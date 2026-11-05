@@ -8,10 +8,6 @@
   <a href="../../actions/workflows/ci.yml"><img alt="CI" src="https://github.com/UlyanaPerova/first-aid-cat/actions/workflows/ci.yml/badge.svg"></a>
 </p>
 
-<p align="center">
-  <img src="docs/screenshots/banner.png" alt="First Aid Cat: the doctor cat in his room full of monitors" width="900">
-</p>
-
 These days everyone checks their computer by asking a terminal AI agent, and so did I. Then one day the internet stopped working, and nothing I tried would bring it back. Once I'd fixed it, I wrote a small script that would rescue me next time and get me back to the quiet harbour of the all-knowing AI. The project grew into something much bigger, and now it runs on all the major platforms.
 
 **First Aid Cat** (in Russian, *Аптечка*) is a desktop health checker with a doctor cat. It watches the things that usually break at the worst moment: the network, the VPN and its leftovers, proxies, the connection to AI assistants, disks, memory, updates, themes and drivers. It explains what is wrong in plain words, and it offers a fix only where a fix is safe.

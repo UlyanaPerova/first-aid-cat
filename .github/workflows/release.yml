@@ -23,11 +23,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Toolchain
         run: |
-          rustup update stable --no-self-update
+          retry(){ for i in 1 2 3; do timeout 300 "$@" && return 0; echo "retry $i: $*"; sleep 10; done; return 1; }
+          retry rustup update stable --no-self-update
           rustup default stable
-          rustup target add x86_64-pc-windows-gnu
-          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update -q
-          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y -q --no-install-recommends gcc-mingw-w64-x86-64 rpm squashfs-tools
+          retry rustup target add x86_64-pc-windows-gnu
+          retry sudo apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update -q
+          retry sudo apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y -q --no-install-recommends gcc-mingw-w64-x86-64 rpm squashfs-tools
       - name: Version matches the tag
         if: startsWith(github.ref, 'refs/tags/')
         run: |

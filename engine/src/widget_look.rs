@@ -65,6 +65,11 @@ pub fn chosen() -> (Style, Size) {
     )
 }
 
+/// Оживление виджета включено (ui.json widget_anim, по умолчанию да; WIDGET_ANIM=0 — выключить).
+pub fn anim_enabled() -> bool {
+    std::env::var("WIDGET_ANIM").map_or(true, |v| v != "0") && crate::prefs::load().get("widget_anim").and_then(|x| x.as_bool()).unwrap_or(true)
+}
+
 /// Куда можно щёлкнуть: крестик, кот (тычок), список (открыть Аптечку).
 #[derive(Clone, Copy, Default)]
 pub struct Hits {

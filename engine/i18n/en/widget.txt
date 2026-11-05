@@ -145,3 +145,7 @@ en: Disk — {} MB
 # widget.rs
 ru: не всё проверено
 en: not everything checked
+
+# widget.rs:1004
+ru: [виджет] за {} с: отсчётов {}, кадров {}, рисование {} мс/кадр
+en: [widget] in {} s: ticks {}, frames {}, drawing {} ms/frame

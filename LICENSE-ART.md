@@ -8,7 +8,7 @@ The Apache License 2.0 in [LICENSE](LICENSE) applies to the **source code only**
 - the background art;
 - the widget art and its looks (`art/layers/виджет/`, `macos/widget/*.png`);
 - the program icons (`assets/aptechka.*`, `assets/xp/`);
-- the screenshots and the banner in `docs/` (the banner was extended from the program's art with image generation in ChatGPT).
+- the screenshots in `docs/`.
 
 You may not use, copy, modify, extract or redistribute these images, alone or as part of another work, without written permission.
 

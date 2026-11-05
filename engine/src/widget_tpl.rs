@@ -1,7 +1,7 @@
 //! Данные виджета: пять строк как в концептах (Сеть, VPN, ИИ, ЦП, Диск), итог, время, уровни нагрузки.
 
 /// Данные для полей шаблона: строки 0 Сеть, 1 VPN, 2 ИИ, 3 ЦП, 4 Диск.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct TplData {
     pub rows: [(String, String); 5],
     pub total: (String, String),

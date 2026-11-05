@@ -66,6 +66,7 @@ mod spravka;
 mod store;
 mod ui;
 mod widget;
+mod widget_anim;
 mod widget_look;
 mod widget_px;
 mod widget_tpl;

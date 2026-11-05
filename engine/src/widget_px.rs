@@ -27,13 +27,14 @@ impl Sprite {
 }
 
 /// Холст в «пикселях картинки»: цвет и маска непрозрачности (форма виджета).
+#[derive(Clone)]
 pub struct Px {
     pub w: i32,
     pub h: i32,
-    rgb: Vec<u32>,
-    on: Vec<bool>,
+    pub(crate) rgb: Vec<u32>,
+    pub(crate) on: Vec<bool>,
     /// непрозрачность точки (255 — целиком; меньше — мягкий край «Стекла»)
-    a: Vec<u8>,
+    pub(crate) a: Vec<u8>,
     /// во сколько раз крупнее рисовать значки и текст (виджет из концепта рисуется сразу в пикселях экрана)
     unit: i32,
 }
@@ -41,6 +42,16 @@ pub struct Px {
 const O: u32 = 0xFF00_0000;
 
 impl Px {
+    /// Пустой холст (для тестов оживления).
+    #[cfg(test)]
+    pub(crate) fn blank(w: i32, h: i32) -> Px {
+        Px::new(w, h)
+    }
+    /// Те же ли точки (цвет, форма, края).
+    #[cfg(test)]
+    pub(crate) fn same(&self, o: &Px) -> bool {
+        self.w == o.w && self.h == o.h && self.rgb == o.rgb && self.on == o.on && self.a == o.a
+    }
     fn new(w: i32, h: i32) -> Px {
         Px { w, h, rgb: vec![0; (w * h) as usize], on: vec![false; (w * h) as usize], a: vec![0; (w * h) as usize], unit: 1 }
     }

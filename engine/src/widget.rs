@@ -23,11 +23,50 @@ use winit::window::{Window, WindowId, WindowLevel};
 use crate::diag::{self, Check};
 use crate::gfx::Fonts;
 use crate::quips::Quips;
+use crate::widget_anim::{self as anim, Anim, Caps};
 use crate::widget_look::{self as look, Hits, Size, Style};
 use crate::widget_px::{self as px, Pieces, Sprite};
 use crate::widget_tpl::TplData;
 
 const FPS: f64 = 6.0;
+
+/// Что нарисовано в окне: по этому решаем, нужен ли новый кадр (см. about_to_wait).
+#[derive(Clone, PartialEq)]
+struct Sig {
+    anim: Anim,
+    /// шаг светлой полосы ЭЛТ (у видов с экраном)
+    crt: i64,
+    quip: bool,
+}
+
+/// Неподвижная часть вида (всё, кроме оживления): пока данные те же, второй раз её не рисуем.
+#[derive(Clone, PartialEq)]
+struct BaseKey {
+    name: String,
+    cell: i32,
+    k: i32,
+    close: bool,
+    crt: i64,
+    d: TplData,
+    lang: crate::i18n::Lang,
+}
+
+/// Ухо, которое тянут мышью: какое (0 — левое), когда нажали и когда отпустили.
+#[derive(Clone, Copy)]
+struct EarPull {
+    side: usize,
+    t0: Instant,
+    rel: Option<Instant>,
+}
+
+/// Счётчики для WIDGET_ANIM_LOG=1: сколько раз проснулись и сколько раз перерисовали.
+#[derive(Default)]
+struct Stats {
+    ticks: u64,
+    draws: u64,
+    draw_time: Duration,
+    since: Option<Instant>,
+}
 
 /// Строка виджета: подпись, статус (ok/warn/bad/info), значение.
 #[derive(Clone)]
@@ -218,6 +257,27 @@ pub struct Widget {
     quips: Quips,
     /// реплика кота в облачке и до какого времени её показывать
     quip: Option<(String, Instant)>,
+    /// оживление включено (ui.json widget_anim, WIDGET_ANIM=0 выключает)
+    anim_on: bool,
+    /// что умеет текущий вид (по разметке) и клетка его картинки
+    caps: Caps,
+    cell: i32,
+    /// у вида есть ЭЛТ-экран со ползущей полосой (она тоже кадры)
+    crt_on: bool,
+    /// последний нарисованный кадр, время рисования и «грязь» (мышь, данные): нужен новый кадр
+    drawn: Option<Sig>,
+    last_draw: Instant,
+    dirty: bool,
+    base: Option<(BaseKey, px::Px, Hits)>,
+    ear: Option<EarPull>,
+    /// куда нажимать, чтобы потянуть ухо (точки окна)
+    ear_rects: Vec<crate::gfx::Rect>,
+    load_t: Instant,
+    /// для снимков: время оживления и ухо, заданные снаружи
+    t_fixed: Option<f64>,
+    ear_fixed: Option<(usize, u8)>,
+    stats: Stats,
+    log: bool,
 }
 
 impl Widget {
@@ -298,6 +358,21 @@ impl Widget {
             refit: false,
             quips: Quips::new(),
             quip: None,
+            anim_on: look::anim_enabled(),
+            caps: Caps::default(),
+            cell: 3,
+            crt_on: false,
+            drawn: None,
+            last_draw: Instant::now(),
+            dirty: true,
+            base: None,
+            ear: None,
+            ear_rects: Vec::new(),
+            load_t: Instant::now(),
+            t_fixed: None,
+            ear_fixed: None,
+            stats: Stats::default(),
+            log: std::env::var_os("WIDGET_ANIM_LOG").is_some(),
         };
         w.relayout();
         w
@@ -326,30 +401,97 @@ impl Widget {
             // (у концепта с крупной сеткой — "cell_scale" в описании: стекло ×4/3, чтобы было ростом с остальные)
             let base_cell = ((3 * self.k + 1) / 2).max(2);
             let cell = ((base_cell as f64) * spec["cell_scale"].as_f64().unwrap_or(1.0)).round().max(1.0) as i32;
-            let look = px::Look {
-                screen_dim: self.style == Style::Monitor,
-                lift: 0,
-                t: self.t0.elapsed().as_secs_f64(),
-                pieces: &self.layers,
-                text_scale: base_cell as f64 / self.k.max(1) as f64 / 1.5,
-                name: base.clone(),
+            let t = self.anim_time();
+            let caps = if self.anim_on { Caps::of(spec) } else { Caps::default() };
+            self.caps = caps;
+            self.cell = cell;
+            self.crt_on = spec.get("crt").is_some();
+            // светлая полоса ЭЛТ ползёт шагами по 1/6 с (как раньше кадры), а не каждый отсчёт
+            let crt = if spec.get("crt").is_some() { (t * FPS) as i64 } else { 0 };
+            let key = BaseKey { name: base.clone(), cell, k: self.k, close: show_close, crt, d: d.clone(), lang: crate::i18n::lang() };
+            let (mut p, hits) = match self.base.as_ref().filter(|(k, _, _)| *k == key) {
+                Some((_, p, h)) => (p.clone(), *h),
+                None => {
+                    let look = px::Look {
+                        screen_dim: self.style == Style::Monitor,
+                        lift: 0,
+                        t: crt as f64 / FPS,
+                        pieces: &self.layers,
+                        text_scale: base_cell as f64 / self.k.max(1) as f64 / 1.5,
+                        name: base.clone(),
+                    };
+                    let layer = self.layers.get(&format!("{base}@{cell}"));
+                    let (p, h) = px::whole(
+                        sp,
+                        layer,
+                        spec,
+                        &d,
+                        &mut self.pixel,
+                        &mut self.sans,
+                        show_close && self.style != Style::Window,
+                        cell,
+                        self.k.max(1),
+                        &look,
+                    );
+                    self.base = Some((key, p.clone(), h));
+                    (p, h)
+                }
             };
-            let layer = self.layers.get(&format!("{base}@{cell}"));
-            return px::whole(
-                sp,
-                layer,
-                spec,
-                &d,
-                &mut self.pixel,
-                &mut self.sans,
-                show_close && self.style != Style::Window,
-                cell,
-                self.k.max(1),
-                &look,
-            );
+            if caps.any() {
+                let a = self.frame_anim(t, cell, caps);
+                anim::apply(&mut p, spec, cell, &a);
+            }
+            self.ear_rects = if caps.ears > 0 { anim::ear_hits(spec, cell) } else { Vec::new() };
+            return (p, hits);
         }
         let pieces = Pieces { cat: self.sprites.get(&key), mug: &self.mugs[d.state.min(2)] };
         px::draw(self.style, self.size, &d, &pieces, &mut self.pixel, show_close)
+    }
+
+    /// Время оживления, секунды (в снимках — заданное снаружи).
+    fn anim_time(&self) -> f64 {
+        self.t_fixed.unwrap_or_else(|| self.t0.elapsed().as_secs_f64())
+    }
+
+    /// Кадр оживления в момент t: покойная жизнь вида плюс ухо, которое сейчас тянут (кот при этом жмурится).
+    fn frame_anim(&self, t: f64, cell: i32, caps: Caps) -> Anim {
+        let mut a = Anim::idle(t, cell, caps);
+        let pull = match (self.ear_fixed, self.ear) {
+            (Some((side, lvl)), _) => Some((side, lvl)),
+            (None, Some(e)) => {
+                let now = Instant::now();
+                let end = e.rel.unwrap_or(now);
+                let held = end.duration_since(e.t0).as_secs_f64().min(anim::EAR_HOLD_MAX);
+                let since = e.rel.map(|r| now.duration_since(r).as_secs_f64());
+                Some((e.side, anim::ear_step(anim::ear_env(held, since))))
+            }
+            _ => None,
+        };
+        if let Some((side, lvl)) = pull.filter(|(s, l)| *l > 0 && *s < caps.ears) {
+            a.ear[side] = lvl;
+            a.blink |= caps.blink;
+        }
+        a
+    }
+
+    /// Что должно быть нарисовано сейчас (для сравнения с нарисованным).
+    fn sig(&self) -> Sig {
+        let t = self.anim_time();
+        let crt = if self.crt_on { (t * FPS) as i64 } else { 0 };
+        let anim = if self.caps.any() { self.frame_anim(t, self.cell, self.caps) } else { Anim::default() };
+        Sig { anim, crt, quip: self.quip.as_ref().is_some_and(|(_, until)| Instant::now() < *until) }
+    }
+
+    /// Нажали на ухо? (0 — левое, 1 — правое)
+    fn ear_at(&self, x: i32, y: i32) -> Option<usize> {
+        self.ear_rects.iter().position(|r| r.contains(x, y))
+    }
+
+    fn release_ear(&mut self) {
+        if let Some(e) = self.ear.as_mut().filter(|e| e.rel.is_none()) {
+            e.rel = Some(Instant::now());
+            self.dirty = true;
+        }
     }
 
     /// Пересчитать размер окна под вид и масштаб (холст не меняется от данных — только от вида).
@@ -566,7 +708,9 @@ impl Widget {
         if let Some(q) = quip.as_deref() {
             // реплика кота — жёлтым облачком у кота
             let mut c = crate::gfx::Canvas::new(buf, w as usize, w, h);
-            look::quip_box(&mut c, &mut self.fonts, self.k, self.hits.cat, q);
+            // у монитора облачко — на экране, а не на коте: иначе закрывает мордочку, когда ухо тянут
+            let at = if self.style == Style::Monitor { self.hits.list } else { self.hits.cat };
+            look::quip_box(&mut c, &mut self.fonts, self.k, at, q);
             for p in buf.iter_mut() {
                 if *p >> 24 == 0 && *p & 0xFF_FFFF != 0 {
                     *p |= 0xFF00_0000;
@@ -581,6 +725,15 @@ impl Widget {
         let _ = (px, py);
         if let Some(q) = self.quips.pick("волосы", "возмущение") {
             self.quip = Some((q.to_string(), Instant::now() + Duration::from_secs(4)));
+            self.dirty = true;
+        }
+    }
+
+    /// Реплика на ухо — из группы «ухо» (те же фразы, что у кота в окне).
+    fn poke_ear(&mut self) {
+        if let Some(q) = self.quips.pick("ухо_левое", "смущение") {
+            self.quip = Some((q.to_string(), Instant::now() + Duration::from_secs(4)));
+            self.dirty = true;
         }
     }
 
@@ -608,6 +761,16 @@ impl Widget {
     }
 
     fn redraw(&mut self) {
+        let t0 = Instant::now();
+        self.draw();
+        self.stats.draws += 1;
+        self.stats.draw_time += t0.elapsed();
+        self.drawn = Some(self.sig());
+        self.last_draw = Instant::now();
+        self.dirty = false;
+    }
+
+    fn draw(&mut self) {
         #[cfg(windows)]
         {
             // Windows: «слоёное» окно с прозрачностью по пикселям (форма — по шаблону)
@@ -733,15 +896,28 @@ impl ApplicationHandler for Widget {
             WindowEvent::RedrawRequested => self.redraw(),
             WindowEvent::CursorMoved { position, .. } => {
                 self.cursor = position;
+                self.dirty |= !self.hover;
                 self.hover = true;
             }
-            WindowEvent::CursorLeft { .. } => self.hover = false,
-            WindowEvent::CursorEntered { .. } => self.hover = true,
+            WindowEvent::CursorLeft { .. } => {
+                self.dirty |= self.hover;
+                self.hover = false;
+                self.release_ear();
+            }
+            WindowEvent::CursorEntered { .. } => {
+                self.dirty |= !self.hover;
+                self.hover = true;
+            }
             WindowEvent::MouseInput { state: ElementState::Pressed, button: MouseButton::Left, .. } => {
                 let h = self.hits;
                 let (x, y) = (self.cursor.x as i32, self.cursor.y as i32);
                 if h.close.contains(x, y) {
                     self.close_down = true;
+                } else if let Some(side) = self.ear_at(x, y) {
+                    // ухо: тянется, пока кнопка нажата; кот жмурится и отвечает репликой, как на тычок
+                    self.ear = Some(EarPull { side, t0: Instant::now(), rel: None });
+                    self.dirty = true;
+                    self.poke_ear();
                 } else if h.cat.contains(x, y) {
                     self.poke(self.cursor.x, self.cursor.y);
                 } else if h.list.contains(x, y) {
@@ -754,6 +930,7 @@ impl ApplicationHandler for Widget {
             // правая кнопка — открыть Аптечку (там же меню «Вид» с видом виджета)
             WindowEvent::MouseInput { state: ElementState::Pressed, button: MouseButton::Right, .. } => open_main(),
             WindowEvent::MouseInput { state: ElementState::Released, button: MouseButton::Left, .. } => {
+                self.release_ear();
                 if std::mem::take(&mut self.close_down) {
                     let close = self.hits.close;
                     if close.contains(self.cursor.x as i32, self.cursor.y as i32) {
@@ -769,10 +946,13 @@ impl ApplicationHandler for Widget {
     fn about_to_wait(&mut self, el: &ActiveEventLoop) {
         let now = Instant::now();
         if now >= self.next {
-            let t = self.t0.elapsed().as_secs_f64();
-            if ((t * FPS) as u64).is_multiple_of(FPS as u64 * 2) {
+            self.stats.ticks += 1;
+            // загрузка процессора — раз в 2 с
+            if self.load_t.elapsed() >= Duration::from_secs(2) {
+                self.load_t = now;
                 self.load_now = self.load.sample();
             }
+            let t = self.t0.elapsed().as_secs_f64();
             self.step(t);
             if self.pos_dirty.is_some_and(|d| d.elapsed() >= Duration::from_millis(600)) {
                 self.pos_dirty = None;
@@ -796,14 +976,40 @@ impl ApplicationHandler for Widget {
             if std::mem::take(&mut self.refit) {
                 self.relayout();
                 self.fit_window();
+                self.dirty = true;
+            }
+            // ухо держат слишком долго — отпускаем; вернулось совсем — забываем
+            if let Some(e) = self.ear {
+                if e.rel.is_none() && e.t0.elapsed().as_secs_f64() >= anim::EAR_HOLD_MAX {
+                    self.release_ear();
+                } else if e.rel.is_some_and(|r| r.elapsed().as_secs_f64() > 0.5) {
+                    self.ear = None;
+                }
             }
             // Windows не присылает Occluded для свёрнутого окна — спрашиваем (на X11 это запрос к серверу, там нет)
             let minimized = cfg!(windows) && self.window.as_ref().and_then(|w| w.is_minimized()) == Some(true);
             let idle = self.hidden || minimized;
-            if let Some(w) = self.window.as_ref().filter(|_| !idle) {
-                w.request_redraw();
+            if idle {
+                self.dirty = true;
+            } else if let Some(w) = self.window.as_ref() {
+                // новый кадр — только если что-то изменилось (оживление шагает целыми точками: чаще всего ничего)
+                // или раз в секунду (часы, данные, ЭЛТ)
+                if self.dirty || self.last_draw.elapsed() >= Duration::from_secs(1) || self.drawn.as_ref() != Some(&self.sig()) {
+                    w.request_redraw();
+                }
             }
-            self.next = now + Duration::from_secs_f64(if idle { 1.0 } else { 1.0 / FPS });
+            if self.log {
+                let since = *self.stats.since.get_or_insert(now);
+                if since.elapsed() >= Duration::from_secs(10) {
+                    let s = &self.stats;
+                    let (el_s, ms) = (since.elapsed().as_secs_f64(), s.draw_time.as_secs_f64() * 1000.0 / s.draws.max(1) as f64);
+                    eprintln!("[виджет] за {el_s:.0} с: отсчётов {}, кадров {}, рисование {ms:.1} мс/кадр", s.ticks, s.draws);
+                    self.stats = Stats { since: Some(now), ..Stats::default() };
+                }
+            }
+            // прячется — раз в секунду; иначе ритм оживления, если оно есть, а нет — раз в секунду
+            let tick = if idle || !(self.caps.any() || self.crt_on) { 1.0 } else { 1.0 / anim::FPS };
+            self.next = now + Duration::from_secs_f64(tick);
         }
         el.set_control_flow(ControlFlow::WaitUntil(self.next));
     }
@@ -902,6 +1108,12 @@ pub fn shot(path: &str) {
                 f.state = 1;
             }
         }
+    }
+    // WIDGET_ANIM_T=секунды — кадр оживления в этот момент; WIDGET_EAR=l|r[:ступень 0..4] — потянутое ухо
+    w.t_fixed = std::env::var("WIDGET_ANIM_T").ok().and_then(|v| v.parse().ok());
+    if let Ok(v) = std::env::var("WIDGET_EAR") {
+        let (side, lvl) = v.split_once(':').unwrap_or((&v, "4"));
+        w.ear_fixed = Some((usize::from(side == "r"), lvl.parse().unwrap_or(4)));
     }
     w.relayout();
     // WIDGET_POKE=1 — тычок в середину кота перед снимком, чтобы увидеть реакцию и реплику

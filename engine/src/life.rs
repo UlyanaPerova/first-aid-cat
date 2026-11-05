@@ -271,7 +271,7 @@ impl Life {
         format!("ear_{}_{st}", if self.ear_left { "L" } else { "R" })
     }
 
-    fn breath(t: f64, fast: bool) -> i32 {
+    pub(crate) fn breath(t: f64, fast: bool) -> i32 {
         let seq = if fast { BREATH_FAST } else { BREATH };
         let total: f64 = seq.iter().map(|p| p.1).sum();
         let mut k = t.rem_euclid(total);
