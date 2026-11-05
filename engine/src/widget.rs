@@ -469,6 +469,8 @@ impl Widget {
         };
         if let Some((side, lvl)) = pull.filter(|(s, l)| *l > 0 && *s < caps.ears) {
             a.ear[side] = lvl;
+            // жмурится, как в приложении: нарисованная мордочка «shy», а где её нет — простое моргание
+            a.shy = true;
             a.blink |= caps.blink;
         }
         a

@@ -45,12 +45,14 @@ pub struct Anim {
     pub blink: bool,
     /// оттяжка левого и правого уха, 0..=EAR_STEPS
     pub ear: [u8; 2],
+    /// смущение (тянут за ухо): мордочка из нарисованного кадра «shy» — зажмурился, румянец
+    pub shy: bool,
 }
 
 impl Default for Anim {
     /// Покой: всё как нарисовано (картинка без оживления).
     fn default() -> Anim {
-        Anim { bubble: 0, spark: [SPARK_FULL; MAX_SPARK], breath: 0, blink: false, ear: [0; 2] }
+        Anim { bubble: 0, spark: [SPARK_FULL; MAX_SPARK], breath: 0, blink: false, ear: [0; 2], shy: false }
     }
 }
 
@@ -404,7 +406,10 @@ pub fn apply(p: &mut Px, spec: &Value, cs: i32, a: &Anim) {
     for (i, e) in an["ears"].as_array().into_iter().flatten().take(2).enumerate() {
         ear(p, &g, e, a.ear[i]);
     }
-    if a.blink {
+    // смущение: нарисованная мордочка (ChatGPT по образцу «румянца» приложения, подогнана под клетки вида);
+    // она закрывает глаза сама — моргание поверх не нужно
+    let shy = a.shy && an.get("shy").is_some_and(|s| shy_face(p, &g, s));
+    if a.blink && !shy {
         for e in an["blink"].as_array().into_iter().flatten() {
             blink(p, &g, e);
         }
@@ -412,6 +417,36 @@ pub fn apply(p: &mut Px, spec: &Value, cs: i32, a: &Anim) {
     if let Some(b) = an.get("breath").filter(|b| b.is_object()) {
         breath(p, &g, b, a.breath);
     }
+}
+
+/// Кадр «shy»: картинка размером с rect (в клетках), прозрачное — не трогать. Клетка — сплошной прямоугольник
+/// cs × (высота строки), как клетки самого вида. false — нет картинки (тогда обычное моргание).
+fn shy_face(p: &mut Px, g: &Geo, spec: &Value) -> bool {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    static CACHE: OnceLock<Mutex<HashMap<String, Option<std::sync::Arc<crate::widget_px::Sprite>>>>> = OnceLock::new();
+    let file = spec["file"].as_str().unwrap_or("");
+    let sp = CACHE
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .entry(file.to_string())
+        .or_insert_with(|| crate::widget_px::Sprite::load(file).map(std::sync::Arc::new))
+        .clone();
+    let Some(sp) = sp else { return false };
+    let n = |i: usize| spec["rect"][i].as_i64().unwrap_or(0) as i32;
+    let (cx0, cy0) = (n(0), n(1));
+    for y in 0..sp.h {
+        for x in 0..sp.w {
+            let v = sp.px[(y * sp.w + x) as usize];
+            if v >> 24 == 0 {
+                continue;
+            }
+            let (y0, y1) = (g.rowy(cy0 + y), g.rowy(cy0 + y + 1));
+            p.fill(Rect::new((cx0 + x) * g.cs, y0, g.cs, y1 - y0), v & 0xFF_FFFF);
+        }
+    }
+    true
 }
 
 /// Куда нажимать, чтобы потянуть i-е ухо (точки холста).
@@ -542,7 +577,7 @@ mod tests {
         // нет разметки "anim" — любой кадр ничего не меняет
         let mut q = p0.clone();
         let bare = serde_json::json!({"step": [10.0, 10.0]});
-        apply(&mut q, &bare, 3, &Anim { bubble: 4, spark: [0; MAX_SPARK], breath: 1, blink: true, ear: [4, 4] });
+        apply(&mut q, &bare, 3, &Anim { bubble: 4, spark: [0; MAX_SPARK], breath: 1, blink: true, ear: [4, 4], shy: false });
         assert!(q.same(&p0));
     }
 
@@ -600,5 +635,21 @@ mod tests {
         assert_eq!(p.rgb[(19 * 60 + 14) as usize], 0x406080);
         assert_eq!(p.rgb[(29 * 60 + 14) as usize], 0x406080);
         assert_eq!(p.rgb[(25 * 60 + 14) as usize], 0xFFFFFF);
+    }
+}
+
+#[cfg(test)]
+mod shy_tests {
+    /// Мордочка «смущение» вшита для обоих мониторов и по размеру совпадает со своим местом в разметке.
+    #[test]
+    fn shy_faces_are_embedded_and_fit() {
+        for name in ["monitor_small", "monitor_medium"] {
+            let raw = crate::art::read("", &format!("виджет/целиком/{name}.json")).expect("разметка");
+            let spec: serde_json::Value = serde_json::from_slice(&raw).expect("json");
+            let s = &spec["anim"]["shy"];
+            let sp = crate::widget_px::Sprite::load(s["file"].as_str().unwrap()).expect("картинка мордочки");
+            assert_eq!((sp.w as i64, sp.h as i64), (s["rect"][2].as_i64().unwrap(), s["rect"][3].as_i64().unwrap()), "{name}");
+            assert!(sp.px.iter().any(|v| v >> 24 != 0), "{name}: пустая");
+        }
     }
 }

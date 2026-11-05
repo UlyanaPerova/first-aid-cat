@@ -68,7 +68,7 @@ impl Px {
             self.put(x + i, y, c);
         }
     }
-    fn fill(&mut self, r: Rect, c: u32) {
+    pub(crate) fn fill(&mut self, r: Rect, c: u32) {
         for y in r.y..r.bottom() {
             self.hline(r.x, y, r.w, c);
         }
