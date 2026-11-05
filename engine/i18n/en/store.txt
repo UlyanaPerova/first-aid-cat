@@ -13,3 +13,7 @@ en: the settings folder isn't mine (or it's a link) — working without saving
 # store.rs:245
 ru: замок — не обычный файл
 en: the lock is not a regular file
+
+# store.rs
+ru: папка сеанса чужая или ссылка — данные измерений только в запасной личной папке
+en: the session folder is not mine (or is a link) — measurement data goes only to a private fallback folder

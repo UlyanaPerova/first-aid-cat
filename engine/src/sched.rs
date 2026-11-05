@@ -138,8 +138,38 @@ pub fn check_now() {
 
 static NOW: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
+/// Папка сеанса (не папка настроек): результаты проверок не должны пережить выход из системы. Окно и виджет
+/// берут её одной и той же функцией, поэтому видят одни и те же файлы.
 fn dir() -> std::path::PathBuf {
-    crate::store::private_dir()
+    crate::store::runtime_dir()
+}
+
+/// Идёт ли в этом процессе проверяющий (для уборки при выходе).
+static PRODUCING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+struct ProducingGuard;
+impl ProducingGuard {
+    fn new() -> Self {
+        PRODUCING.store(true, std::sync::atomic::Ordering::SeqCst);
+        ProducingGuard
+    }
+}
+impl Drop for ProducingGuard {
+    fn drop(&mut self) {
+        PRODUCING.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// При выходе убрать данные измерений из папки сеанса, если мы последняя копия: проверяющий — мы, либо замок
+/// свободен (его никто не держит). Если проверяет другой процесс (виджет), его файлы не трогаем.
+pub fn cleanup_on_exit() {
+    let d = dir();
+    let ours = PRODUCING.load(std::sync::atomic::Ordering::SeqCst);
+    if ours || crate::store::lock::free(&d.join("checks.lock")) {
+        for n in crate::store::RUNTIME_DATA {
+            crate::store::remove_file_nofollow(&d.join(n));
+        }
+    }
 }
 fn res_path() -> std::path::PathBuf {
     dir().join("checks.json")
@@ -257,6 +287,7 @@ enum Produce {
 const STUCK: Duration = Duration::from_secs(300);
 
 fn produce(tx: &Sender<Vec<Check>>, mut lock: Option<crate::store::lock::Held>) -> Produce {
+    let _producing = ProducingGuard::new();
     let (done_tx, done_rx) = mpsc::channel::<(&'static str, u64, Vec<Check>)>();
     let me = std::process::id();
     let mut beat_t = Instant::now() - Duration::from_secs(60);
@@ -655,5 +686,22 @@ mod economy_tests {
         assert!(crate::netproxy::pmset_on_battery(bat));
         assert!(!crate::netproxy::pmset_on_battery(ac));
         assert!(!crate::netproxy::pmset_on_battery("Now drawing from 'Battery Power'"));
+    }
+}
+
+#[cfg(test)]
+mod runtime_path_tests {
+    use super::*;
+
+    /// Окно и виджет ходят через одни и те же функции sched, а они — через store::runtime_dir() (не папку настроек).
+    #[test]
+    fn scheduler_files_live_in_runtime_dir() {
+        let _g = crate::ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let rt = crate::store::runtime_dir();
+        let cfg = crate::store::private_dir();
+        assert_ne!(rt, cfg);
+        for p in [res_path(), alive_path(), req_path(), dir().join("speed.json"), dir().join("speed.net")] {
+            assert_eq!(p.parent(), Some(rt.as_path()));
+        }
     }
 }

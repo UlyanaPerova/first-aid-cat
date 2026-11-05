@@ -245,16 +245,18 @@ fn scan_state(p: &Path, until: Instant) -> Result<Option<Vec<&'static str>>, ()>
     Ok(Some(found))
 }
 
-/// Память проверенных файлов: (размер, время изменения) → найденные виды. Без самих секретов.
-fn cache_path() -> PathBuf {
-    // версия правил распознавания в имени: правила поменялись — старые выводы не годятся
-    crate::store::private_dir().join("footprint-v4.json")
-}
-
+/// Память проверенных файлов: (размер, время изменения) → найденные виды. Без самих секретов. Только в памяти
+/// процесса: на диск не пишется и со сменой сеанса пропадает.
 type Seen = std::collections::HashMap<String, (u64, u64, Vec<String>)>;
 
+static SEEN: std::sync::Mutex<Option<Seen>> = std::sync::Mutex::new(None);
+
 fn load_seen() -> Seen {
-    crate::store::read_capped(&cache_path(), 8 << 20).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
+    SEEN.lock().unwrap_or_else(|e| e.into_inner()).clone().unwrap_or_default()
+}
+
+fn store_seen(s: &Seen) {
+    *SEEN.lock().unwrap_or_else(|e| e.into_inner()) = Some(s.clone());
 }
 
 fn stamp(p: &Path) -> Option<(u64, u64)> {
@@ -470,7 +472,7 @@ pub fn check() -> Vec<Check> {
     }
     // забытые файлы — из памяти вон
     seen.retain(|k, _| Path::new(k).exists());
-    let _ = crate::store::write_private(&cache_path(), serde_json::to_string(&seen).unwrap_or_default().as_bytes());
+    store_seen(&seen);
     if !chats_with.is_empty() {
         let kinds: Vec<String> = chats_with.iter().flat_map(|x| x.1.iter().cloned()).collect::<std::collections::BTreeSet<_>>().into_iter().collect();
         out.push(

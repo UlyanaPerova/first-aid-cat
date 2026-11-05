@@ -3075,11 +3075,12 @@ struct SpeedRec {
     up: Option<f64>,
 }
 
-fn speed_hist_path() -> std::path::PathBuf {
-    crate::store::private_dir().join("speed_history.jsonl")
-}
+/// История замеров текущего сеанса: только в памяти процесса (на диск не пишется), последние 20.
+/// (сеть, ping, вниз, вверх)
+static SPEED_HIST: std::sync::Mutex<std::collections::VecDeque<(String, SpeedRec)>> = std::sync::Mutex::new(std::collections::VecDeque::new());
+const SPEED_HIST_MAX: usize = 20;
 
-/// Отпечаток сети для истории: адрес, с которого выходим в интернет (без отправки пакетов). Только у себя,
+/// Отпечаток сети для сравнения замеров: адрес, с которого выходим в интернет (без отправки пакетов). Только у себя,
 /// никуда не уходит; сами адреса не храним — только хэш.
 fn net_tag() -> String {
     let ip = std::net::UdpSocket::bind("0.0.0.0:0")
@@ -3114,42 +3115,24 @@ fn default_gateway() -> Option<String> {
     })
 }
 
-/// Дописать замер в историю (последние ~200 записей, 90 дней).
+/// Запомнить замер в памяти (для сравнения «ниже обычного» в этом же сеансе).
 fn speed_remember(r: &SpeedRec) {
     if r.down.is_none() && r.up.is_none() {
         return;
     }
-    let p = speed_hist_path();
-    let now = now_secs();
-    let mut lines: Vec<String> = crate::store::read_text(&p)
-        .unwrap_or_default()
-        .lines()
-        .filter(|l| serde_json::from_str::<serde_json::Value>(l).ok().and_then(|v| v["t"].as_f64()).is_some_and(|t| now - t < 90.0 * 86400.0))
-        .map(String::from)
-        .collect();
-    lines.push(serde_json::json!({"t": now, "net": net_tag(), "ping": r.ping, "down": r.down, "up": r.up}).to_string());
-    let start = lines.len().saturating_sub(200);
-    let _ = crate::store::write_private(&p, (lines[start..].join("\n") + "\n").as_bytes());
+    let mut h = SPEED_HIST.lock().unwrap_or_else(|e| e.into_inner());
+    if h.len() >= SPEED_HIST_MAX {
+        h.pop_front();
+    }
+    h.push_back((net_tag(), SpeedRec { ping: r.ping, down: r.down, up: r.up }));
 }
 
-/// Обычная скорость этой сети: медиана прошлых замеров (нужно хотя бы 3).
+/// Обычная скорость этой сети в этом сеансе: медиана прошлых замеров (нужно хотя бы 3).
 fn speed_usual(down: bool) -> Option<f64> {
     let tag = net_tag();
-    let k = if down { "down" } else { "up" };
-    let mut v: Vec<f64> = crate::store::read_text(speed_hist_path())
-        .ok()?
-        .lines()
-        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
-        .filter(|j| j["net"].as_str() == Some(&tag))
-        // только последние 90 дней и не «из будущего» (если часы когда-то врали)
-        .filter(|j| {
-            j["t"].as_f64().is_some_and(|t| {
-                let age = now_secs() - t;
-                (0.0..90.0 * 86400.0).contains(&age)
-            })
-        })
-        .filter_map(|j| j[k].as_f64())
-        .collect();
+    let h = SPEED_HIST.lock().unwrap_or_else(|e| e.into_inner());
+    let mut v: Vec<f64> = h.iter().filter(|(n, _)| *n == tag).filter_map(|(_, r)| if down { r.down } else { r.up }).collect();
+    drop(h);
     if v.len() < 3 {
         return None;
     }
@@ -3465,4 +3448,36 @@ mod tests {
         assert!(secs < 8.0);
         assert!(r.is_err(), "{r:?}");
     }
+}
+
+/// История скорости живёт только в памяти: сравнение с «обычным» появляется после 3 замеров и ничего не пишет на диск.
+#[cfg(test)]
+#[test]
+fn speed_history_is_memory_only() {
+    let _g = crate::ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let root = std::env::temp_dir().join(format!("aptechka_sh_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    let old = std::env::var_os("XDG_CONFIG_HOME");
+    std::env::set_var("XDG_CONFIG_HOME", &root);
+    SPEED_HIST.lock().unwrap_or_else(|e| e.into_inner()).clear();
+    assert!(speed_usual(true).is_none());
+    for v in [10.0, 30.0, 20.0] {
+        speed_remember(&SpeedRec { ping: None, down: Some(v), up: None });
+    }
+    assert_eq!(speed_usual(true), Some(20.0));
+    assert_eq!(speed_usual(false), None);
+    for _ in 0..50 {
+        speed_remember(&SpeedRec { ping: None, down: Some(5.0), up: None });
+    }
+    assert_eq!(SPEED_HIST.lock().unwrap_or_else(|e| e.into_inner()).len(), SPEED_HIST_MAX);
+    // ни одного файла истории нигде в папке настроек
+    let found = std::fs::read_dir(&root).map(|rd| rd.flatten().any(|e| e.file_name().to_string_lossy().contains("speed_history"))).unwrap_or(false);
+    assert!(!found);
+    SPEED_HIST.lock().unwrap_or_else(|e| e.into_inner()).clear();
+    match old {
+        Some(v) => std::env::set_var("XDG_CONFIG_HOME", v),
+        None => std::env::remove_var("XDG_CONFIG_HOME"),
+    }
+    let _ = std::fs::remove_dir_all(&root);
 }

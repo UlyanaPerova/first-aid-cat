@@ -135,6 +135,84 @@ pub fn private_dir() -> PathBuf {
     d
 }
 
+/// Имена файлов с данными измерений в папке сеанса (их же убирают при выходе и при старте, если старше 12 часов).
+pub const RUNTIME_DATA: [&str; 6] = ["checks.json", "checks.alive", "check_now", "speed.json", "speed.net", "dupes.json"];
+
+/// Папка сеанса для данных измерений (результаты проверок, замер скорости, поиск дублей, замок проверяющего):
+/// то, что не должно пережить выход из системы. Одна функция и для окна, и для виджета.
+/// Linux — $XDG_RUNTIME_DIR/aptechka (tmpfs, очищается при выходе; сам $XDG_RUNTIME_DIR обязан быть абсолютным,
+/// своим и 0700), запасной путь — /tmp/aptechka-<uid>; macOS — $TMPDIR/aptechka (личная папка пользователя,
+/// система её чистит); Windows — %TEMP%\aptechka (там уборка при выходе и по возрасту). Папка своя, 0700,
+/// не ссылка; чужая или ссылка — не берём: персональная запасная (refused_dir), в общие папки ничего не попадёт.
+/// В тестах XDG_RUNTIME_DIR подменяет базу на любой системе.
+pub fn runtime_dir() -> PathBuf {
+    #[cfg(unix)]
+    {
+        extern "C" {
+            fn getuid() -> u32;
+        }
+        let me = unsafe { getuid() };
+        runtime_dir_for(me)
+    }
+    #[cfg(not(unix))]
+    {
+        let base =
+            std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).filter(|p| cfg!(test) && p.is_absolute()).unwrap_or_else(std::env::temp_dir);
+        let d = base.join("aptechka");
+        let _ = std::fs::create_dir_all(&d);
+        d
+    }
+}
+
+#[cfg(unix)]
+fn runtime_dir_for(me: u32) -> PathBuf {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    let xdg = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).filter(|p| p.is_absolute() && (cfg!(target_os = "linux") || cfg!(test)));
+    if let Some(x) = xdg {
+        let ok = std::fs::symlink_metadata(&x).is_ok_and(|m| m.is_dir() && m.uid() == me && m.permissions().mode() & 0o077 == 0);
+        if ok {
+            if let Some(d) = own_subdir(&x.join("aptechka"), me) {
+                return d;
+            }
+        }
+    }
+    // в тестах общий запасной путь не трогаем: только заданная база или персональная запасная папка
+    if cfg!(test) {
+        return refused_dir(me);
+    }
+    let fallback = if cfg!(target_os = "macos") && std::env::var_os("TMPDIR").is_some() {
+        std::env::temp_dir().join("aptechka")
+    } else {
+        std::env::temp_dir().join(format!("aptechka-{me}"))
+    };
+    own_subdir(&fallback, me).unwrap_or_else(|| {
+        crate::diag::log("папка сеанса чужая или ссылка — данные измерений только в запасной личной папке");
+        refused_dir(me)
+    })
+}
+
+/// Создать (не «создать если нет»: занятое имя проверяем) папку 0700 и убедиться, что она наша, настоящая (не
+/// ссылка) и закрыта. None — не подходит.
+#[cfg(unix)]
+fn own_subdir(path: &Path, me: u32) -> Option<PathBuf> {
+    use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
+    let mut b = std::fs::DirBuilder::new();
+    b.mode(0o700);
+    match b.create(path) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(_) => return None,
+    }
+    let m = std::fs::symlink_metadata(path).ok()?;
+    if !m.is_dir() || m.uid() != me {
+        return None;
+    }
+    if m.permissions().mode() & 0o077 != 0 {
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700)).ok()?;
+    }
+    Some(path.to_path_buf())
+}
+
 /// Запасная папка, когда настоящая папка настроек чужая: одна на процесс, создаётся заново (не «создать
 /// если нет» — чужую готовую не берём), права 0700, имя непредсказуемое, лежит в личной папке сеанса
 /// ($XDG_RUNTIME_DIR), а при её отсутствии — в temp. Не получилось создать — путь, куда записать нельзя
@@ -214,8 +292,8 @@ fn write_full(path: &Path, data: &[u8], mode: u32, sync: bool) -> std::io::Resul
     res
 }
 
-/// Уборка своих данных при запуске: копии правок старше 7 дней (и больше 10 штук), устаревший замер
-/// скорости, память проверки «цифрового следа» старше 30 дней и прежних версий. Чужие данные (чаты, история,
+/// Уборка своих данных при запуске: копии правок старше 7 дней (и больше 10 штук), прежние постоянные файлы
+/// данных измерений (теперь они только в памяти и в папке сеанса), устаревшее в папке сеанса. Чужие данные (чаты, история,
 /// настройки VPN) не трогаются.
 pub fn housekeeping() {
     let d = private_dir();
@@ -243,21 +321,30 @@ pub fn housekeeping() {
             }
         }
     }
-    // замер скорости — 6 часов; память «цифрового следа» — 30 дней, прежние версии — сразу
-    for (name, ttl) in [("speed.json", day / 4), ("speed.net", day / 4), ("footprint-v4.json", 30 * day)] {
-        let p = d.join(name);
-        if age(&p).is_some_and(|a| a > ttl) {
-            let _ = std::fs::remove_file(&p);
+    // переезд: прежние версии держали данные измерений в папке настроек; теперь они живут только в памяти и в
+    // папке сеанса. Удаляем ровно эти имена, не переходя по ссылкам (ссылка удаляется сама, цель цела).
+    for name in OLD_PERSISTENT {
+        remove_file_nofollow(&d.join(name));
+    }
+    if let Ok(rd) = std::fs::read_dir(&d) {
+        for e in rd.flatten() {
+            let n = e.file_name();
+            let n = n.to_string_lossy();
+            // и недописанные временные копии этих же файлов от прежних версий («checks.tmp1234.0.ab12cd34»)
+            let stem = n.split_once(".tmp").map(|(s, _)| s);
+            let old_tmp = stem.is_some_and(|s| s.starts_with("footprint") || OLD_PERSISTENT.iter().any(|o| o.split('.').next() == Some(s)));
+            if (n.starts_with("footprint") && n.ends_with(".json")) || old_tmp {
+                remove_file_nofollow(&e.path());
+            }
         }
     }
-    // история скорости: не старше 90 дней и не больше 200 строк (дописывает speed_remember; здесь — подчистка,
-    // если замеров давно нет и файл так и лежал бы)
-    trim_history(&d.join("speed_history.jsonl"), 90 * 86400, 200);
-    // кэши без своего срока: если не обновлялись 60 дней, значит, давно не нужны (пересоздадутся сами)
-    for name in ["checks.json", "checks.alive", "check_now", "dupes.json"] {
-        let p = d.join(name);
-        if age(&p).is_some_and(|a| a > 60 * day) {
-            let _ = std::fs::remove_file(&p);
+    crate::dupes::remove_legacy_cache();
+    // папка сеанса: файлы старше 12 часов (на Windows и macOS её не чистят при выходе из системы)
+    let rd_dir = runtime_dir();
+    for name in RUNTIME_DATA {
+        let p = rd_dir.join(name);
+        if age(&p).is_some_and(|a| a > day / 2) {
+            remove_file_nofollow(&p);
         }
     }
     // забытые временные файлы записи (процесс упал между созданием и переименованием)
@@ -281,8 +368,16 @@ pub fn housekeeping() {
             }
         }
     }
-    for old in ["footprint.json", "footprint-v2.json", "footprint-v3.json"] {
-        let _ = std::fs::remove_file(d.join(old));
+}
+
+/// Старые постоянные файлы данных измерений в папке настроек (их больше не пишем).
+pub const OLD_PERSISTENT: [&str; 9] =
+    ["checks.json", "checks.alive", "check_now", "checks.lock", "takeover.lock", "speed.json", "speed.net", "speed_history.jsonl", "dupes.json"];
+
+/// Удалить файл или ссылку (саму ссылку, не цель); каталоги не трогаем.
+pub fn remove_file_nofollow(p: &Path) {
+    if std::fs::symlink_metadata(p).is_ok_and(|m| !m.is_dir()) {
+        let _ = std::fs::remove_file(p);
     }
 }
 
@@ -299,34 +394,6 @@ fn remove_tree_nofollow(p: &Path) {
         }
     }
     let _ = std::fs::remove_dir(p);
-}
-
-/// Оставить в журнале JSON-строк (по одной на строку) только свежие (поле "t" — секунды, не старше `max_age`
-/// и не из будущего) и не больше `max_lines` последних. Файл без изменений не переписывается.
-pub fn trim_history(p: &Path, max_age: u64, max_lines: usize) {
-    let Ok(text) = read_text(p) else { return };
-    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0);
-    let all: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
-    let fresh: Vec<&str> = all
-        .iter()
-        .copied()
-        .filter(|l| {
-            serde_json::from_str::<serde_json::Value>(l)
-                .ok()
-                .and_then(|v| v["t"].as_f64())
-                .is_some_and(|t| (-60.0..max_age as f64).contains(&(now - t)))
-        })
-        .collect();
-    let start = fresh.len().saturating_sub(max_lines);
-    let keep = &fresh[start..];
-    if keep.len() == all.len() {
-        return;
-    }
-    if keep.is_empty() {
-        let _ = std::fs::remove_file(p);
-    } else {
-        let _ = write_private(p, (keep.join("\n") + "\n").as_bytes());
-    }
 }
 
 /// Подождать замок до `wait` (для коротких дел: прочитать-поправить-записать настройки).
@@ -563,27 +630,6 @@ fn refused_dir_is_private_and_unpredictable() {
     let _ = std::fs::remove_dir(&a);
 }
 
-#[cfg(test)]
-#[test]
-fn history_trim() {
-    let d = std::env::temp_dir().join(format!("aptechka_hist_{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    let p = d.join("h.jsonl");
-    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64();
-    let mut t = format!("{{\"t\": {}}}\n", now - 100.0 * 86400.0);
-    for i in 0..5 {
-        t += &format!("{{\"t\": {}}}\n", now - 1000.0 + i as f64);
-    }
-    std::fs::write(&p, t).unwrap();
-    trim_history(&p, 90 * 86400, 3);
-    assert_eq!(std::fs::read_to_string(&p).unwrap().lines().count(), 3);
-    std::fs::write(&p, format!("{{\"t\": {}}}\n", now - 100.0 * 86400.0)).unwrap();
-    trim_history(&p, 90 * 86400, 3);
-    assert!(!p.exists());
-    let _ = std::fs::remove_dir_all(&d);
-}
-
 /// Уборка при запуске: забытые копии базы OpenCode (старше 10 минут, только свои каталоги, ссылки не трогаем),
 /// а `backups` — ссылка на чужую папку — не очищается.
 #[cfg(all(test, unix))]
@@ -625,6 +671,108 @@ fn housekeeping_stale_oc_dirs_and_backups_symlink() {
     match old {
         Some(v) => std::env::set_var("XDG_CONFIG_HOME", v),
         None => std::env::remove_var("XDG_CONFIG_HOME"),
+    }
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Папка сеанса: чужая или ссылка — отказ; своя — 0700 и берётся; подмена базы через XDG_RUNTIME_DIR.
+#[cfg(all(test, unix))]
+#[test]
+fn runtime_dir_safety() {
+    use std::os::unix::fs::PermissionsExt;
+    extern "C" {
+        fn getuid() -> u32;
+    }
+    let me = unsafe { getuid() };
+    let root = std::env::temp_dir().join(format!("aptechka_rt_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    // своя: создаётся 0700; открытые права исправляются
+    let mine = root.join("mine");
+    assert_eq!(own_subdir(&mine, me), Some(mine.clone()));
+    assert_eq!(std::fs::metadata(&mine).unwrap().permissions().mode() & 0o777, 0o700);
+    std::fs::set_permissions(&mine, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(own_subdir(&mine, me), Some(mine.clone()));
+    assert_eq!(std::fs::metadata(&mine).unwrap().permissions().mode() & 0o777, 0o700);
+    // «чужая»: для нас владелец другой пользователь
+    assert_eq!(own_subdir(&mine, me + 1), None);
+    // ссылка (даже на свою папку) — отказ
+    let link = root.join("link");
+    std::os::unix::fs::symlink(&mine, &link).unwrap();
+    assert_eq!(own_subdir(&link, me), None);
+    // целиком: база из XDG_RUNTIME_DIR берётся, а ссылка на месте «aptechka» — нет
+    let _g = crate::ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let old = std::env::var_os("XDG_RUNTIME_DIR");
+    let base = root.join("run");
+    std::fs::create_dir(&base).unwrap();
+    std::fs::set_permissions(&base, std::fs::Permissions::from_mode(0o700)).unwrap();
+    std::env::set_var("XDG_RUNTIME_DIR", &base);
+    assert_eq!(runtime_dir(), base.join("aptechka"));
+    std::fs::remove_dir(base.join("aptechka")).unwrap();
+    std::os::unix::fs::symlink(&mine, base.join("aptechka")).unwrap();
+    let d = runtime_dir();
+    assert_ne!(d, base.join("aptechka"));
+    assert!(d.to_string_lossy().contains("aptechka-refused-"));
+    // база открыта для других (0755) — тоже отказ
+    std::fs::remove_file(base.join("aptechka")).unwrap();
+    std::fs::set_permissions(&base, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(runtime_dir().to_string_lossy().contains("aptechka-refused-"));
+    match old {
+        Some(v) => std::env::set_var("XDG_RUNTIME_DIR", v),
+        None => std::env::remove_var("XDG_RUNTIME_DIR"),
+    }
+    let _ = std::fs::remove_dir(refused_dir(me));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Уборка при запуске удаляет ровно прежние файлы данных измерений (и ссылку — не цель), остальное цело.
+#[cfg(all(test, unix))]
+#[test]
+fn housekeeping_removes_exactly_old_measurement_files() {
+    let _g = crate::ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let root = std::env::temp_dir().join(format!("aptechka_hk2_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("run")).unwrap();
+    let (oc, orr) = (std::env::var_os("XDG_CONFIG_HOME"), std::env::var_os("XDG_RUNTIME_DIR"));
+    std::env::set_var("XDG_CONFIG_HOME", root.join("cfg"));
+    std::env::set_var("XDG_RUNTIME_DIR", root.join("run"));
+    std::fs::set_permissions(root.join("run"), std::os::unix::fs::PermissionsExt::from_mode(0o700)).unwrap();
+    let d = private_dir();
+    let victim = root.join("victim.txt");
+    std::fs::write(&victim, "INTACT").unwrap();
+    for n in OLD_PERSISTENT.iter().chain(["footprint.json", "footprint-v4.json", "footprint-v9.json"].iter()) {
+        std::fs::write(d.join(n), "x").unwrap();
+    }
+    // ссылка с таким именем: удаляется сама, цель цела
+    std::fs::remove_file(d.join("speed.json")).unwrap();
+    std::os::unix::fs::symlink(&victim, d.join("speed.json")).unwrap();
+    let keep = ["ui.json", "snapshot.json", "footprint_notes.txt", "backups.json"];
+    for n in keep {
+        std::fs::write(d.join(n), "keep").unwrap();
+    }
+    std::fs::create_dir(d.join("backups")).unwrap();
+    std::fs::write(d.join("backups/a.1.bak"), "keep").unwrap();
+    housekeeping();
+    let mut left: Vec<String> = std::fs::read_dir(&d).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+    left.sort();
+    let mut want: Vec<String> = keep.iter().map(|s| s.to_string()).chain(["backups".to_string()]).collect();
+    want.sort();
+    assert_eq!(left, want);
+    assert_eq!(std::fs::read_to_string(&victim).unwrap(), "INTACT");
+    assert!(d.join("backups/a.1.bak").exists());
+    // папка сеанса: старые данные уходят, свежие остаются
+    let rd = runtime_dir();
+    std::fs::write(rd.join("checks.json"), "{}").unwrap();
+    std::fs::write(rd.join("speed.json"), "{}").unwrap();
+    let t = std::time::SystemTime::now() - std::time::Duration::from_secs(13 * 3600);
+    std::fs::File::open(rd.join("speed.json")).unwrap().set_modified(t).unwrap();
+    housekeeping();
+    assert!(rd.join("checks.json").exists() && !rd.join("speed.json").exists());
+    for (k, o) in [("XDG_CONFIG_HOME", oc), ("XDG_RUNTIME_DIR", orr)] {
+        match o {
+            Some(v) => std::env::set_var(k, v),
+            None => std::env::remove_var(k),
+        }
     }
     let _ = std::fs::remove_dir_all(&root);
 }

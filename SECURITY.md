@@ -28,6 +28,7 @@ First Aid Cat reads a lot of sensitive local state, and some of its fixes need a
 ### Files
 
 - State files are written atomically (a temporary file with an unpredictable name, `fsync`, then rename), with mode `0600` in a folder created `0700`. The app refuses a state folder owned by someone else.
+- Measurement results (check results, speed test, duplicate search) are not kept in the state folder. They live in memory and in a per-session runtime folder (`$XDG_RUNTIME_DIR/aptechka`, `$TMPDIR/aptechka`, `%TEMP%\\aptechka`) that is `0700`, owned by the user, not a symlink, and cleared by the system at logout. The state folder keeps only settings, the saved theme baseline and edit backups.
 - Files from the user's home are opened with `O_NOFOLLOW | O_NONBLOCK`, must be regular files and are size-capped. A planted symlink, FIFO or huge file can't redirect a read, hang it or exhaust memory.
 - Cross-process locks keep two copies of the app from running the same fix, or two scans, at once.
 
@@ -41,7 +42,7 @@ First Aid Cat reads a lot of sensitive local state, and some of its fixes need a
 
 - **The binaries are not code-signed.** The macOS app has an ad-hoc signature, and the Windows executable has no Authenticode signature. Your system will warn about an unknown publisher. Build from source if you prefer.
 - Checks are not sandboxed separately from the UI. They run with your user rights, as any program you start does.
-- State files are protected by file permissions, not encrypted. Anything running as your user can read them, just as it can read the original files the checks look at.
+- State files (and the temporary session files) are protected by file permissions, not encrypted. Anything running as your user can read them, just as it can read the original files the checks look at.
 - Network checks go directly, not through your proxy. They are meant to find out whether the network itself works.
 - On Linux the window uses X11. Wayland sessions run it through XWayland.
 

@@ -17,7 +17,7 @@ First Aid Cat is one Rust crate (`engine/`) that builds a single binary, `aptech
                              | results                            | results
                     +--------v------------------------------------v--------+
                     |  sched.rs: scheduler, one shared result set            |
-                    |  checks.json (cache for the widget), cross-process lock |
+                    |  runtime-folder results (for the widget), lock          |
                     +--------+---------------------------------------+------+
                              | runs checks                           | runs fixes
           +------------------v-----------------+       +-------------v------------+
@@ -64,7 +64,7 @@ First Aid Cat is one Rust crate (`engine/`) that builds a single binary, `aptech
 | `fixes.rs` | All fix actions, the validation gate, resource locks, manual equivalents |
 | `elevate.rs` | The only way to run something as administrator |
 | `cmd.rs` | The only way to run external commands |
-| `store.rs`, `prefs.rs` | Files on disk: private folder, atomic writes, safe reads, settings |
+| `store.rs`, `prefs.rs` | Files on disk: private settings folder, per-session runtime folder for measurement data, atomic writes, safe reads, settings |
 | `single.rs` | One instance per user; a second launch asks the first to show its window |
 | `clip.rs` | Clipboard without GTK |
 | `i18n.rs` | Interface language (see below) |
@@ -76,7 +76,7 @@ The window is drawn in software into a `softbuffer` surface. A slightly patched 
 
 ## Checks and the scheduler
 
-A check is a function that returns rows (`Check`: title, status `ok/warn/bad/info`, value, detail, possible fixes). The scheduler runs each check on its own interval and also on events (network change, wake from sleep). Every check runs in a worker with a deadline, behind `catch_unwind`. Results go into one shared set, used by the window, the widget and `checks.json`. A cross-process lock makes sure that only one process runs checks, even when the window and the widget are separate processes.
+A check is a function that returns rows (`Check`: title, status `ok/warn/bad/info`, value, detail, possible fixes). The scheduler runs each check on its own interval and also on events (network change, wake from sleep). Every check runs in a worker with a deadline, behind `catch_unwind`. Results go into one shared set, used by the window, the widget and a file in the per-session runtime folder (`store::runtime_dir()`, memory-backed or cleared by the system; never the settings folder). A cross-process lock makes sure that only one process runs checks, even when the window and the widget are separate processes.
 
 ## Fixes
 

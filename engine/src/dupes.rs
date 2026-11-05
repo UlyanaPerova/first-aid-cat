@@ -434,13 +434,21 @@ fn win_recycle(path: &str) -> bool {
 // ───────────────────────────── Кэш результата ─────────────────────────────
 
 fn cache_path() -> PathBuf {
-    // кэш — как у всех программ (XDG_CACHE_HOME или ~/.cache); без домашней папки — во временной, не в текущей
-    std::env::var_os("XDG_CACHE_HOME")
+    // результат — данные измерения: лежит в папке сеанса (исчезает при выходе из системы), не в кэше на диске
+    crate::store::runtime_dir().join("dupes.json")
+}
+
+/// Прежние версии писали результат в ~/.cache/aptechka/dupes.json — убрать (ссылку — саму, не цель).
+pub fn remove_legacy_cache() {
+    let dir = std::env::var_os("XDG_CACHE_HOME")
         .map(PathBuf::from)
         .filter(|p| p.is_absolute())
         .or_else(|| crate::store::home_dir().map(|h| h.join(".cache")))
-        .unwrap_or_else(|| std::env::temp_dir().join("aptechka-nohome"))
-        .join("aptechka/dupes.json")
+        .map(|d| d.join("aptechka"));
+    if let Some(dir) = dir {
+        crate::store::remove_file_nofollow(&dir.join("dupes.json"));
+        let _ = std::fs::remove_dir(&dir); // только если пуста
+    }
 }
 
 pub fn save(groups: &[Group], complete: bool) {
@@ -453,9 +461,6 @@ pub fn save(groups: &[Group], complete: bool) {
         })).collect::<Vec<_>>(),
     });
     let p = cache_path();
-    if let Some(d) = p.parent() {
-        let _ = std::fs::create_dir_all(d);
-    }
     // атомарно, только для владельца (в списке — пути к его файлам)
     let _ = crate::store::write_private(&p, j.to_string().as_bytes());
 }
