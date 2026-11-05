@@ -112,7 +112,7 @@ Download the installer for your system from [Releases](../../releases). Every fi
 | **Linux**, Fedora and openSUSE | `first-aid-cat-0.9.2-1.x86_64.rpm` | `sudo dnf install ./first-aid-cat-0.9.2-1.x86_64.rpm` |
 | **Linux**, any distribution | `first-aid-cat-0.9.2-linux-x86_64.AppImage` | `chmod +x` it and double-click. Needs FUSE; without it run `./first-aid-cat-0.9.2-linux-x86_64.AppImage --appimage-extract-and-run` |
 | **Windows** 10 and 11, x86-64 | `first-aid-cat-0.9.2-windows-x86_64-setup.exe` | Double-click. Installs for your user only, no administrator rights needed. The binary is not signed yet, so SmartScreen may warn about an unknown publisher |
-| **macOS** 14 Sonoma or later, Apple silicon | `first-aid-cat-0.9.2-macos-arm64.dmg` | Open it and drag the app to *Applications*. The app has an ad-hoc signature, not a Developer ID, so on first launch right-click it and choose *Open* |
+| **macOS** 14 Sonoma or later, Apple silicon | `first-aid-cat-0.9.2-macos-arm64.dmg` | Open it and drag the app to *Applications*. The app has an ad-hoc signature, not a Developer ID, so macOS blocks the first launch: open *System Settings → Privacy & Security* and click *Open Anyway* (on older macOS, right-click the app and choose *Open*) |
 
 Linux packages need glibc 2.35 or newer (Ubuntu 22.04+, Debian 12+, Fedora 36+) and X11 or XWayland. The package installs the `aptechka` command, a menu entry and an icon; it does not start anything at login.
 
