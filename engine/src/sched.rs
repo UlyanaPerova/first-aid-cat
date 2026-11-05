@@ -433,6 +433,7 @@ fn write_checks(path: &std::path::Path, all: &[Check]) {
         "time": crate::ui::now_secs(),
         "checks": all.iter().map(|c| serde_json::json!({
             "key": c.key, "unit": c.unit, "title": c.title, "status": c.status, "value": c.value, "detail": c.detail,
+            "unchecked": c.unchecked,
             "fixes": c.fixes.iter().map(|f| serde_json::json!({"id": f.id, "label": f.label, "arg": f.arg})).collect::<Vec<_>>(),
         })).collect::<Vec<_>>(),
     });
@@ -468,6 +469,8 @@ fn read_checks(path: &std::path::Path) -> Option<(i64, Vec<Check>)> {
             ch.fix = fixes.first().map(|f| f.id.clone());
             ch.fixes = fixes;
             ch.unit = unit;
+            // старые файлы без поля — как «проверено»
+            ch.unchecked = c["unchecked"].as_bool().unwrap_or(false);
             ch
         })
         .collect();
@@ -508,5 +511,26 @@ pub fn load_speed() -> Vec<Check> {
     match read_checks(&dir().join("speed.json")) {
         Some((t, rows)) if same_net && crate::ui::now_secs() - t < 6 * 3600 => rows,
         _ => Vec::new(),
+    }
+}
+
+#[cfg(test)]
+mod unchecked_tests {
+    use super::*;
+
+    #[test]
+    fn unchecked_flag_roundtrip_and_old_files() {
+        let dir = std::env::temp_dir().join(format!("aptechka-unk-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let p = dir.join("c.json");
+        let rows = vec![Check::new("sys", "Диск", "info", "не проверить").unknown(), Check::new("sys", "Память", "ok", "1")];
+        write_checks(&p, &rows);
+        let (_, back) = read_checks(&p).unwrap();
+        assert_eq!(back.iter().map(|c| c.unchecked).collect::<Vec<_>>(), [true, false]);
+        // старый файл без поля
+        std::fs::write(&p, r#"{"time":1,"checks":[{"key":"sys","title":"Диск","status":"info","value":"не проверить"}]}"#).unwrap();
+        let (_, old) = read_checks(&p).unwrap();
+        assert!(!old[0].unchecked);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

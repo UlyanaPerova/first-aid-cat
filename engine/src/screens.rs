@@ -8,6 +8,8 @@
 //! листья и провода остаются поверх текста. Помехи кинескопа: сканлайны, катящаяся
 //! светлая полоса, «снег», редкие сбои.
 
+use crate::gfx::Face;
+use skrifa::outline::OutlinePen;
 use tiny_skia::{Color, FillRule, GradientStop, LinearGradient, Paint, PathBuilder, Pixmap, Point, Rect, SpreadMode, Transform};
 
 const FONT: &[u8] = include_bytes!("../assets/FusionPixel.ttf");
@@ -60,6 +62,9 @@ pub struct ScreenState {
     pub speed: Option<(f64, f64, f64)>,
     pub net_rows: Vec<(String, String, String)>,
     pub sys_rows: Vec<(String, String, String)>,
+    /// идёт замер скорости: этап (0 пинг, 1 скачивание, 2 отдача) и текущее значение (мс или Мбит/с) —
+    /// экран «Сеть» становится спидометром со стрелкой
+    pub speed_live: Option<(u8, f64)>,
 }
 
 impl Default for ScreenState {
@@ -74,6 +79,7 @@ impl Default for ScreenState {
             speed: None,
             net_rows: vec![],
             sys_rows: vec![],
+            speed_live: None,
         }
     }
 }
@@ -101,7 +107,7 @@ struct Outline<'a> {
     y: f32,
     s: f32,
 }
-impl ttf_parser::OutlineBuilder for Outline<'_> {
+impl OutlinePen for Outline<'_> {
     fn move_to(&mut self, x: f32, y: f32) {
         self.pb.move_to(self.x + x * self.s, self.y - y * self.s)
     }
@@ -130,7 +136,7 @@ impl ttf_parser::OutlineBuilder for Outline<'_> {
 struct Painter<'a> {
     pm: &'a mut Pixmap,
     tr: Transform,
-    face: &'a ttf_parser::Face<'a>,
+    face: &'a Face,
     size: f32,
 }
 
@@ -140,6 +146,15 @@ impl Painter<'_> {
         p.set_color(Color::from_rgba(c.0, c.1, c.2, a).unwrap());
         p.anti_alias = false;
         p
+    }
+    fn line(&mut self, x0: f32, y0: f32, x1: f32, y1: f32, width: f32, c: (f32, f32, f32)) {
+        let mut pb = PathBuilder::new();
+        pb.move_to(x0, y0);
+        pb.line_to(x1, y1);
+        if let Some(path) = pb.finish() {
+            let stroke = tiny_skia::Stroke { width, line_cap: tiny_skia::LineCap::Round, ..Default::default() };
+            self.pm.stroke_path(&path, &Self::paint(c, 1.0), &stroke, self.tr, None);
+        }
     }
     fn rect(&mut self, x: f32, y: f32, w: f32, h: f32, c: (f32, f32, f32), a: f32) {
         if let Some(r) = Rect::from_xywh(x, y, w, h) {
@@ -158,17 +173,17 @@ impl Painter<'_> {
         }
     }
     fn width(&self, text: &str) -> f32 {
-        let s = self.size / self.face.units_per_em() as f32;
-        text.chars().map(|c| self.face.glyph_index(c).and_then(|g| self.face.glyph_hor_advance(g)).unwrap_or(0) as f32 * s).sum()
+        let s = self.size / self.face.upm;
+        text.chars().map(|c| self.face.glyph_index(c).and_then(|g| self.face.advance(g)).unwrap_or(0.0) * s).sum()
     }
     fn text(&mut self, x: f32, y: f32, text: &str, c: (f32, f32, f32)) {
-        let s = self.size / self.face.units_per_em() as f32;
+        let s = self.size / self.face.upm;
         let mut pb = PathBuilder::new();
         let mut ox = x;
         for ch in text.chars() {
             let Some(g) = self.face.glyph_index(ch) else { continue };
-            self.face.outline_glyph(g, &mut Outline { pb: &mut pb, x: ox, y, s });
-            ox += self.face.glyph_hor_advance(g).unwrap_or(0) as f32 * s;
+            self.face.outline(g, &mut Outline { pb: &mut pb, x: ox, y, s });
+            ox += self.face.advance(g).unwrap_or(0.0) * s;
         }
         if let Some(p) = pb.finish() {
             let mut paint = Self::paint(c, 1.0);
@@ -288,7 +303,7 @@ impl Screens {
 
     /// Нарисовать все экраны в их слои (время t, состояние st).
     pub fn draw(&mut self, t: f64, st: &ScreenState) {
-        let face = ttf_parser::Face::parse(FONT, 0).expect("шрифт");
+        let face = Face::parse(FONT).expect("шрифт");
         for i in 0..self.screens.len() {
             let tr0 = self.src_to_layer(&self.screens[i]);
             let sc = &mut self.screens[i];
@@ -334,7 +349,7 @@ impl Screens {
 }
 
 /// Часы шрифтом 3×5 на экране робота-телевизора, наклон 23° вместе с экраном.
-fn clock(pm: &mut Pixmap, tr0: Transform, face: &ttf_parser::Face, t: f64) {
+fn clock(pm: &mut Pixmap, tr0: Transform, face: &Face, t: f64) {
     let tr = tr0.pre_translate(91., 1004.).pre_rotate(23.0);
     let text = hhmm();
     let u = 3.0;
@@ -364,7 +379,7 @@ fn clock(pm: &mut Pixmap, tr0: Transform, face: &ttf_parser::Face, t: f64) {
     p.rects(&px, (0.86, 0.96, 1.0), 1.0);
 }
 
-fn draw_screen(sc: &mut Screen, tr0: Transform, face: &ttf_parser::Face, st: &ScreenState, t: f64) {
+fn draw_screen(sc: &mut Screen, tr0: Transform, face: &Face, st: &ScreenState, t: f64) {
     let [tl, trr, bl] = sc.quad;
     let (ux, uy, vx, vy) = (trr.0 - tl.0, trr.1 - tl.1, bl.0 - tl.0, bl.1 - tl.1);
     let (w, h) = (ux.hypot(uy), vx.hypot(vy));
@@ -375,7 +390,7 @@ fn draw_screen(sc: &mut Screen, tr0: Transform, face: &ttf_parser::Face, st: &Sc
     let mut rnd = Rng(((t * 24.0) as u64).wrapping_mul(7919) + sc.name.len() as u64 * 131 + 1);
     let dx = if glitch { (if rnd.f() < 0.5 { -1.0 } else { 1.0 }) * rnd.int(3, 7) as f32 } else { 0.0 };
     let mut p = Painter { pm: &mut sc.layer, tr: base.pre_translate(dx, 0.0), face, size: 24. };
-    content(&mut p, &sc.name, st, w, t);
+    content(&mut p, &sc.name, st, w, h, t);
     p.tr = base;
     // сканлайны и мерцание кинескопа
     let flick = (0.1 + 0.04 * (t * 9.0).sin() + 0.03 * (t * 23.7).sin()) as f32;
@@ -437,7 +452,37 @@ fn draw_screen(sc: &mut Screen, tr0: Transform, face: &ttf_parser::Face, st: &Sc
 }
 
 /// Содержимое экрана: текст, значки, строки.
-fn content(p: &mut Painter, name: &str, st: &ScreenState, w: f32, t: f64) {
+/// Спидометр на экране «Сеть» во время замера (как в Python-версии, screens.py _gauge): полукруг из точек
+/// красный → жёлтый → зелёный, стрелка (на пинге качается, на скорости — по логарифму до 1000 Мбит/с) и подпись.
+#[allow(clippy::too_many_arguments)]
+fn gauge(p: &mut Painter, cx: f32, cy: f32, r: f32, phase: u8, val: f64, t: f64) {
+    use std::f32::consts::PI;
+    for i in 0..=30 {
+        let k = i as f32 / 30.0;
+        let ang = PI + PI * k;
+        let st = if k > 0.55 {
+            "ok"
+        } else if k > 0.25 {
+            "warn"
+        } else {
+            "bad"
+        };
+        p.rect(cx + r * ang.cos() - 3., cy + r * ang.sin() - 3., 6., 6., st_color(st), 1.0);
+    }
+    let k = if phase == 0 { 0.5 + 0.5 * (t * 6.0).sin() as f32 } else { ((val.max(1.0)).log10() / 3.0).min(1.0) as f32 };
+    let ang = PI + PI * k;
+    p.line(cx, cy, cx + (r - 10.) * ang.cos(), cy + (r - 10.) * ang.sin(), 4., INK);
+    let tr = crate::i18n::t;
+    let (name, unit) = match phase {
+        0 => (tr("пинг"), tr("мс")),
+        1 => (tr("↓ скачка"), tr("Мбит/с")),
+        _ => (tr("↑ отдача"), tr("Мбит/с")),
+    };
+    let label = if val > 0.0 { format!("{name} {val:.0} {unit}") } else { name };
+    p.text(cx - r, cy + 30., &label, INK);
+}
+
+fn content(p: &mut Painter, name: &str, st: &ScreenState, w: f32, h: f32, t: f64) {
     // перевод (i18n.rs) — до обрезки по буквам: обрезанную фразу в таблице не найти
     let tr = crate::i18n::t;
     match name {
@@ -468,6 +513,10 @@ fn content(p: &mut Painter, name: &str, st: &ScreenState, w: f32, t: f64) {
         "net" => {
             let m = 14.0;
             p.text(m, 32., &tr("СЕТЬ"), INK);
+            if let Some((phase, val)) = st.speed_live {
+                gauge(p, w / 2., h * 0.72, w.min(h) * 0.38, phase, val, t);
+                return;
+            }
             let mut y = 62.;
             for (s, label, val) in st.net_rows.iter().take(6) {
                 p.dot(m + 6., y - 8., s, t);
@@ -516,5 +565,36 @@ fn content(p: &mut Painter, name: &str, st: &ScreenState, w: f32, t: f64) {
             p.rect(16., 44., 14., 14., col, 1.0);
             p.text(38., 60., if on { "ON" } else { "OFF" }, ink);
         }
+    }
+}
+
+#[cfg(test)]
+mod font_tests {
+    use super::*;
+
+    #[test]
+    fn painter_text_matches_fixture() {
+        let face = Face::parse(FONT).unwrap();
+        let strs = ["ON OFF 0123456789", "Аптечка — всё ок ✓", "36.6° ↓↑ …", "\u{E000}x"];
+        let mut pm = Pixmap::new(420, 40 * strs.len() as u32).unwrap();
+        let mut widths = String::new();
+        for (i, s) in strs.iter().enumerate() {
+            let mut p = Painter { pm: &mut pm, tr: Transform::identity(), face: &face, size: 24. };
+            p.text(4., 30. + 40. * i as f32, s, (1.0, 1.0, 1.0));
+            widths += &format!("{}\n", p.width(s).to_bits());
+        }
+        let pix: Vec<u8> = pm.data().chunks(4).map(|p| p[3]).collect();
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/fonts");
+        if std::env::var("UPDATE_FONT_FIXTURE").is_ok() {
+            std::fs::write(format!("{dir}/painter_widths.txt"), &widths).unwrap();
+            std::fs::write(format!("{dir}/painter.bin"), &pix).unwrap();
+        }
+        assert_eq!(widths, std::fs::read_to_string(format!("{dir}/painter_widths.txt")).unwrap());
+        let want = std::fs::read(format!("{dir}/painter.bin")).unwrap();
+        assert_eq!(pix.len(), want.len());
+        let max = pix.iter().zip(&want).map(|(a, b)| a.abs_diff(*b)).max().unwrap_or(0);
+        let n = pix.iter().zip(&want).filter(|(a, b)| a != b).count();
+        eprintln!("экраны: макс. разница {max}, отличных пикселей {n}");
+        assert!(max <= 1 && n <= 50, "текст экранов изменился: макс {max}, пикселей {n}");
     }
 }

@@ -66,5 +66,14 @@ en: Resume the last one: {}
 ru: {}: сессии
 en: {}: sessions
 
-ru: список не читаю (база SQLite)
-en: list not read (SQLite database)
+ru: не смогла прочитать
+en: could not read
+
+ru: ссылка вместо файла
+en: a link instead of a file
+
+ru: слишком долго
+en: took too long
+
+ru: незнакомая схема базы
+en: unknown database schema

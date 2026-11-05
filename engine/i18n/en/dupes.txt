@@ -44,7 +44,7 @@ en:  I didn't finish searching (too many files): some files weren't checked. “
 
 # dupes.rs:541
 ru: Все лишние ({}) — в корзину
-en: All extras ({}) — to the Trash
+en: Trash all ({})
 
 # dupes.rs:553
 ru: Копия: {}

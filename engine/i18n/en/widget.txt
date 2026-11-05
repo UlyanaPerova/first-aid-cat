@@ -141,3 +141,7 @@ en: Attention: AI
 # widget.rs: свободно меньше 1 ГБ
 ru: Диск — {} МБ
 en: Disk — {} MB
+
+# widget.rs
+ru: не всё проверено
+en: not everything checked

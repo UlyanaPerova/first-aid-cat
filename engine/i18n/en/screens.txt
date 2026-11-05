@@ -17,3 +17,16 @@ en: ↓{} ↑{} Mbit/s  ping {}
 # screens.rs:468
 ru: СЕТЬ
 en: NET
+
+# screens.rs: спидометр
+ru: мс
+en: ms
+
+ru: ↓ скачка
+en: ↓ down
+
+ru: Мбит/с
+en: Mbit/s
+
+ru: ↑ отдача
+en: ↑ up

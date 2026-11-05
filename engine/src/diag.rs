@@ -52,6 +52,9 @@ pub struct Check {
     pub fixes: Vec<Fix>,
     /// Код показателя из каталога, который дал эту строку ("" — не из каталога, например замер скорости).
     pub unit: &'static str,
+    /// Проверка не смогла выполниться (программа не ответила, нет доступа, просмотрено не всё): статус
+    /// остаётся info, но итог не должен говорить «всё в порядке». Обычные «для сведения» (пояс, IP) — false.
+    pub unchecked: bool,
 }
 
 impl Check {
@@ -67,7 +70,13 @@ impl Check {
             fix: None,
             fixes: Vec::new(),
             unit: "",
+            unchecked: false,
         }
+    }
+    /// Пометить строку «не удалось проверить».
+    pub(crate) fn unknown(mut self) -> Check {
+        self.unchecked = true;
+        self
     }
     pub(crate) fn hint(mut self, h: &str) -> Check {
         self.detail = crate::proxyaddr::redact(h);
@@ -301,7 +310,7 @@ pub(crate) fn check_network() -> Vec<Check> {
         }
         // программы ip нет или она не ответила — о маршруте ничего не знаем (а не «нет маршрута»)
         _ if !route_r.answered() => {
-            out.push(Check::new("net", "Подключение", INFO, "не проверить").hint("Нет программы ip (iproute2) или она не ответила."));
+            out.push(Check::new("net", "Подключение", INFO, "не проверить").unknown().hint("Нет программы ip (iproute2) или она не ответила."));
         }
         _ => {
             out.push(Check::new("net", "Подключение", BAD, "нет маршрута").hint("Кабель/Wi-Fi не подключены или сеть выключена.").fixes(reconnect()))
@@ -654,6 +663,7 @@ pub(crate) fn vpn_summary_full(up: &[String], installed: bool, apps: &[String], 
     if !home_ok && !world_ok {
         out.push(
             Check::new("net", t, INFO, "не проверить: нет интернета")
+                .unknown()
                 .hint("Сначала нужен интернет — смотри строки «Подключение», «Интернет», «DNS»."),
         );
         return out;
@@ -704,7 +714,7 @@ pub(crate) fn vpn_summary_full(up: &[String], installed: bool, apps: &[String], 
             .hint(&format!("VPN-клиент есть, но не включён: интернет видит тебя из {e}, как и без VPN. Открой клиент и подключись."))
             .fixes(fixes),
         (Some(_), Some(_)) => Check::new("net", t, INFO, "не используется").hint(&format!("VPN не установлен; выход в интернет — из {home_s}.")),
-        (None, _) => Check::new("net", t, INFO, "не удалось проверить")
+        (None, _) => Check::new("net", t, INFO, "не удалось проверить").unknown()
             .hint("Сервисы, по которым видно страну выхода в интернет, не ответили. Проверю в следующий раз."),
     };
     out.insert(0, c);
@@ -892,7 +902,7 @@ pub(crate) fn check_proxy() -> Vec<Check> {
         "auto" => out.push(crate::proxyaddr::pac_row(&gsettings(&["org.gnome.system.proxy", "autoconfig-url"]), off_fix())),
         // gsettings завис или не запустился — не «прокси выключен». (Нет схемы GNOME — не GNOME, строки нет.)
         _ if matches!(mode_r, crate::cmd::Outcome::Timeout { .. } | crate::cmd::Outcome::SpawnError(_)) => {
-            out.push(Check::new("net", "Системный прокси", INFO, "не удалось проверить").hint("gsettings не ответил вовремя."));
+            out.push(Check::new("net", "Системный прокси", INFO, "не удалось проверить").unknown().hint("gsettings не ответил вовремя."));
         }
         _ => {}
     }
@@ -1405,7 +1415,7 @@ pub(crate) fn check_themes() -> Vec<Check> {
     for (kind, a, b, title) in THEME_KEYS {
         let key = key_id(kind, a, b);
         let Some(now) = read_key(kind, a, b) else {
-            out.push(Check::new("theme", title, INFO, "не проверить").hint("Настройка не прочиталась (gsettings/dconf не ответили)."));
+            out.push(Check::new("theme", title, INFO, "не проверить").unknown().hint("Настройка не прочиталась (gsettings/dconf не ответили)."));
             continue;
         };
         let want = snap.key(&key).unwrap_or(&now).to_string();
@@ -1458,7 +1468,9 @@ pub(crate) fn check_themes() -> Vec<Check> {
     }
     let Some(enabled) = enabled_extensions() else {
         if !snap.extensions.is_empty() {
-            out.push(Check::new("theme", "Расширения", INFO, "не проверить").hint("gnome-extensions не ответил — не знаю, какие включены."));
+            out.push(
+                Check::new("theme", "Расширения", INFO, "не проверить").unknown().hint("gnome-extensions не ответил — не знаю, какие включены."),
+            );
         }
         out.push(Check::new("theme", "Эталон", INFO, &snap.time).hint("С этим состоянием сравниваются темы.").fixes(vec![fx(
             "snapshot",
@@ -1834,7 +1846,7 @@ fn cpu_busy(span: Duration) -> Option<f64> {
 fn disk_rows() -> Vec<Check> {
     let all = crate::disks::list();
     if all.is_empty() {
-        return vec![Check::new("sys", "Диск", INFO, "не проверить").hint("Не удалось узнать разделы дисков.")];
+        return vec![Check::new("sys", "Диск", INFO, "не проверить").unknown().hint("Не удалось узнать разделы дисков.")];
     }
     let home_dev = crate::disks::for_path(&all, &home()).map(|f| f.dev.clone());
     // разделы, которые и задуманы «только для чтения» (fstab с ro), не тревожат
@@ -1909,7 +1921,7 @@ pub(crate) fn check_system() -> Vec<Check> {
             } else {
                 String::new()
             })),
-        None => out.push(Check::new("sys", "Процессор", INFO, "не проверить").hint("Не читается /proc/stat.")),
+        None => out.push(Check::new("sys", "Процессор", INFO, "не проверить").unknown().hint("Не читается /proc/stat.")),
     }
     if let Some((t, crit)) = hwmon_temp(&["k10temp", "coretemp", "zenpower"]) {
         // порог — от самого процессора (его критическая отметка); не знает — для AMD (Tctl, у новых Ryzen
@@ -1976,7 +1988,7 @@ pub(crate) fn check_system() -> Vec<Check> {
     let failed_r = run_ex(&["systemctl", "--failed", "--no-legend", "--plain"], 6);
     // systemctl нет или не ответил — не проверить (а не «упавших нет»)
     if !failed_r.answered() {
-        out.push(Check::new("sys", "Упавшие службы", INFO, "не проверить").hint("Нет программы systemctl или она не ответила."));
+        out.push(Check::new("sys", "Упавшие службы", INFO, "не проверить").unknown().hint("Нет программы systemctl или она не ответила."));
         return out;
     }
     let failed = failed_r.text().to_string();
@@ -2051,7 +2063,13 @@ pub fn run_all() -> Vec<Check> {
     all
 }
 
+/// Сколько строк «не удалось проверить» (с явной пометкой, а не по тексту).
+pub fn unchecked_count(results: &[Check]) -> usize {
+    results.iter().filter(|c| c.unchecked).count()
+}
+
 /// Худший статус из списка (bad > warn > ok > info); пустой список считается «ok».
+/// Непроверенные строки на статус не влияют (они info): о них говорит `unchecked_count`.
 pub fn worst(results: &[Check]) -> &str {
     let rank = |s: &str| match s {
         "bad" => 3,
@@ -2643,33 +2661,133 @@ fn mbps_of(bytes: u64, secs: f64) -> f64 {
     bytes as f64 * 8.0 / secs / 1e6
 }
 
-fn download(progress: &mut dyn FnMut(SpeedProgress), limit_s: f64, max_bytes: u64) -> Result<Option<f64>, String> {
-    let agent = speed_agent(8);
-    let url = format!("https://{SPEED_HOST}/__down?bytes={max_bytes}");
+/// Замер в несколько потоков, как у speedtest: один поток TCP (особенно через VPN с большим пингом) не
+/// заполняет быстрый канал. Каждый поток раз за разом качает (или отдаёт) кусок `chunk`, пока не выйдет время
+/// или общий объём `cap`. Скорость — по установившемуся участку: первые ~1,5 с (рукопожатие, TLS, разгон
+/// TCP) не считаются, иначе на коротком замере выходит вдвое меньше настоящей.
+#[allow(clippy::too_many_arguments)]
+fn transfer(progress: &mut dyn FnMut(SpeedProgress), down: bool, streams: usize, limit_s: f64, cap: u64, chunk: u64) -> Result<Option<f64>, String> {
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    use std::sync::{Arc, Mutex};
+    let total = Arc::new(AtomicU64::new(0));
+    let stop = Arc::new(AtomicBool::new(false));
+    let err: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+    let block = Arc::new(if down { Vec::new() } else { random_block(256 * 1024) });
     let t0 = Instant::now();
-    let resp = agent.get(&url).call().map_err(|e| e.to_string())?;
-    let mut r = resp.into_reader();
+    let mut workers = Vec::new();
+    for _ in 0..streams.max(1) {
+        let (total, stop, err, block) = (total.clone(), stop.clone(), err.clone(), block.clone());
+        workers.push(thread::spawn(move || {
+            let agent = speed_agent(8);
+            while !stop.load(Ordering::Relaxed) && total.load(Ordering::Relaxed) < cap {
+                let r = if down { pull(&agent, chunk, &total, &stop) } else { push(&agent, chunk, &block, &total, &stop) };
+                if let Err(e) = r {
+                    if !stop.load(Ordering::Relaxed) {
+                        err.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert(e);
+                    }
+                    break;
+                }
+            }
+        }));
+    }
+    // главный поток: прогресс для окна и точки для расчёта установившейся скорости
+    let mut samples: Vec<(f64, u64)> = vec![(0.0, 0)];
+    loop {
+        thread::sleep(Duration::from_millis(100));
+        let el = t0.elapsed().as_secs_f64();
+        let got = total.load(Ordering::Relaxed);
+        samples.push((el, got));
+        // текущая скорость — за последнюю секунду
+        let back = samples.iter().rev().find(|(t, _)| el - t >= 1.0).copied().unwrap_or(samples[0]);
+        let now_mbps = mbps_of(got.saturating_sub(back.1), (el - back.0).max(0.1));
+        progress(SpeedProgress {
+            phase: if down { SpeedPhase::Down } else { SpeedPhase::Up },
+            mbps: now_mbps,
+            ping_ms: None,
+            fraction: (got as f64 / cap as f64).max(el / limit_s).min(1.0),
+        });
+        let all_done = workers.iter().all(|w| w.is_finished());
+        if el > limit_s || got >= cap || all_done {
+            break;
+        }
+    }
+    stop.store(true, Ordering::Relaxed);
+    for w in workers {
+        let _ = w.join();
+    }
+    let (end_t, end_b) = *samples.last().unwrap_or(&(0.0, 0));
+    if end_b <= 500_000 {
+        return match err.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            Some(e) => Err(e),
+            None => Ok(None),
+        };
+    }
+    // начало установившегося участка: 1,5 с, но не больше трети замера (на короткой лимитной — с начала)
+    let warm = (end_t / 3.0).min(1.5);
+    let (w_t, w_b) = samples.iter().copied().find(|(t, _)| *t >= warm).unwrap_or((0.0, 0));
+    let steady = if end_t - w_t >= 0.5 && end_b > w_b { mbps_of(end_b - w_b, end_t - w_t) } else { mbps_of(end_b, end_t.max(0.01)) };
+    Ok(Some(steady))
+}
+
+/// Один запрос скачивания: читает тело и сразу прибавляет к общему счёту.
+fn pull(agent: &ureq::Agent, chunk: u64, total: &std::sync::atomic::AtomicU64, stop: &std::sync::atomic::AtomicBool) -> Result<(), String> {
+    use std::sync::atomic::Ordering;
+    let resp = agent.get(&format!("https://{SPEED_HOST}/__down?bytes={chunk}")).call().map_err(|e| e.to_string())?;
+    let mut r = resp.into_reader().take(chunk);
     let mut buf = vec![0u8; 256 * 1024];
-    let mut got: u64 = 0;
-    while got < max_bytes {
+    while !stop.load(Ordering::Relaxed) {
         let n = r.read(&mut buf).map_err(|e| e.to_string())?;
         if n == 0 {
             break;
         }
-        got += n as u64;
-        let el = t0.elapsed().as_secs_f64();
-        progress(SpeedProgress {
-            phase: SpeedPhase::Down,
-            mbps: mbps_of(got, el.max(0.01)),
-            ping_ms: None,
-            fraction: (got as f64 / max_bytes as f64).max(el / limit_s).min(1.0),
-        });
-        if el > limit_s {
-            break;
-        }
+        total.fetch_add(n as u64, Ordering::Relaxed);
     }
-    let el = t0.elapsed().as_secs_f64();
-    Ok(if got > 500_000 { Some(mbps_of(got, el)) } else { None })
+    Ok(())
+}
+
+/// Тело для отдачи: блоки случайных байт; обрывается, когда замер закончен.
+struct UpBody<'a> {
+    block: &'a [u8],
+    left: u64,
+    total: &'a std::sync::atomic::AtomicU64,
+    stop: &'a std::sync::atomic::AtomicBool,
+}
+
+impl Read for UpBody<'_> {
+    fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
+        use std::sync::atomic::Ordering;
+        if self.left == 0 {
+            return Ok(0);
+        }
+        if self.stop.load(Ordering::Relaxed) {
+            return Err(std::io::Error::other("замер закончен"));
+        }
+        let n = out.len().min(self.block.len()).min(self.left as usize);
+        out[..n].copy_from_slice(&self.block[..n]);
+        self.left -= n as u64;
+        self.total.fetch_add(n as u64, Ordering::Relaxed);
+        Ok(n)
+    }
+}
+
+/// Один запрос отдачи куска `chunk`.
+fn push(
+    agent: &ureq::Agent,
+    chunk: u64,
+    block: &[u8],
+    total: &std::sync::atomic::AtomicU64,
+    stop: &std::sync::atomic::AtomicBool,
+) -> Result<(), String> {
+    let body = UpBody { block, left: chunk, total, stop };
+    match agent
+        .post(&format!("https://{SPEED_HOST}/__up"))
+        .set("Content-Type", "application/octet-stream")
+        .set("Content-Length", &chunk.to_string())
+        .send(body)
+    {
+        Ok(_) | Err(ureq::Error::Status(_, _)) => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 /// Источник случайных байт для отдачи: /dev/urandom, а если его нет, простой xorshift.
@@ -2690,76 +2808,8 @@ fn random_block(n: usize) -> Vec<u8> {
     b
 }
 
-/// Читатель тела для POST: отдаёт блоки, считает отправленное и сообщает прогресс.
-/// После лимита времени обрывает отправку ошибкой (в Python там break и закрытие соединения).
-struct UpBody<'a> {
-    block: &'a [u8],
-    total: u64,
-    limit_s: f64,
-    t0: Instant,
-    sent: &'a std::cell::Cell<u64>,
-    /// время (с) на момент последней отправки/обрыва, до ожидания ответа сервера
-    end_el: &'a std::cell::Cell<Option<f64>>,
-    cut: &'a std::cell::Cell<bool>,
-    progress: &'a mut dyn FnMut(SpeedProgress),
-}
-
-impl Read for UpBody<'_> {
-    fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
-        let sent = self.sent.get();
-        let el = self.t0.elapsed().as_secs_f64();
-        if sent >= self.total {
-            if self.end_el.get().is_none() {
-                self.end_el.set(Some(el));
-            }
-            return Ok(0);
-        }
-        if el > self.limit_s {
-            self.cut.set(true);
-            self.end_el.set(Some(el));
-            return Err(std::io::Error::other("лимит времени отдачи"));
-        }
-        let n = out.len().min(self.block.len()).min((self.total - sent) as usize);
-        let src = self.block.get(..n).unwrap_or(&[]);
-        let dst = out.get_mut(..n).unwrap_or(&mut []);
-        dst.copy_from_slice(src);
-        let sent = sent + n as u64;
-        self.sent.set(sent);
-        let el = self.t0.elapsed().as_secs_f64();
-        (self.progress)(SpeedProgress {
-            phase: SpeedPhase::Up,
-            mbps: mbps_of(sent, el.max(0.01)),
-            ping_ms: None,
-            fraction: (sent as f64 / self.total as f64).max(el / self.limit_s).min(1.0),
-        });
-        Ok(n)
-    }
-}
-
-fn upload(progress: &mut dyn FnMut(SpeedProgress), limit_s: f64, total: u64) -> Result<Option<f64>, String> {
-    let agent = speed_agent(8);
-    let block = random_block(128 * 1024);
-    let sent = std::cell::Cell::new(0u64);
-    let end_el = std::cell::Cell::new(None);
-    let cut = std::cell::Cell::new(false);
-    let t0 = Instant::now();
-    let body = UpBody { block: &block, total, limit_s, t0, sent: &sent, end_el: &end_el, cut: &cut, progress };
-    let res = agent
-        .post(&format!("https://{SPEED_HOST}/__up"))
-        .set("Content-Type", "application/octet-stream")
-        .set("Content-Length", &total.to_string())
-        .send(body);
-    match res {
-        Ok(_) | Err(ureq::Error::Status(_, _)) => {}
-        Err(_) if cut.get() => {} // свой обрыв по времени: так и задумано
-        Err(e) => return Err(e.to_string()),
-    }
-    let el = end_el.get().unwrap_or_else(|| t0.elapsed().as_secs_f64());
-    Ok(if sent.get() > 500_000 { Some(mbps_of(sent.get(), el.max(0.001))) } else { None })
-}
-
-/// Пинг, скачивание и отдача через Cloudflare, около 20 секунд (скачивает до 60 МБ,
-/// отдаёт до 25 МБ). Строки и пороги как в Python.
+/// Пинг, скачивание и отдача через Cloudflare: около 20 секунд, в 6 потоков (на лимитной сети — один поток
+/// и несколько мегабайт).
 pub fn speed_test(mut progress: impl FnMut(SpeedProgress)) -> Vec<Check> {
     let mut out = Vec::new();
     let ping = |p: &mut dyn FnMut(SpeedProgress), ms: Option<f64>| {
@@ -2798,11 +2848,13 @@ pub fn speed_test(mut progress: impl FnMut(SpeedProgress)) -> Vec<Check> {
     }
     for (title, is_down, good) in [(SPEED_TITLES[1], true, 20.0), (SPEED_TITLES[2], false, 5.0)] {
         log(&format!("тест скорости: {}", if is_down { "скачивание" } else { "отдача" }));
-        // объём ограничен: на быстрой линии хватает и этого (замер по времени), на лимитной — совсем немного
-        let res = if is_down {
-            download(&mut progress, 10.0, if metered { 5_000_000 } else { 30_000_000 })
-        } else {
-            upload(&mut progress, 8.0, if metered { 2_000_000 } else { 10_000_000 })
+        // обычная сеть — 6 потоков по времени (до 10 с скачивание, 8 с отдача; объём с запасом на гигабитную
+        // линию); лимитная — один поток и совсем немного
+        let res = match (is_down, metered) {
+            (true, false) => transfer(&mut progress, true, 6, 10.0, 600_000_000, 50_000_000),
+            (false, false) => transfer(&mut progress, false, 6, 8.0, 300_000_000, 20_000_000),
+            (true, true) => transfer(&mut progress, true, 1, 10.0, 5_000_000, 5_000_000),
+            (false, true) => transfer(&mut progress, false, 1, 8.0, 2_000_000, 2_000_000),
         };
         let (mbps, err) = match res {
             Ok(m) => (m, String::new()),
@@ -3124,5 +3176,12 @@ mod tests {
         // как в Python: не больше двух слов
         assert_eq!(ext_state("Name: x\n  State: OUT OF DATE\n"), "OUT OF");
         assert_eq!(ext_state("  State: ENABLED\nOther: 1"), "ENABLED");
+    }
+
+    #[test]
+    fn unchecked_count_uses_marker_not_text() {
+        let a = Check::new("sys", "Диск", INFO, "не проверить").unknown();
+        let b = Check::new("sys", "Пояс", INFO, "не проверить"); // та же фраза, но без пометки
+        assert_eq!(unchecked_count(&[a, b]), 1);
     }
 }

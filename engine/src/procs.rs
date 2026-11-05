@@ -92,7 +92,7 @@ pub fn list() -> Vec<Proc> {
             return v.clone();
         }
     }
-    // свои дочерние процессы (Аптечка сама запускает, например, `opencode session list`) — не программы пользователя
+    // свои дочерние процессы (команды, которые запускает сама Аптечка) — не программы пользователя
     let me = std::process::id() as i64;
     let v: Vec<Proc> = list_now().into_iter().filter(|p| p.ppid != me).collect();
     *c = Some((Instant::now(), v.clone()));

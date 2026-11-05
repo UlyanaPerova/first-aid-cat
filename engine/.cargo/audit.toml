@@ -1,0 +1,10 @@
+# cargo audit: exceptions with reasons. Anything new fails CI.
+[advisories]
+ignore = [
+    # zbus_names / zvariant / zvariant_derive are "unmaintained" only because they were merged into zbus 6.
+    # They are pulled in by accesskit_unix (screen-reader support on Linux), which is already on its latest
+    # version and still uses zbus 5. No known vulnerabilities. Remove these lines when AccessKit moves to zbus 6.
+    "RUSTSEC-2026-0370",
+    "RUSTSEC-2026-0371",
+    "RUSTSEC-2026-0372",
+]

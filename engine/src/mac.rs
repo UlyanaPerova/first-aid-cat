@@ -28,7 +28,7 @@ pub fn proxy_all_off() -> bool {
 
 pub(crate) fn check_proxy() -> Vec<Check> {
     let Some(d) = scutil_proxy() else {
-        return vec![Check::new("net", "Системный прокси", INFO, "не проверить").hint("scutil --proxy не ответил.")];
+        return vec![Check::new("net", "Системный прокси", INFO, "не проверить").unknown().hint("scutil --proxy не ответил.")];
     };
     let mut out = Vec::new();
     let mut any = false;

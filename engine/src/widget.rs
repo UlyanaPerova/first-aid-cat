@@ -73,6 +73,9 @@ fn summarize(all: &[Check]) -> Vec<Row> {
     let total = if real == 0 {
         // проверок ещё нет (или все — «не проверить») — это не «всё в порядке»
         Row { label: "Итог", status: "info".into(), value: "ещё проверяю".into() }
+    } else if bad + warn == 0 && crate::diag::unchecked_count(all) > 0 {
+        // часть проверок не смогла выполниться: не зелёное «всё в порядке», а нейтральное
+        Row { label: "Итог", status: "info".into(), value: "не всё проверено".into() }
     } else if bad + warn == 0 {
         Row { label: "Итог", status: "ok".into(), value: "всё в порядке".into() }
     } else {
@@ -200,6 +203,8 @@ pub struct Widget {
     window: Option<Rc<Window>>,
     surface: Option<softbuffer::Surface<Rc<Window>, Rc<Window>>>,
     next: Instant,
+    /// Окно закрыто другими окнами (Occluded) или свёрнуто: картинку не перерисовываем, данные берём.
+    hidden: bool,
     cursor: PhysicalPosition<f64>,
     /// нажата кнопка «закрыть» (отпускание над ней — закрыть виджет)
     close_down: bool,
@@ -284,6 +289,7 @@ impl Widget {
             window: None,
             surface: None,
             next: Instant::now(),
+            hidden: false,
             cursor: PhysicalPosition::new(0.0, 0.0),
             close_down: false,
             hover: false,
@@ -711,6 +717,13 @@ impl ApplicationHandler for Widget {
 
     fn window_event(&mut self, el: &ActiveEventLoop, _id: WindowId, ev: WindowEvent) {
         match ev {
+            WindowEvent::Occluded(h) => {
+                self.hidden = h;
+                if !h {
+                    // снова видно — кадр сразу
+                    self.next = Instant::now();
+                }
+            }
             WindowEvent::CloseRequested => {
                 if self.pos_dirty.take().is_some() {
                     self.save_pos();
@@ -784,10 +797,13 @@ impl ApplicationHandler for Widget {
                 self.relayout();
                 self.fit_window();
             }
-            if let Some(w) = &self.window {
+            // Windows не присылает Occluded для свёрнутого окна — спрашиваем (на X11 это запрос к серверу, там нет)
+            let minimized = cfg!(windows) && self.window.as_ref().and_then(|w| w.is_minimized()) == Some(true);
+            let idle = self.hidden || minimized;
+            if let Some(w) = self.window.as_ref().filter(|_| !idle) {
                 w.request_redraw();
             }
-            self.next = now + Duration::from_secs_f64(1.0 / FPS);
+            self.next = now + Duration::from_secs_f64(if idle { 1.0 } else { 1.0 / FPS });
         }
         el.set_control_flow(ControlFlow::WaitUntil(self.next));
     }
@@ -961,6 +977,9 @@ fn mac_state(all: &[Check], concept: bool, dir: Option<&std::path::Path>) -> Str
         "bad"
     } else if all.iter().any(|c| c.status == "warn") {
         "warn"
+    } else if crate::diag::unchecked_count(all) > 0 {
+        // ни бед, ни предупреждений, но часть проверок не смогла выполниться (Swift показывает нейтральный значок)
+        "unknown"
     } else {
         "ok"
     };
@@ -1173,5 +1192,35 @@ fn layered_present(win: &Window, buf: &[u32], w: i32, h: i32) {
         }
         DeleteDC(mem);
         ReleaseDC(std::ptr::null_mut(), screen);
+    }
+}
+
+#[cfg(test)]
+mod unchecked_tests {
+    use super::*;
+    use crate::diag::{Check, INFO};
+
+    fn total(all: &[Check]) -> (String, String) {
+        let r = summarize(all).pop().unwrap();
+        (r.status, r.value)
+    }
+
+    #[test]
+    fn total_not_green_when_something_unchecked() {
+        let ok = Check::new("sys", "Память", "ok", "40%");
+        let cant = Check::new("sys", "Диск", INFO, "не проверить").unknown();
+        assert_eq!(total(std::slice::from_ref(&ok)), ("ok".into(), "всё в порядке".into()));
+        assert_eq!(total(&[ok.clone(), cant.clone()]), ("info".into(), "не всё проверено".into()));
+        // обычная строка «для сведения» итог не портит
+        assert_eq!(total(&[ok.clone(), Check::new("net", "Часовой пояс", INFO, "UTC")]).0, "ok");
+        // беда сильнее
+        assert_eq!(total(&[Check::new("sys", "ЦП", "bad", "99%"), cant]).0, "bad");
+    }
+
+    #[test]
+    fn mac_state_unknown() {
+        let all = [Check::new("sys", "Память", "ok", "40%"), Check::new("sys", "Диск", INFO, "не проверить").unknown()];
+        let j: serde_json::Value = serde_json::from_str(&mac_state(&all, false, None)).unwrap();
+        assert_eq!(j["state"], "unknown");
     }
 }

@@ -1217,7 +1217,7 @@ pub fn manual(id: &str, arg: Option<&str>) -> Option<String> {
             "mac_thin_snapshots" => "tmutil thinlocalsnapshots / 999999999999 4".into(),
             "mac_force_quit" => {
                 let p = a.trim().parse::<u32>().ok()?;
-                confirm_kill(p, &format!("   # still running? kill -9 {p}"))
+                confirm_kill(p, "   # still running? run this line again; if it stays, use Activity Monitor > Force Quit")
             }
             _ => return None,
         })
@@ -1542,7 +1542,9 @@ fn proc_term(pid: i64, started: Option<u64>) -> (bool, String) {
         if fd.wait_exit(Duration::from_secs(5)) {
             return (true, "Программа закрыта.".into());
         }
-        (false, format!("Программа не закрылась сама. Закрыть принудительно: kill -9 {pid}"))
+        // без «kill -9 <номер>»: номер мог достаться другой программе. Принудительно закрывают по имени и
+        // подтверждению — в менеджере процессов (там видно, что именно закрываешь)
+        (false, format!("{name} не закрылась сама. Закрой её принудительно в менеджере процессов («Завершить принудительно»): там видно, что именно закрываешь."))
     }
     #[cfg(not(target_os = "linux"))]
     {

@@ -598,12 +598,189 @@ fn cursor_sessions(dir: &Path) -> Vec<AgentSession> {
 
 // ───────────────────────────── OpenCode ─────────────────────────────
 
-/// OpenCode (1.19+) хранит сессии в SQLite (~/.local/share/opencode/opencode.db). Читать её нечем (разборщика
-/// SQLite в программе нет), а запускать найденный в PATH или ~/.opencode/bin `opencode` в обычной проверке
-/// нельзя: это чужая программа, и подменённая выполнилась бы без согласия человека. Поэтому список сессий
-/// OpenCode не строится; строка проверки говорит об этом прямо (см. `check`).
-fn opencode_sessions(_dir: &Path) -> Vec<AgentSession> {
-    Vec::new()
+/// Самая большая база (и журнал -wal), которую согласна скопировать.
+const OC_MAX_COPY: u64 = 256 << 20;
+/// Всего на чтение базы: копирование и запрос.
+const OC_BUDGET: std::time::Duration = std::time::Duration::from_secs(8);
+
+/// OpenCode (1.19+) хранит сессии в SQLite (~/.local/share/opencode/opencode.db, режим WAL). Чужую программу
+/// не запускаем (обычная проверка этого не делает), базу читаем сами и только на чтение.
+/// Саму базу не открываем: копируем opencode.db и opencode.db-wal (обычные файлы, без ссылок, не больше
+/// 256 МБ) в закрытую временную папку и читаем копию. Так мы не берём блокировок у работающего OpenCode,
+/// не создаём -wal/-shm рядом с его базой и видим свежие записи из журнала (с `immutable=1` журнал
+/// игнорируется, и список отстал бы). Копия удаляется сразу после чтения.
+/// Кэш — по «личности» файлов (время изменения + размер базы и журнала).
+fn opencode_sessions(dir: &Path) -> Vec<AgentSession> {
+    opencode_read(dir).unwrap_or_default()
+}
+
+type OcCache = Option<(PathBuf, Vec<(u64, u64)>, Vec<AgentSession>)>;
+static OC_CACHE: std::sync::Mutex<OcCache> = std::sync::Mutex::new(None);
+static OC_FAILED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Последнее чтение базы OpenCode не удалось (повреждена, занята, схема незнакомая).
+pub(crate) fn opencode_unreadable() -> bool {
+    OC_FAILED.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+fn oc_stamp(db: &Path) -> Vec<(u64, u64)> {
+    let wal = PathBuf::from(format!("{}-wal", db.display()));
+    [db.to_path_buf(), wal]
+        .iter()
+        .map(|p| {
+            let m = std::fs::metadata(p).ok();
+            let t = m.as_ref().and_then(|m| m.modified().ok()).and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_nanos() as u64);
+            (t.unwrap_or(0), m.map_or(0, |m| m.len()))
+        })
+        .collect()
+}
+
+fn opencode_read(dir: &Path) -> Result<Vec<AgentSession>, String> {
+    let db = dir.join("opencode.db");
+    if !db.is_file() {
+        OC_FAILED.store(false, std::sync::atomic::Ordering::Relaxed);
+        return Ok(Vec::new());
+    }
+    let stamp = oc_stamp(&db);
+    if let Ok(c) = OC_CACHE.lock() {
+        if let Some((p, st, v)) = c.as_ref() {
+            if *p == db && *st == stamp {
+                return Ok(v.clone());
+            }
+        }
+    }
+    let r = opencode_read_db(&db);
+    OC_FAILED.store(r.is_err(), std::sync::atomic::Ordering::Relaxed);
+    if let Ok(v) = &r {
+        if let Ok(mut c) = OC_CACHE.lock() {
+            *c = Some((db.clone(), stamp, v.clone()));
+        }
+    }
+    r
+}
+
+/// Копия на время чтения; Drop стирает её, что бы ни случилось.
+struct TempCopy(PathBuf);
+impl Drop for TempCopy {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// Скопировать обычный файл (не ссылку), не больше max байт и до срока.
+fn oc_copy(src: &Path, dst: &Path, max: u64, deadline: std::time::Instant) -> Result<(), String> {
+    if std::fs::symlink_metadata(src).map_err(|e| e.to_string())?.file_type().is_symlink() {
+        return Err("ссылка вместо файла".into());
+    }
+    let mut f = crate::store::open_regular(src).map_err(|e| e.to_string())?;
+    if f.metadata().map_err(|e| e.to_string())?.len() > max {
+        return Err("файл слишком большой".into());
+    }
+    let mut out = std::fs::File::create(dst).map_err(|e| e.to_string())?;
+    let mut buf = vec![0u8; 1 << 20];
+    let mut total = 0u64;
+    loop {
+        if std::time::Instant::now() > deadline {
+            return Err("слишком долго".into());
+        }
+        let n = f.read(&mut buf).map_err(|e| e.to_string())?;
+        if n == 0 {
+            return Ok(());
+        }
+        total += n as u64;
+        if total > max {
+            return Err("файл слишком большой".into());
+        }
+        std::io::Write::write_all(&mut out, &buf[..n]).map_err(|e| e.to_string())?;
+    }
+}
+
+fn opencode_read_db(db: &Path) -> Result<Vec<AgentSession>, String> {
+    let deadline = std::time::Instant::now() + OC_BUDGET;
+    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let tmp = crate::store::private_dir().join(format!("oc_{}_{nanos}_{n}", std::process::id()));
+    #[allow(unused_mut)]
+    let mut b = std::fs::DirBuilder::new();
+    #[cfg(unix)]
+    std::os::unix::fs::DirBuilderExt::mode(&mut b, 0o700);
+    b.create(&tmp).map_err(|e| e.to_string())?;
+    let guard = TempCopy(tmp);
+    let copy = guard.0.join("opencode.db");
+    oc_copy(db, &copy, OC_MAX_COPY, deadline)?;
+    let wal = PathBuf::from(format!("{}-wal", db.display()));
+    if std::fs::symlink_metadata(&wal).is_ok() {
+        // журнала может не быть (OpenCode закрыт) — тогда читаем одну базу
+        oc_copy(&wal, &guard.0.join("opencode.db-wal"), OC_MAX_COPY, deadline)?;
+    }
+    opencode_query(&copy, db, deadline)
+}
+
+/// Запрос к копии. Таблица `session_v2` (новые версии) или `session` (старые); нужные столбцы находим по
+/// PRAGMA table_info — если их нет, это незнакомая схема: ошибка, а не паника.
+fn opencode_query(copy: &Path, orig: &Path, deadline: std::time::Instant) -> Result<Vec<AgentSession>, String> {
+    use rusqlite::{types::Value, Connection, OpenFlags};
+    let mut conn =
+        Connection::open_with_flags(copy, OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX).map_err(|e| e.to_string())?;
+    conn.busy_timeout(std::time::Duration::from_secs(2)).map_err(|e| e.to_string())?;
+    let _ = conn.progress_handler(10_000, Some(move || std::time::Instant::now() > deadline));
+    let mut out: Vec<AgentSession> = Vec::new();
+    let mut found = false;
+    for table in ["session_v2", "session"] {
+        let cols: Vec<String> = {
+            let mut st = conn.prepare(&format!("PRAGMA table_info({table})")).map_err(|e| e.to_string())?;
+            let rows = st.query_map([], |r| r.get::<_, String>(1)).map_err(|e| e.to_string())?;
+            rows.flatten().collect()
+        };
+        if !["id", "title", "directory", "time_updated"].iter().all(|c| cols.iter().any(|x| x == c)) {
+            continue;
+        }
+        found = true;
+        let mut cond = Vec::new();
+        if cols.iter().any(|c| c == "parent_id") {
+            cond.push("parent_id IS NULL"); // подсессии (помощники) не показываем
+        }
+        if cols.iter().any(|c| c == "time_archived") {
+            cond.push("time_archived IS NULL");
+        }
+        let wh = if cond.is_empty() { String::new() } else { format!(" WHERE {}", cond.join(" AND ")) };
+        let sql = format!("SELECT id, title, directory, time_updated FROM {table}{wh} ORDER BY time_updated DESC LIMIT {SCAN}");
+        let mut st = conn.prepare(&sql).map_err(|e| e.to_string())?;
+        let mut rows = st.query([]).map_err(|e| e.to_string())?;
+        while let Some(r) = rows.next().map_err(|e| e.to_string())? {
+            // значения читаем как есть (Value): строка с неожиданным типом не роняет весь список
+            let text = |i: usize| match r.get::<_, Value>(i) {
+                Ok(Value::Text(t)) => t,
+                _ => String::new(),
+            };
+            let id = text(0);
+            if id.is_empty() {
+                continue;
+            }
+            let t = match r.get::<_, Value>(3) {
+                Ok(Value::Integer(n)) => n as f64,
+                Ok(Value::Real(x)) => x,
+                _ => 0.0,
+            };
+            out.push(AgentSession {
+                agent: "opencode",
+                id,
+                cwd: text(2),
+                title: crate::footprint::mask_secrets(&clip(&text(1))),
+                // время в миллисекундах; на случай секунд — как есть
+                mtime: if t > 1e11 { t / 1000.0 } else { t },
+                path: orig.to_path_buf(),
+                ..Default::default()
+            });
+        }
+    }
+    if !found {
+        return Err("незнакомая схема базы".into());
+    }
+    out.sort_by(|a, b| b.mtime.partial_cmp(&a.mtime).unwrap_or(std::cmp::Ordering::Equal));
+    out.truncate(SCAN);
+    Ok(out)
 }
 
 // ───────────────────────────── Живые сессии ─────────────────────────────
@@ -730,9 +907,9 @@ pub fn check(a: &Agent) -> Vec<Check> {
         }
     } else if let Some(last) = sess.first() {
         format!("закрыт · последняя {}", ago(last.mtime))
-    } else if a.id == "opencode" && a.data_dir().is_some_and(|d| d.join("opencode.db").is_file()) {
-        // не «сессий нет»: они есть, просто список не читаем (см. opencode_sessions)
-        "список не читаю (база SQLite)".into()
+    } else if a.id == "opencode" && opencode_unreadable() {
+        // база есть, но прочесть её не вышло (повреждена, занята, схема незнакомая) — не «сессий нет»
+        "не смогла прочитать".into()
     } else {
         "сессий нет".into()
     };
@@ -871,5 +1048,112 @@ mod tests {
         assert_eq!(x.busy, Some(false));
         assert_eq!(resume_command(x), "kimi -r session_439c1b35-399f-491c-9b95-91bf6d56b68b");
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    static OC_TEST: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn oc_tmp(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("aptechka-oc-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    #[test]
+    fn opencode_reads_db() {
+        let _g = OC_TEST.lock().unwrap_or_else(|e| e.into_inner());
+        let d = oc_tmp("ok");
+        // ключ собираем на лету: в исходниках его нет
+        let key = format!("sk-ant-api03-{}", "aB3dE5fG7hJ9kL1mN3pQ5rS7tU9vW1xY3zA5bC7d");
+        {
+            let c = rusqlite::Connection::open(d.join("opencode.db")).unwrap();
+            c.execute_batch(
+                "CREATE TABLE session_v2 (id text PRIMARY KEY, parent_id text, directory text NOT NULL, title text, time_updated integer NOT NULL, time_archived integer);",
+            )
+            .unwrap();
+            let mut ins = c.prepare("INSERT INTO session_v2 VALUES (?1,?2,?3,?4,?5,?6)").unwrap();
+            ins.execute(rusqlite::params!["ses_old", None::<String>, "/tmp/a", "старая", 1_700_000_000_000i64, None::<i64>]).unwrap();
+            ins.execute(rusqlite::params!["ses_new", None::<String>, "/tmp/b", format!("ключ {key} тут"), 1_800_000_000_000i64, None::<i64>])
+                .unwrap();
+            ins.execute(rusqlite::params!["ses_sub", Some("ses_new"), "/tmp/b", "помощник", 1_900_000_000_000i64, None::<i64>]).unwrap();
+            ins.execute(rusqlite::params!["ses_arch", None::<String>, "/tmp/b", "в архиве", 1_900_000_000_000i64, Some(5i64)]).unwrap();
+            // кривые строки: нет номера, время текстом, заголовок числом
+            ins.execute(rusqlite::params!["", None::<String>, "/x", "без номера", 1i64, None::<i64>]).unwrap();
+            ins.execute(rusqlite::params!["ses_bad", None::<String>, "/x", 42i64, "вчера", None::<i64>]).unwrap();
+            ins.execute(rusqlite::params!["x; rm -rf ~", None::<String>, "/x", "злой номер", 1_600_000_000_000i64, None::<i64>]).unwrap();
+        }
+        let v = opencode_read(&d).unwrap();
+        let ids: Vec<&str> = v.iter().map(|x| x.id.as_str()).collect();
+        assert_eq!(ids, ["ses_new", "ses_old", "x; rm -rf ~", "ses_bad"]);
+        assert_eq!(v[0].cwd, "/tmp/b");
+        assert_eq!(v[0].mtime, 1_800_000_000.0);
+        assert!(!v[0].title.contains(&key), "{}", v[0].title);
+        assert!(v[0].title.starts_with("ключ "));
+        assert_eq!(v[3].title, "42"); // число в текстовом столбце SQLite хранит строкой
+        assert_eq!(v[3].mtime, 0.0);
+        assert!(resume_command(&v[0]).ends_with("opencode -s ses_new"));
+        assert_eq!(resume_command(&v[2]), "", "небезопасный номер не даёт команду");
+        assert!(!opencode_unreadable());
+        // кэш по времени и размеру: тот же ответ без чтения
+        assert_eq!(opencode_read(&d).unwrap().len(), 4);
+        // временных копий не осталось
+        let left = std::fs::read_dir(crate::store::private_dir())
+            .map(|r| r.flatten().filter(|e| e.file_name().to_string_lossy().starts_with(&format!("oc_{}_", std::process::id()))).count())
+            .unwrap_or(0);
+        assert_eq!(left, 0);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn opencode_old_table_and_unknown_schema() {
+        let _g = OC_TEST.lock().unwrap_or_else(|e| e.into_inner());
+        let d = oc_tmp("old");
+        {
+            let c = rusqlite::Connection::open(d.join("opencode.db")).unwrap();
+            c.execute_batch("CREATE TABLE session (id text, title text, directory text, time_updated integer); INSERT INTO session VALUES ('s1','t','/a',1700000000000);")
+                .unwrap();
+        }
+        let v = opencode_read(&d).unwrap();
+        assert_eq!(v.len(), 1);
+        assert_eq!(v[0].id, "s1");
+        let _ = std::fs::remove_dir_all(&d);
+
+        let d = oc_tmp("schema");
+        {
+            let c = rusqlite::Connection::open(d.join("opencode.db")).unwrap();
+            c.execute_batch("CREATE TABLE session (foo text);").unwrap();
+        }
+        assert!(opencode_read_db(&d.join("opencode.db")).is_err());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn opencode_garbage_or_locked_is_error_not_panic() {
+        let _g = OC_TEST.lock().unwrap_or_else(|e| e.into_inner());
+        let d = oc_tmp("garbage");
+        std::fs::write(d.join("opencode.db"), vec![0xA5u8; 8192]).unwrap();
+        assert!(opencode_read_db(&d.join("opencode.db")).is_err());
+        assert!(opencode_read(&d).is_err());
+        assert!(opencode_unreadable());
+        assert!(opencode_sessions(&d).is_empty());
+        let _ = std::fs::remove_dir_all(&d);
+
+        // база занята: другой процесс держит исключительную блокировку — копия всё равно читается
+        let d = oc_tmp("locked");
+        let c = rusqlite::Connection::open(d.join("opencode.db")).unwrap();
+        c.execute_batch("CREATE TABLE session (id text, title text, directory text, time_updated integer); INSERT INTO session VALUES ('s1','t','/a',1700000000000); BEGIN EXCLUSIVE;")
+            .unwrap();
+        let r = opencode_read_db(&d.join("opencode.db"));
+        assert!(r.is_ok() || r.is_err()); // главное — без паники и зависания
+        drop(c);
+        // ссылка вместо базы — отказ
+        #[cfg(unix)]
+        {
+            let t = oc_tmp("link");
+            std::os::unix::fs::symlink(d.join("opencode.db"), t.join("opencode.db")).unwrap();
+            assert!(opencode_read_db(&t.join("opencode.db")).is_err());
+            let _ = std::fs::remove_dir_all(&t);
+        }
+        let _ = std::fs::remove_dir_all(&d);
     }
 }

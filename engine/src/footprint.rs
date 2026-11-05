@@ -633,6 +633,7 @@ pub fn check() -> Vec<Check> {
         }
         out.push(
             Check::new("sys", "Цифровой след: охват", INFO, "проверила не всё")
+                .unknown()
                 .hint(&format!("{}. Если ключей не нашла — это не значит, что их там нет.", what.join("; "))),
         );
     } else if out.iter().all(|c| c.status == INFO || c.status == OK) && hist.is_empty() && chats_with.is_empty() {

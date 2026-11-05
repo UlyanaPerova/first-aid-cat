@@ -146,9 +146,9 @@ pub fn check_health() -> Vec<crate::diag::Check> {
         // не ответил вовремя / не запустился — «не проверить», а не «дисков нет». Нет службы UDisks2 (код ошибки) — у системы
         // просто нет этой проверки, строки не будет, как и раньше
         if matches!(tree_r, crate::cmd::Outcome::Timeout { .. } | crate::cmd::Outcome::SpawnError(_)) {
-            return vec![
-                Check::new("sys", "Здоровье дисков", crate::diag::INFO, "не удалось проверить").hint("Служба дисков (UDisks2) не ответила вовремя.")
-            ];
+            return vec![Check::new("sys", "Здоровье дисков", crate::diag::INFO, "не удалось проверить")
+                .unknown()
+                .hint("Служба дисков (UDisks2) не ответила вовремя.")];
         }
         let tree = tree_r.text().to_string();
         for path in tree.lines().map(str::trim).filter(|l| l.starts_with("/org/freedesktop/UDisks2/drives/")) {

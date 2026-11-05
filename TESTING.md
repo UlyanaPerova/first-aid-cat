@@ -2,7 +2,13 @@
 
 ## Automated checks
 
-Run these in `engine/` before every change is merged:
+GitHub Actions runs them on every push and pull request ([ci.yml](.github/workflows/ci.yml)):
+- Linux: formatting, Clippy for Linux and Windows, tests, translation coverage;
+- Windows and macOS: tests;
+- macOS: a build of the app with its WidgetKit widget;
+- weekly: `cargo audit` for new advisories on dependencies, with the exceptions and their reasons in `engine/.cargo/audit.toml`.
+
+Run the same checks locally in `engine/`:
 
 ```sh
 cargo fmt --check

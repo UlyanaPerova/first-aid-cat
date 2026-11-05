@@ -77,7 +77,18 @@ fn windows_icon() {
     println!("cargo:rerun-if-changed={}", ico.display());
     let out = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
     let rc = out.join("icon.rc");
-    std::fs::write(&rc, format!("1 ICON \"{}\"\n", ico.to_string_lossy().replace('\\', "/"))).unwrap();
+    // значок и сведения о версии (свойства файла, «Приложения» в параметрах Windows)
+    let ver = env!("CARGO_PKG_VERSION");
+    let n: Vec<u32> = ver.split(['.', '-']).filter_map(|x| x.parse().ok()).chain([0, 0, 0, 0]).take(4).collect();
+    let nums = format!("{},{},{},{}", n[0], n[1], n[2], n[3]);
+    let info = format!(
+        "1 VERSIONINFO\nFILEVERSION {nums}\nPRODUCTVERSION {nums}\nFILEOS 0x40004\nFILETYPE 0x1\nBEGIN\n  BLOCK \"StringFileInfo\"\n  BEGIN\n    \
+         BLOCK \"040904B0\"\n    BEGIN\n      VALUE \"CompanyName\", \"First Aid Cat\"\n      VALUE \"FileDescription\", \"First Aid Cat\"\n      \
+         VALUE \"FileVersion\", \"{ver}\"\n      VALUE \"InternalName\", \"aptechka\"\n      VALUE \"OriginalFilename\", \"aptechka.exe\"\n      \
+         VALUE \"ProductName\", \"First Aid Cat\"\n      VALUE \"ProductVersion\", \"{ver}\"\n    END\n  END\n  BLOCK \"VarFileInfo\"\n  BEGIN\n    \
+         VALUE \"Translation\", 0x409, 1200\n  END\nEND\n"
+    );
+    std::fs::write(&rc, format!("1 ICON \"{}\"\n{info}", ico.to_string_lossy().replace('\\', "/"))).unwrap();
     let obj = out.join("icon.o");
     // GNU-сборка (MinGW): windres → объектный файл, который компоновщик добавит в exe
     let windres = std::env::var("WINDRES").unwrap_or_else(|_| "x86_64-w64-mingw32-windres".into());

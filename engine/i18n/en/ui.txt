@@ -807,3 +807,7 @@ en: {}?
 # ui.rs: «О программе» с версией
 ru: Аптечка {}
 en: First Aid Cat {}
+
+# ui.rs
+ru: Проверка завершена: {} из {} · проблем: {} · предупреждений: {} · не проверено: {}
+en: Check complete: {} of {} · problems: {} · warnings: {} · not checked: {}

@@ -370,3 +370,11 @@ en: Age since last reboot:
 ru: Дежурный ассистент Claude:
 en: Assistant on duty: Claude:
 
+
+# spravka.rs
+ru: Пациент осмотрен не полностью: проблем в выполненных проверках не найдено, но часть проверок выполнить не удалось. Заключения «здоров» не даю.
+en: The patient was examined only in part: no problems in the checks that ran, but some checks could not be done. No «healthy» verdict is given.
+
+# spravka.rs
+ru: Не удалось проверить: {}
+en: Could not check: {}

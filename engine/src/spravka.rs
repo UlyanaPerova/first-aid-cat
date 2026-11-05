@@ -156,6 +156,8 @@ pub struct Doc {
     pub os: String,
     pub age: String,
     pub healthy: bool,
+    /// Сколько проверок не смогли выполниться: «здоров» тогда не пишем.
+    pub unchecked: usize,
     pub claude: &'static str,
     pub findings: Vec<Finding>,
     /// (показатель, результат, оценка, норма)
@@ -268,7 +270,12 @@ pub fn build(results: &[Check], sessions: &[Session]) -> Doc {
         os: format!("{os}, ядро {kernel}"),
         age: age.or_else(uptime_text).unwrap_or_else(|| "—".to_string()),
         // «здоров» — только если проверки есть и все пройдены (пустой набор или всё «проверяю» — не здоровье)
-        healthy: bad.is_empty() && warn.is_empty() && results.iter().any(|r| r.status == "ok") && !results.iter().any(|r| r.status == "checking"),
+        unchecked: crate::diag::unchecked_count(results),
+        healthy: crate::diag::unchecked_count(results) == 0
+            && bad.is_empty()
+            && warn.is_empty()
+            && results.iter().any(|r| r.status == "ok")
+            && !results.iter().any(|r| r.status == "checking"),
         claude: if sessions.iter().any(|s| s.live) { "на смене" } else { "отдыхает" },
         findings: Vec::new(),
         vitals: Vec::new(),
@@ -475,6 +482,16 @@ pub fn layout(fonts: &mut Fonts, doc: &Doc, pw: i32) -> Page {
             left,
             14,
         );
+    } else if doc.findings.is_empty() && doc.unchecked > 0 {
+        b.text(
+            "Пациент осмотрен не полностью: проблем в выполненных проверках не найдено, но часть проверок выполнить не удалось. Заключения «здоров» не даю.",
+            15,
+            false,
+            INK,
+            left,
+            4,
+        );
+        b.text(&format!("Не удалось проверить: {}", doc.unchecked), 15, true, INK, left, 12);
     } else if doc.findings.is_empty() {
         b.text("Осмотр не закончен: проверки ещё идут или не выполнены. Данных для заключения недостаточно.", 15, false, INK, left, 12);
     } else {
@@ -674,4 +691,18 @@ pub fn render_rgb(fonts: &mut Fonts, doc: &Doc, pw: i32) -> (usize, usize, Vec<u
         rgb.extend_from_slice(&[(p >> 16) as u8, (p >> 8) as u8, p as u8]);
     }
     (w, h, rgb)
+}
+
+#[cfg(test)]
+mod unchecked_tests {
+    use super::*;
+
+    #[test]
+    fn not_healthy_if_unchecked() {
+        let ok = Check::new("sys", "Память", "ok", "40%");
+        assert!(build(std::slice::from_ref(&ok), &[]).healthy);
+        let d = build(&[ok, Check::new("sys", "Диск", "info", "не проверить").unknown()], &[]);
+        assert!(!d.healthy);
+        assert_eq!(d.unchecked, 1);
+    }
 }

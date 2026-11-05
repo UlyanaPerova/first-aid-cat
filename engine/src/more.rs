@@ -35,6 +35,7 @@ pub(crate) fn check_sound() -> Vec<Check> {
     if !act.answered() || st.lines().filter(|l| !l.trim().is_empty()).count() < 2 {
         out.push(
             Check::new("dev", "Звуковая служба", INFO, "не удалось проверить")
+                .unknown()
                 .hint("systemctl --user не ответил (нет пользовательской сессии systemd?)."),
         );
         return out;
@@ -50,7 +51,7 @@ pub(crate) fn check_sound() -> Vec<Check> {
     }
     let insp = crate::diag::run_ex(&["wpctl", "inspect", "@DEFAULT_AUDIO_SINK@"], 5);
     if !insp.answered() {
-        out.push(Check::new("dev", "Звук: вывод", INFO, "не проверить").hint("Программа wpctl (PipeWire) не ответила."));
+        out.push(Check::new("dev", "Звук: вывод", INFO, "не проверить").unknown().hint("Программа wpctl (PipeWire) не ответила."));
         return out;
     }
     let (code, inspect) = (insp.code(), insp.text().to_string());
@@ -280,7 +281,7 @@ pub(crate) fn check_packages() -> Vec<Check> {
         let aud = crate::diag::run_ex(&["dpkg", "--audit"], 20);
         let audit = aud.text().to_string();
         if !aud.answered() || (aud.code() != 0 && audit.trim().is_empty()) {
-            out.push(Check::new("sys", "Пакеты", INFO, "не удалось проверить").hint("dpkg --audit не ответил или завершился с ошибкой."));
+            out.push(Check::new("sys", "Пакеты", INFO, "не удалось проверить").unknown().hint("dpkg --audit не ответил или завершился с ошибкой."));
         } else if !audit.trim().is_empty() {
             out.push(
                 Check::new("sys", "Пакеты", WARN, "есть недоустановленные")
@@ -462,13 +463,14 @@ pub(crate) fn check_memory() -> Vec<Check> {
     if !can_read {
         out.push(
             Check::new("sys", "Нехватка памяти", INFO, "не проверить")
+                .unknown()
                 .hint("Журнал системы закрыт для этого пользователя (нужна группа adm или systemd-journal)."),
         );
     }
     // journalctl -g (поиск) есть не во всех сборках; ошибка — «не проверить», а не «нехватки не было»
     let kr = crate::diag::run_ex(&["journalctl", "-k", "--since", "-24h", "-q", "--no-pager", "-g", "Out of memory|oom-kill|Killed process"], 8);
     if !kr.answered() || kr.code() != 0 && kr.code() != 1 {
-        out.push(Check::new("sys", "Нехватка памяти", INFO, "не проверить").hint("Журнал системы не прочитался."));
+        out.push(Check::new("sys", "Нехватка памяти", INFO, "не проверить").unknown().hint("Журнал системы не прочитался."));
         return out;
     }
     let k = kr.text().to_string();

@@ -747,8 +747,8 @@ ru: Не удалось послать программе сигнал закр�
 en: I couldn't send the program a signal to close.
 
 # fixes.rs:1483
-ru: Программа не закрылась сама. Закрыть принудительно: kill -9 {}
-en: The program didn't close on its own. To force-close it: kill -9 {}
+ru: {} не закрылась сама. Закрой её принудительно в менеджере процессов («Завершить принудительно»): там видно, что именно закрываешь.
+en: {} didn't close on its own. Force-quit it in your process manager («Force quit» / «Kill»): it shows exactly what you are closing.
 
 # fixes.rs:1544
 ru: Часы сверены.

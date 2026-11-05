@@ -189,6 +189,8 @@ struct App {
     back: Vec<u32>,
     /// Окно не видно (закрыто другими окнами, свёрнуто): не рисуем.
     hidden: bool,
+    /// Окно в фокусе. Без фокуса, но на виду — рисуем втрое реже (живые показания в картинке всё равно идут).
+    focused: bool,
     /// файл программы при запуске (время изменения) и сказали ли уже, что её обновили
     exe_stamp: Option<std::time::SystemTime>,
     told_update: bool,
@@ -268,7 +270,8 @@ impl From<accesskit_winit::Event> for AppEvent {
 /// Результаты проверок и сессии Claude → что показать на экранах (как _screen_state в Python-версии).
 fn screen_state(checks: &[diag::Check], sessions: &[diag::Session], speed: Option<(f64, f64, f64)>, prev: &ScreenState, t: f64) -> ScreenState {
     let g = |title: &str| checks.iter().find(|c| c.title == title);
-    let mut st = ScreenState { message_t: prev.message_t, ..ScreenState::default() };
+    // идущий замер скорости — до его конца (Bg::SpeedDone его снимает)
+    let mut st = ScreenState { message_t: prev.message_t, speed_live: prev.speed_live, ..ScreenState::default() };
     st.speed = speed;
     if let Some(v) = g("VPN (итог)") {
         let short = if v.status == "ok" { v.value.replace("мир видит ", "вкл · ") } else { v.value.clone() };
@@ -346,6 +349,7 @@ fn screen_state(checks: &[diag::Check], sessions: &[diag::Session], speed: Optio
     st.message = match worst.as_str() {
         "bad" => first("bad").map(|c| format!("Ой! {}: {}", i18n::t(&c.title), i18n::t(&c.value))).unwrap_or_default(),
         "warn" => first("warn").map(|c| format!("Хм, {}: {}", i18n::t(&c.title), i18n::t(&c.value))).unwrap_or_default(),
+        _ if diag::unchecked_count(checks) > 0 => format!("Проблем не вижу, но не всё получилось проверить: {}", diag::unchecked_count(checks)),
         _ => "Всё спокойно, мур! :3".into(),
     };
     st.mood = worst;
@@ -539,11 +543,19 @@ impl App {
                 Bg::Sessions(ss) => self.apply_sessions(ss, t),
                 Bg::Checks(c, full) => self.apply_checks(c, full, t),
                 Bg::Speed(p) => {
+                    // стрелка спидометра на экране «Сеть» в картинке
+                    let (ph, val) = match p.phase {
+                        diag::SpeedPhase::Ping => (0, p.ping_ms.unwrap_or(0.0)),
+                        diag::SpeedPhase::Down => (1, p.mbps),
+                        diag::SpeedPhase::Up => (2, p.mbps),
+                    };
+                    self.sstate.speed_live = Some((ph, val));
                     if let Some(u) = self.ui.as_mut() {
                         u.speed_progress(p);
                     }
                 }
                 Bg::SpeedDone(res) => {
+                    self.sstate.speed_live = None;
                     crate::sched::save_speed(&res);
                     self.speed_checks = res.clone();
                     if let Some(u) = self.ui.as_mut() {
@@ -1294,6 +1306,13 @@ impl ApplicationHandler<AppEvent> for App {
             }
             _ => {}
         }
+        if let WindowEvent::Focused(f) = ev {
+            self.focused = f;
+            if f {
+                // вернулись к окну — кадр сразу, а не через долгий шаг фоновой частоты
+                self.next = Instant::now();
+            }
+        }
         match ev {
             WindowEvent::CloseRequested => el.exit(),
             WindowEvent::CursorMoved { position, .. } if self.manual_resize.is_some() => {
@@ -1424,6 +1443,7 @@ impl ApplicationHandler<AppEvent> for App {
                 self.hidden = hidden;
                 if !hidden {
                     self.need_full = true;
+                    self.next = Instant::now();
                     self.tick();
                 }
             }
@@ -1487,7 +1507,7 @@ impl ApplicationHandler<AppEvent> for App {
         } else if now >= self.next {
             self.tick();
             // окна не видно — просыпаемся редко, только проверить, не показали ли его
-            let step = if self.hidden || self.minimized() { 1.0 } else { 1.0 / self.fps };
+            let step = frame_step(self.hidden || self.minimized(), self.focused, self.fps);
             self.next = now + Duration::from_secs_f64(step);
         }
         // во время анимации интерфейса — 60 кадров в секунду, иначе обычный темп
@@ -1501,6 +1521,31 @@ impl ApplicationHandler<AppEvent> for App {
             self.next
         };
         el.set_control_flow(ControlFlow::WaitUntil(wake));
+    }
+}
+
+/// Шаг между кадрами, секунды: окна не видно (закрыто другим окном, свёрнуто) — раз в секунду, только принять
+/// результаты проверок; на виду, но без фокуса — втрое реже обычного; в фокусе — обычный темп.
+fn frame_step(hidden: bool, focused: bool, fps: f64) -> f64 {
+    if hidden {
+        1.0
+    } else if !focused {
+        3.0 / fps
+    } else {
+        1.0 / fps
+    }
+}
+
+#[cfg(test)]
+mod frame_step_tests {
+    use super::frame_step;
+
+    #[test]
+    fn throttled_when_nobody_looks() {
+        assert_eq!(frame_step(false, true, 20.0), 0.05);
+        assert!((frame_step(false, false, 20.0) - 0.15).abs() < 1e-9);
+        assert_eq!(frame_step(true, true, 20.0), 1.0);
+        assert_eq!(frame_step(true, false, 20.0), 1.0);
     }
 }
 
@@ -1803,6 +1848,7 @@ fn main() {
         ceiling_px: (0, 0, 0, Vec::new()),
         back: Vec::new(),
         hidden: false,
+        focused: true,
         last_present: Instant::now(),
         exe_stamp: procs::self_stamp(),
         told_update: false,

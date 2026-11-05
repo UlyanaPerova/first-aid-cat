@@ -63,6 +63,7 @@ func icon(_ s: String) -> (String, Color) {
     case "bad": return ("xmark.octagon.fill", .red)
     case "warn": return ("exclamationmark.triangle.fill", .orange)
     case "ok": return ("checkmark.circle.fill", .green)
+    // "unknown" (итог: «не всё проверено») и "info" — нейтральный значок
     default: return ("circle.dashed", .secondary)
     }
 }

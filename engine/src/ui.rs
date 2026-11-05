@@ -2565,8 +2565,15 @@ impl P<'_, '_> {
                 continue;
             }
             self.hit(vis, Hit::Row(i as u16));
-            let show_fix =
-                !row.fixes.is_empty() && (matches!(row.status.as_str(), "bad" | "warn") || row.title.starts_with("Канал") || row.key == "settings");
+            // кнопка — у красных и жёлтых строк; и всегда — у действий «по просьбе» (поиск и уборка копий, эталон
+            // тем, закрыть ключи от других): их строки спокойные (сведения или «в порядке»), а без кнопки
+            // действие было бы недоступно
+            const ON_DEMAND: [&str; 5] = ["dupes_scan", "dupes_trash", "snapshot", "footprint_lock", "footprint_history"];
+            let show_fix = !row.fixes.is_empty()
+                && (matches!(row.status.as_str(), "bad" | "warn")
+                    || row.title.starts_with("Канал")
+                    || row.key == "settings"
+                    || row.fixes.iter().any(|f| ON_DEMAND.contains(&f.id.as_str())));
             let btn = Rect::new(view.x + cols[2].0 + 4 * k, rr.y + 2 * k, cols[2].1 - 8 * k, rh - 4 * k);
             if show_fix {
                 self.hit(btn.intersect(view), Hit::Fix(i as u16));
@@ -2660,8 +2667,11 @@ impl P<'_, '_> {
         let ok = real.iter().filter(|c| c.status == "ok").count();
         let bad = real.iter().filter(|c| c.status == "bad").count();
         let warn = real.iter().filter(|c| c.status == "warn").count();
+        let unk = self.s.checks.iter().chain(self.s.speed_checks.iter()).filter(|c| c.unchecked).count();
         let s1 = if self.s.checking {
             "Проверяю…".to_string()
+        } else if unk > 0 {
+            format!("Проверка завершена: {ok} из {} · проблем: {bad} · предупреждений: {warn} · не проверено: {unk}", real.len())
         } else {
             format!("Проверка завершена: {ok} из {} · проблем: {bad} · предупреждений: {warn}", real.len())
         };
@@ -3062,6 +3072,7 @@ fn chk(key: &'static str, title: &str, status: &str, value: &str, fixes: &[(&str
         fix: fixes.first().map(|f| f.0.to_string()),
         fixes: fixes.iter().map(|f| crate::diag::Fix { id: f.0.into(), label: f.1.into(), arg: f.2.map(|a| a.into()) }).collect(),
         unit: "",
+        unchecked: false,
     }
 }
 

@@ -205,7 +205,9 @@ pub(crate) fn check_proxy() -> Vec<Check> {
         15,
     ) else {
         // PowerShell не ответил — это не «прокси выключен»
-        out.push(Check::new("net", "Системный прокси", INFO, "не удалось проверить").hint("PowerShell не ответил вовремя или вернул ошибку."));
+        out.push(
+            Check::new("net", "Системный прокси", INFO, "не удалось проверить").unknown().hint("PowerShell не ответил вовремя или вернул ошибку."),
+        );
         out.extend(crate::proxyaddr::env_row());
         return out;
     };
@@ -343,7 +345,7 @@ pub(crate) fn check_updates() -> Vec<Check> {
         "Get-WinEvent -FilterHashtable @{LogName='System';ProviderName='Microsoft-Windows-WindowsUpdateClient';Id=20;StartTime=(Get-Date).AddDays(-14)} -MaxEvents 200 -ErrorAction SilentlyContinue | ForEach-Object { $x=[xml]$_.ToXml(); [pscustomobject]@{t=$_.TimeCreated.ToString('dd.MM'); code=($x.Event.EventData.Data | Where-Object Name -eq 'errorCode').'#text'; title=($x.Event.EventData.Data | Where-Object Name -eq 'updateTitle').'#text'} }",
         40,
     ) else {
-        return vec![Check::new("sys", "Обновления Windows", INFO, "не проверить").hint("Журнал Windows не прочитался вовремя.")];
+        return vec![Check::new("sys", "Обновления Windows", INFO, "не проверить").unknown().hint("Журнал Windows не прочитался вовремя.")];
     };
     if ev.is_empty() {
         out.push(Check::new("sys", "Обновления Windows", OK, "ошибок за 2 недели нет"));

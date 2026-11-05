@@ -2,6 +2,10 @@
 //! текст шрифтом DejaVu Sans Condensed (кэш растров глифов по размеру), значки.
 //! Всё пишется прямо в буфер окна (0x00RRGGBB), без GTK и OpenGL.
 
+use skrifa::instance::{LocationRef, Size};
+use skrifa::metrics::GlyphMetrics;
+use skrifa::outline::{DrawSettings, OutlineGlyphCollection, OutlinePen};
+use skrifa::{charmap::Charmap, FontRef, GlyphId, MetadataProvider};
 use std::collections::HashMap;
 use tiny_skia::{Color, FillRule, GradientStop, LineCap, Paint, PathBuilder, Pixmap, Point, RadialGradient, SpreadMode, Stroke, Transform};
 
@@ -253,6 +257,51 @@ struct Glyph {
     cov: Vec<u8>,
 }
 
+/// Шрифт TrueType (skrifa): размеры — в единицах шрифта, перевод в пиксели делает вызывающий.
+#[derive(Clone)]
+pub struct Face {
+    charmap: Charmap<'static>,
+    outlines: OutlineGlyphCollection<'static>,
+    hmetrics: GlyphMetrics<'static>,
+    pub upm: f32,
+}
+
+/// Габарит глифа в единицах шрифта (из заголовка глифа таблицы glyf).
+pub struct GlyphBox {
+    pub x_min: f32,
+    pub y_min: f32,
+    pub x_max: f32,
+    pub y_max: f32,
+}
+
+impl Face {
+    pub fn parse(data: &'static [u8]) -> Option<Face> {
+        let font = FontRef::new(data).ok()?;
+        let loc = LocationRef::default();
+        let upm = font.metrics(Size::unscaled(), loc).units_per_em.max(1) as f32;
+        Some(Face { charmap: font.charmap(), outlines: font.outline_glyphs(), hmetrics: font.glyph_metrics(Size::unscaled(), loc), upm })
+    }
+
+    pub fn glyph_index(&self, ch: char) -> Option<GlyphId> {
+        self.charmap.map(ch)
+    }
+
+    pub fn advance(&self, g: GlyphId) -> Option<f32> {
+        self.hmetrics.advance_width(g)
+    }
+
+    /// None — у глифа нет контура (пробел и т. п.).
+    pub fn bounding_box(&self, g: GlyphId) -> Option<GlyphBox> {
+        let b = self.hmetrics.bounds(g)?;
+        (b.x_max > b.x_min && b.y_max > b.y_min).then_some(GlyphBox { x_min: b.x_min, y_min: b.y_min, x_max: b.x_max, y_max: b.y_max })
+    }
+
+    pub fn outline(&self, g: GlyphId, pen: &mut impl OutlinePen) -> Option<()> {
+        let o = self.outlines.get(g)?;
+        o.draw(DrawSettings::unhinted(Size::unscaled(), LocationRef::default()), pen).ok().map(|_| ())
+    }
+}
+
 struct Outline {
     pb: PathBuilder,
     s: f32,
@@ -260,7 +309,7 @@ struct Outline {
     oy: f32,
 }
 
-impl ttf_parser::OutlineBuilder for Outline {
+impl OutlinePen for Outline {
     fn move_to(&mut self, x: f32, y: f32) {
         self.pb.move_to(self.ox + x * self.s, self.oy - y * self.s);
     }
@@ -287,7 +336,7 @@ impl ttf_parser::OutlineBuilder for Outline {
 
 /// Два начертания (обычное и жирное) и кэш растров глифов по (начертание, символ, размер).
 pub struct Fonts {
-    faces: [ttf_parser::Face<'static>; 2],
+    faces: [Face; 2],
     cache: HashMap<(u8, char, u16), Glyph>,
     /// без сглаживания (пиксельный шрифт)
     crisp: bool,
@@ -295,23 +344,22 @@ pub struct Fonts {
 
 const FONT_PIXEL: &[u8] = include_bytes!("../assets/FusionPixel.ttf");
 
-fn raster(face: &ttf_parser::Face<'static>, ch: char, px: u16, crisp: bool) -> Glyph {
-    let upm = face.units_per_em().max(1) as f32;
-    let s = px as f32 / upm;
+fn raster(face: &Face, ch: char, px: u16, crisp: bool) -> Glyph {
+    let s = px as f32 / face.upm;
     let blank = |adv: f32| Glyph { w: 0, h: 0, left: 0, top: 0, adv, cov: Vec::new() };
     let Some(gid) = face.glyph_index(ch) else { return blank(px as f32 * 0.55) };
-    let adv = face.glyph_hor_advance(gid).map(|a| a as f32 * s).unwrap_or(px as f32 * 0.55);
-    let Some(bb) = face.glyph_bounding_box(gid) else { return blank(adv) };
-    let x0 = (bb.x_min as f32 * s).floor() as i32 - 1;
-    let top = (bb.y_max as f32 * s).ceil() as i32 + 1;
-    let x1 = (bb.x_max as f32 * s).ceil() as i32 + 1;
-    let bot = (bb.y_min as f32 * s).floor() as i32 - 1;
+    let adv = face.advance(gid).map(|a| a * s).unwrap_or(px as f32 * 0.55);
+    let Some(bb) = face.bounding_box(gid) else { return blank(adv) };
+    let x0 = (bb.x_min * s).floor() as i32 - 1;
+    let top = (bb.y_max * s).ceil() as i32 + 1;
+    let x1 = (bb.x_max * s).ceil() as i32 + 1;
+    let bot = (bb.y_min * s).floor() as i32 - 1;
     let (w, h) = (x1 - x0, top - bot);
     if w <= 0 || h <= 0 {
         return blank(adv);
     }
     let mut ol = Outline { pb: PathBuilder::new(), s, ox: -x0 as f32, oy: top as f32 };
-    if face.outline_glyph(gid, &mut ol).is_none() {
+    if face.outline(gid, &mut ol).is_none() {
         return blank(adv);
     }
     let (Some(path), Some(mut pm)) = (ol.pb.finish(), Pixmap::new(w as u32, h as u32)) else { return blank(adv) };
@@ -325,13 +373,13 @@ fn raster(face: &ttf_parser::Face<'static>, ch: char, px: u16, crisp: bool) -> G
 
 impl Fonts {
     pub fn new() -> Fonts {
-        let parse = |d: &'static [u8]| ttf_parser::Face::parse(d, 0).expect("шрифт DejaVu вшит в программу");
+        let parse = |d: &'static [u8]| Face::parse(d).expect("шрифт DejaVu вшит в программу");
         Fonts { faces: [parse(FONT_REG), parse(FONT_BOLD)], cache: HashMap::new(), crisp: false }
     }
 
     /// Пиксельный шрифт (FusionPixel, кириллица есть), чёткий: размер — кратный 12.
     pub fn pixel() -> Fonts {
-        let f = || ttf_parser::Face::parse(FONT_PIXEL, 0).expect("пиксельный шрифт вшит в программу");
+        let f = || Face::parse(FONT_PIXEL).expect("пиксельный шрифт вшит в программу");
         Fonts { faces: [f(), f()], cache: HashMap::new(), crisp: true }
     }
 
@@ -644,4 +692,72 @@ fn draw_status(code: u8, lamp: bool, size: u32) -> Option<Pixmap> {
         }
     }
     box_scale(&pm, size)
+}
+
+#[cfg(test)]
+mod font_tests {
+    use super::*;
+
+    const STRINGS: &[&str] = &[
+        "Аптечка: всё в порядке",
+        "First Aid Cat 0123456789",
+        "Ёё Щщ Ъъ ЫЬЭЮЯ — … ✓ ↓↑ 36.6°C",
+        "Диск C: 87% (занято) — проверка…",
+        "\u{E000}\u{1F600}x", // нет в шрифте: пустой шаг
+    ];
+
+    fn configs() -> Vec<(bool, bool, u16)> {
+        let mut v = Vec::new();
+        for px in [12u16, 13, 24, 26] {
+            v.push((false, false, px));
+            v.push((false, true, px));
+        }
+        v.push((true, false, 12));
+        v.push((true, false, 24));
+        v
+    }
+
+    /// Рисует все строки столбиком; возвращает (ширины, яркость пикселей).
+    fn render() -> (Vec<i32>, Vec<u8>) {
+        let mut widths = Vec::new();
+        let mut pix = Vec::new();
+        for (pixel, bold, px) in configs() {
+            let mut f = if pixel { Fonts::pixel() } else { Fonts::new() };
+            let (w, lh) = (480usize, px as i32 * 3 / 2);
+            let h = lh as usize * STRINGS.len();
+            let mut buf = vec![0u32; w * h];
+            let mut c = Canvas::new(&mut buf, w, w as i32, h as i32);
+            for (i, s) in STRINGS.iter().enumerate() {
+                widths.push(f.width(s, px, bold));
+                for ch in s.chars() {
+                    widths.push(f.width(&ch.to_string(), px, bold));
+                }
+                f.draw(&mut c, 2, i as i32 * lh + px as i32, s, 0xFFFFFF, px, bold);
+            }
+            pix.extend(buf.iter().map(|p| (*p & 0xFF) as u8));
+        }
+        (widths, pix)
+    }
+
+    #[test]
+    fn text_rendering_matches_fixture() {
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/fonts");
+        let t0 = std::time::Instant::now();
+        let (widths, pix) = render();
+        eprintln!("отрисовка всех строк (холодный кэш, 10 шрифтов): {:?}", t0.elapsed());
+        let wtxt = widths.iter().map(|w| w.to_string()).collect::<Vec<_>>().join("\n");
+        if std::env::var("UPDATE_FONT_FIXTURE").is_ok() {
+            std::fs::write(format!("{dir}/widths.txt"), &wtxt).unwrap();
+            std::fs::write(format!("{dir}/text.bin"), &pix).unwrap();
+        }
+        let want_w = std::fs::read_to_string(format!("{dir}/widths.txt")).unwrap();
+        assert_eq!(wtxt, want_w, "ширины глифов изменились");
+        let want = std::fs::read(format!("{dir}/text.bin")).unwrap();
+        assert_eq!(pix.len(), want.len());
+        let diffs: Vec<u8> = pix.iter().zip(&want).map(|(a, b)| a.abs_diff(*b)).collect();
+        let max = diffs.iter().copied().max().unwrap_or(0);
+        let n = diffs.iter().filter(|d| **d > 0).count();
+        eprintln!("текст: макс. разница {max}, отличных пикселей {n}");
+        assert!(max <= 1 && n <= 50, "картинка текста изменилась: макс {max}, пикселей {n}");
+    }
 }
