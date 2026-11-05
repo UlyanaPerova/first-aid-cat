@@ -8,6 +8,12 @@ use std::path::PathBuf;
 /// Папка настроек: Linux — $XDG_CONFIG_HOME или ~/.config; macOS — ~/Library/Application Support;
 /// Windows — %APPDATA%.
 pub fn config_dir() -> PathBuf {
+    // тесты подменяют папку через XDG_CONFIG_HOME на любой системе: на macOS и Windows иначе они писали бы
+    // в настоящую папку настроек
+    #[cfg(test)]
+    if let Some(x) = std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from).filter(|p| p.is_absolute()) {
+        return x.join("aptechka");
+    }
     // без домашней папки — временная папка, но не «.config» в текущем каталоге
     // без домашней папки — личная папка сеанса ($XDG_RUNTIME_DIR, 0700), а не общий /tmp (там её мог бы
     // заранее занять другой пользователь)

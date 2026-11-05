@@ -1038,7 +1038,8 @@ mod tests {
         std::fs::create_dir_all(&tmp).unwrap();
         let src = fx(".kimi-code");
         let idx = crate::store::read_text(src.join("session_index.jsonl")).unwrap();
-        std::fs::write(tmp.join("session_index.jsonl"), idx.replace("/home/ubuntu/.kimi-code", src.to_str().unwrap())).unwrap();
+        std::fs::write(tmp.join("session_index.jsonl"), idx.replace("/home/ubuntu/.kimi-code", &src.to_str().unwrap().replace('\\', "\\\\")))
+            .unwrap();
         let v = kimi_sessions(&tmp);
         assert_eq!(v.len(), 1);
         let x = &v[0];

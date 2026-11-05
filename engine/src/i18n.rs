@@ -53,6 +53,12 @@ fn now_ms() -> u64 {
 /// Текущий язык. Выбор из настроек («lang» в ui.json) перечитывается не чаще раза в секунду —
 /// так окно и виджет (отдельные процессы) переключаются вместе.
 pub fn lang() -> Lang {
+    // в тестах язык не зависит от системы (на CI система английская): по-русски, если тест не попросил иначе
+    #[cfg(test)]
+    {
+        return TEST_LANG.with(|l| l.get());
+    }
+    #[allow(unreachable_code)]
     let cur = LANG.load(Ordering::Relaxed);
     let now = now_ms();
     if cur != 0 && now.saturating_sub(CHECKED_MS.load(Ordering::Relaxed)) < 1000 {
@@ -64,6 +70,12 @@ pub fn lang() -> Lang {
     let l = forced.or_else(chosen).unwrap_or_else(system);
     LANG.store(if l == Lang::En { 2 } else { 1 }, Ordering::Relaxed);
     l
+}
+
+#[cfg(test)]
+thread_local! {
+    /// язык для тестов этого потока (см. lang)
+    pub static TEST_LANG: std::cell::Cell<Lang> = const { std::cell::Cell::new(Lang::Ru) };
 }
 
 /// Язык, выбранный вручную (меню «Вид»), если выбирали.

@@ -1,0 +1,2 @@
+# reference files of the tests: exact bytes, no CRLF conversion on Windows checkouts
+engine/tests/fixtures/** -text

@@ -435,6 +435,8 @@ mod tests {
         assert!(find_proxy_lines("case $x in a) ;; esac\nexport http_proxy=a\n")[0].top_level);
     }
 
+    // про ссылки на файлы оболочки — только там, где они есть (на Windows ссылку пришлось бы заменить копией)
+    #[cfg(unix)]
     #[test]
     fn comment_keeps_crlf_and_symlink() {
         let _g = crate::ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
