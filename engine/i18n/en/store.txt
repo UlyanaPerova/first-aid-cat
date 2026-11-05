@@ -1,0 +1,15 @@
+# store.rs:52
+ru: не обычный файл
+en: not a regular file
+
+# store.rs:55
+ru: файл слишком большой
+en: file is too large
+
+# store.rs:106
+ru: папка настроек принадлежит не мне (или это ссылка) — работаю без сохранения
+en: the settings folder isn't mine (or it's a link) — working without saving
+
+# store.rs:245
+ru: замок — не обычный файл
+en: the lock is not a regular file

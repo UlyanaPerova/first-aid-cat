@@ -1,0 +1,238 @@
+# netproxy.rs:22
+ru: {}: настроен прокси.
+en: {}: proxy configured.
+
+# netproxy.rs:28
+ru: {} ходит в интернет через прокси {}.
+en: {} goes online through proxy {}.
+
+# netproxy.rs:31
+ru: там никто не слушает — VPN выключен, а прокси остался
+en: nobody is listening there — VPN is off but the proxy was left behind
+
+# netproxy.rs:33
+ru: этот прокси-сервер не отвечает
+en: this proxy server is not responding
+
+# netproxy.rs:35
+ru: {} — там пусто
+en: {} — nothing there
+
+# netproxy.rs:35
+ru: {} отправляет интернет через {}, но {}. {}
+en: {} sends internet traffic through {}, but {}. {}
+
+# netproxy.rs:86
+ru: расширение
+en: extension
+
+# netproxy.rs:88
+ru: Это расширение может пускать браузер через свой прокси или VPN. Если сайты не открываются только в браузере (или только в нём открываются) — дело в нём: выключи его на странице about:addons.
+en: This extension may route the browser through its own proxy or VPN. If sites fail to open only in the browser (or open only there), it is the cause: turn it off on the about:addons page.
+
+# netproxy.rs:103
+ru: {}: свой прокси
+en: {}: own proxy
+
+# netproxy.rs:107
+ru: Исправь в Firefox: Настройки → Основные → Параметры сети → «Без прокси» (или «Использовать системные»).
+en: Fix it in Firefox: Settings → General → Network Settings → “No proxy” (or “Use system proxy settings”).
+
+# netproxy.rs:117
+ru: {}: прокси по PAC-файлу
+en: {}: proxy via PAC file
+
+# netproxy.rs:118
+ru: Браузер берёт правила прокси из PAC-файла.
+en: The browser takes its proxy rules from a PAC file.
+
+# netproxy.rs:137
+ru: Яндекс Браузер
+en: Yandex Browser
+
+# netproxy.rs:184
+ru: Расширение с правом управлять прокси: может пускать браузер через свой VPN. Если сайты не открываются только в браузере — выключи его в «Расширениях».
+en: An extension that can control the proxy: it may route the browser through its own VPN. If sites fail to open only in the browser, turn it off in “Extensions”.
+
+# netproxy.rs:245
+ru: В строке {} кроме прокси есть другие настройки — убери из неё только прокси в {} вручную.
+en: Line {} has other settings besides the proxy — remove only the proxy from it in {} by hand.
+
+# netproxy.rs:249
+ru: Закомментировать
+en: Comment out
+
+# netproxy.rs:251
+ru: Строка {} внутри условия или функции — поправь её в {} вручную.
+en: Line {} is inside a condition or function — fix it in {} by hand.
+
+# netproxy.rs:252
+ru: Это системный файл — поправь строку {} вручную: sudo nano {}
+en: This is a system file — fix line {} by hand: sudo nano {}
+
+# netproxy.rs:255
+ru: Прокси в {}
+en: Proxy in {}
+
+# netproxy.rs:256
+ru: Терминал (строка {} в {})
+en: Terminal (line {} in {})
+
+# netproxy.rs:259
+ru: Из-за этого не работают терминал и ИИ-агенты в нём, хотя браузер работает. {}
+en: Because of this the terminal and AI agents in it don't work, though the browser does. {}
+
+# netproxy.rs:272
+ru: git: прокси
+en: git: proxy
+
+# netproxy.rs:272
+ru: Убрать у git
+en: Remove from git
+
+# netproxy.rs:280
+ru: npm: прокси
+en: npm: proxy
+
+# netproxy.rs:280
+ru: Убрать у npm
+en: Remove from npm
+
+# netproxy.rs:295
+ru: pip: прокси
+en: pip: proxy
+
+# netproxy.rs:295
+ru: Убери строку proxy из этого файла.
+en: Remove the proxy line from this file.
+
+# netproxy.rs:317
+ru: apt: прокси
+en: apt: proxy
+
+# netproxy.rs:321
+ru: Обновления не скачаются. Убери строку: sudo nano {}
+en: Updates won't download. Remove the line: sudo nano {}
+
+# netproxy.rs:343
+ru: Непонятно, какую строку.
+en: I can't tell which line.
+
+# netproxy.rs:347
+ru: Этот файл системный (или вне домашней папки) — поправь его вручную.
+en: This is a system file (or outside the home folder) — fix it by hand.
+
+# netproxy.rs:351
+ru: закомментировать строку {} в {}
+en: comment out line {} in {}
+
+# netproxy.rs:354
+ru: Строка {} закомментирована (копия: {}). Открой новый терминал.
+en: Line {} is commented out (backup: {}). Open a new terminal.
+
+# netproxy.rs:431
+ru: не нужен
+en: not needed
+
+# netproxy.rs:442
+ru: Открыть страницу входа ({})
+en: Open sign-in page ({})
+
+# netproxy.rs:446
+ru: Сеть просит войти на своей странице (как в кафе или гостинице): {}
+en: The network asks you to sign in on its own page (like in a café or hotel): {}
+
+# netproxy.rs:448
+ru: Сеть пускает только на свою страницу (как в кафе, гостинице, на вокзале). Открой любой сайт в браузере — появится страница входа.
+en: The network lets you reach only its own page (like in a café, hotel or station). Open any site in the browser and the sign-in page will appear.
+
+# netproxy.rs:452
+ru: нужен вход на странице сети
+en: sign-in needed on the network page
+
+# netproxy.rs:456
+ru: возможно, нужен
+en: maybe needed
+
+# netproxy.rs:457
+ru: Один адрес проверки подменён, другой не ответил. Если сайты не открываются — открой страницу входа.
+en: One test address was replaced and another did not answer. If sites don't open, open the sign-in page.
+
+# netproxy.rs:461
+ru: не понять
+en: can't tell
+
+# netproxy.rs:461
+ru: Адреса проверки ответили неожиданно.
+en: The test addresses answered unexpectedly.
+
+# netproxy.rs:588
+ru: заряжается
+en: charging
+
+# netproxy.rs:589
+ru: заряжена, от сети
+en: charged, on mains
+
+# netproxy.rs:590
+ru: полная
+en: full
+
+# netproxy.rs:591
+ru: от батареи
+en: on battery
+
+# netproxy.rs:592
+ru: не заряжается
+en: not charging
+
+# netproxy.rs:601
+ru: Ноутбук включён в сеть, а батарея не заряжается. Проверь блок питания и разъём; если включено «ограничение заряда» — это нормально.
+en: The laptop is plugged in but the battery isn't charging. Check the power adapter and the socket; if “charge limit” is on, that's normal.
+
+# netproxy.rs:604
+ru: Почти разряжена — подключи зарядку.
+en: Almost empty — plug in the charger.
+
+# netproxy.rs:609
+ru: Износ батареи
+en: Battery wear
+
+# netproxy.rs:609
+ru: держит {}% от новой
+en: holds {}% of new
+
+# netproxy.rs:611
+ru: Батарея заметно износилась: ноутбук без зарядки проработает меньше. Это нормально через несколько лет.
+en: The battery is noticeably worn: the laptop will last less on battery. That's normal after a few years.
+
+# netproxy.rs:634
+ru: хороший
+en: good
+
+# netproxy.rs:638
+ru: слабый
+en: weak
+
+# netproxy.rs:640
+ru: очень слабый
+en: very weak
+
+# netproxy.rs:642
+ru: {} ({} дБм, {})
+en: {} ({} dBm, {})
+
+# netproxy.rs:646
+ru: Слабый сигнал: интернет будет тормозить и обрываться. Подойди ближе к роутеру или убери преграды между ними.
+en: Weak signal: the internet will lag and drop. Move closer to the router or remove obstacles between you.
+
+# собираются в рантайме
+ru: {} отправляет интернет через {}, но {}.
+en: {} sends internet traffic through {}, but {}.
+
+ru: Из-за этого не работают терминал и ИИ-агенты в нём, хотя браузер работает.
+en: Because of this the terminal and AI agents in it don't work, though the browser does.
+
+ru: {}%, {}
+en: {}%, {}
+

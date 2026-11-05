@@ -1,0 +1,73 @@
+{
+ "w": 106,
+ "h": 117,
+ "step": [
+  9.57,
+  10.61
+ ],
+ "cat": [
+  8,
+  0,
+  90,
+  47
+ ],
+ "close": [
+  94,
+  21,
+  9,
+  9
+ ],
+ "list": [
+  12,
+  52,
+  83,
+  50
+ ],
+ "fields": [
+  {
+   "kind": "clock",
+   "rect": [
+    62,
+    52,
+    31,
+    11
+   ],
+   "color": "#02396A",
+   "align": "right",
+   "bold": false,
+   "dx": -1.33,
+   "dy": 1.67,
+   "weight": 2,
+   "ls": 0
+  },
+  {
+   "kind": "total",
+   "rect": [
+    14,
+    78,
+    80,
+    14
+   ],
+   "color": "#023565",
+   "bad_color": "#9A1830",
+   "align": "center",
+   "bold": false,
+   "weight": 1,
+   "ls": 1,
+   "sp": 4
+  },
+  {
+   "kind": "retitle",
+   "rect": [
+    32,
+    62,
+    60,
+    9
+   ],
+   "src": 75,
+   "text": "АПТЕЧКА",
+   "color": "#0B3A66",
+   "bold": true
+  }
+ ]
+}

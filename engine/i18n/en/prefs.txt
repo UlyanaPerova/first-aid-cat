@@ -1,0 +1,13 @@
+# prefs.rs:67
+ru: Настройки не сохранены: файл настроек занят другой копией Аптечки
+en: Settings not saved: the settings file is in use by another copy of First Aid Cat
+
+# prefs.rs:83
+ru: Настройки не сохранены: {}
+en: Settings not saved: {}
+
+ru: Настройки не сохранены: файл настроек не читается, оставляю его как есть
+en: Settings not saved: the settings file cannot be read, leaving it as it is
+
+ru: Настройки не сохранены: не удалось сделать копию испорченного файла настроек ({})
+en: Settings not saved: could not make a copy of the damaged settings file ({})

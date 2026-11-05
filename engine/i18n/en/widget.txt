@@ -1,0 +1,143 @@
+# widget.rs:55
+ru:  (итог)
+en:  (total)
+
+# widget.rs:59
+ru: Канал
+en: Tunnel
+
+# widget.rs:62
+ru: итог
+en: total
+
+# widget.rs:63
+ru: Канал 
+en: Tunnel 
+
+# widget.rs:75
+ru: Итог
+en: Total
+
+# widget.rs:75
+ru: ещё проверяю
+en: still checking
+
+# widget.rs:77
+ru: всё в порядке
+en: all good
+
+# widget.rs:80
+ru: внимание: {}
+en: attention: {}
+
+# widget.rs:81
+ru: проблем: {}
+en: problems: {}
+
+# widget.rs:82
+ru: {} беда · {} предупр.
+en: {0} problem · {1} warn.
+
+# widget.rs:87
+ru: в порядке
+en: OK
+
+# widget.rs:89
+ru: на связи
+en: online
+
+# widget.rs:365
+ru: Сеть — {}
+en: Network — {}
+
+# widget.rs:366
+ru: Сеть — есть
+en: Network — up
+
+# widget.rs:374
+ru: ИИ — {}
+en: AI — {}
+
+# widget.rs:375
+ru: ИИ — {} думает
+en: AI — {} thinking
+
+# widget.rs:376
+ru: ИИ — на связи
+en: AI — online
+
+# widget.rs:384
+ru: ЦП —
+en: CPU —
+
+# widget.rs:384
+ru: ЦП {}%
+en: CPU {}%
+
+# widget.rs:391
+ru: Диск —
+en: Disk —
+
+# widget.rs:391
+ru: Диск — {} ГБ
+en: Disk — {} GB
+
+# widget.rs:400
+ru: Всё в порядке
+en: All good
+
+# widget.rs:404
+ru: Беда
+en: Problem
+
+# widget.rs:404
+ru: Внимание
+en: Attention
+
+# widget.rs:405
+ru: Проверяю…
+en: Checking…
+
+# widget.rs:415
+ru: VPN — вкл
+en: VPN — on
+
+# widget.rs:417
+ru: VPN — не используется
+en: VPN — not in use
+
+# widget.rs:419
+ru: VPN — нет данных
+en: VPN — no data
+
+# widget.rs:421
+ru: VPN — выкл
+en: VPN — off
+
+# widget.rs:649
+ru: Аптечка — виджет
+en: First Aid Cat — widget
+
+# widget.rs:853
+ru: ИИ — Claude думает
+en: AI — Claude thinking
+
+# widget.rs:853
+ru: ЦП 12%
+en: CPU 12%
+
+# widget.rs:853
+ru: Диск — 220 ГБ
+en: Disk — 220 GB
+
+# widget.rs:864
+ru: Беда: VPN
+en: Problem: VPN
+
+# widget.rs:867
+ru: Внимание: ИИ
+en: Attention: AI
+
+# widget.rs: свободно меньше 1 ГБ
+ru: Диск — {} МБ
+en: Disk — {} MB

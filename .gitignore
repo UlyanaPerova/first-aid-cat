@@ -1,0 +1,12 @@
+# secrets never go into the repository
+.env
+*.env
+*.key
+!.env.example
+
+# build output
+target/
+macos/build/
+dist/
+__pycache__/
+*.pyc

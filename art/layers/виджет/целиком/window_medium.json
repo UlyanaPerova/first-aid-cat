@@ -1,0 +1,187 @@
+{
+ "w": 216,
+ "h": 119,
+ "step": [
+  7.12,
+  7.26
+ ],
+ "cat": [
+  8,
+  25,
+  88,
+  88
+ ],
+ "close": [
+  196,
+  5,
+  15,
+  14
+ ],
+ "list": [
+  101,
+  25,
+  108,
+  88
+ ],
+ "fields": [
+  {
+   "kind": "status",
+   "of": 0,
+   "rect": [
+    105,
+    27,
+    12,
+    12
+   ],
+   "shape": "check",
+   "colors": {
+    "ok": "#34B14A",
+    "warn": "#E6A116",
+    "bad": "#E0483E",
+    "info": "#3D7BD9"
+   }
+  },
+  {
+   "kind": "status",
+   "of": 1,
+   "rect": [
+    105,
+    45,
+    12,
+    12
+   ],
+   "shape": "check",
+   "colors": {
+    "ok": "#34B14A",
+    "warn": "#E6A116",
+    "bad": "#E0483E",
+    "info": "#3D7BD9"
+   }
+  },
+  {
+   "kind": "status",
+   "of": 2,
+   "rect": [
+    105,
+    63,
+    12,
+    12
+   ],
+   "shape": "check",
+   "colors": {
+    "ok": "#34B14A",
+    "warn": "#E6A116",
+    "bad": "#E0483E",
+    "info": "#3D7BD9"
+   }
+  },
+  {
+   "kind": "row",
+   "index": 0,
+   "rect": [
+    120,
+    26,
+    86,
+    14
+   ],
+   "color": "#072454",
+   "bad_color": "#B0261C",
+   "bold": true,
+   "dx": 6,
+   "dy": 0.33,
+   "weight": 2,
+   "ls": 1,
+   "sp": 1,
+   "dash": 7
+  },
+  {
+   "kind": "row",
+   "index": 1,
+   "rect": [
+    120,
+    44,
+    86,
+    14
+   ],
+   "color": "#072454",
+   "bad_color": "#B0261C",
+   "bold": true,
+   "dx": 6,
+   "dy": 0.33,
+   "weight": 2,
+   "ls": 1,
+   "sp": 1,
+   "dash": 7
+  },
+  {
+   "kind": "row",
+   "index": 2,
+   "rect": [
+    120,
+    62,
+    86,
+    14
+   ],
+   "color": "#072454",
+   "bad_color": "#B0261C",
+   "bold": true,
+   "dx": 6,
+   "dy": 0.33,
+   "weight": 1,
+   "ls": 0,
+   "sp": 1,
+   "dash": 7
+  },
+  {
+   "kind": "row",
+   "index": 3,
+   "rect": [
+    120,
+    80,
+    86,
+    14
+   ],
+   "color": "#072454",
+   "bad_color": "#B0261C",
+   "bold": true,
+   "dx": 6,
+   "dy": 0.33,
+   "weight": 2,
+   "ls": 1,
+   "sp": 8,
+   "dash": 7
+  },
+  {
+   "kind": "row",
+   "index": 4,
+   "rect": [
+    120,
+    98,
+    86,
+    14
+   ],
+   "color": "#072454",
+   "bad_color": "#B0261C",
+   "bold": true,
+   "dx": 6,
+   "dy": 0.33,
+   "weight": 2,
+   "ls": 1,
+   "sp": 1,
+   "dash": 7
+  },
+  {
+   "kind": "retitle",
+   "rect": [
+    27,
+    7,
+    120,
+    10
+   ],
+   "src": 80,
+   "text": "Аптечка",
+   "color": "#FFFFFF",
+   "bold": true
+  }
+ ]
+}

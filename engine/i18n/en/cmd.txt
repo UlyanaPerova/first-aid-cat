@@ -1,0 +1,3 @@
+# cmd.rs:70
+ru: пустая команда
+en: empty command

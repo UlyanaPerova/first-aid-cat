@@ -1,0 +1,131 @@
+# dupes.rs:503
+ru: ещё не искала
+en: haven't searched yet
+
+# dupes.rs:504
+ru: Найду одинаковые файлы в Загрузках, Документах, Изображениях, Видео, Музыке и на Рабочем столе. Папки программных проектов не трогаю.
+en: I'll look for identical files in Downloads, Documents, Pictures, Videos, Music and on the Desktop. I don't touch software project folders.
+
+# dupes.rs:505
+ru: Найти копии
+en: Find copies
+
+# dupes.rs:512
+ru: копий нет
+en: no copies
+
+# dupes.rs:512
+ru: Поискать снова
+en: Search again
+
+# dupes.rs:514
+ru: просмотрела не всё
+en: didn't check everything
+
+# dupes.rs:515
+ru: Файлов много — за отведённое время просмотрела часть и копий в ней не нашла.
+en: There are many files — in the time I had I checked some of them and found no copies there.
+
+# dupes.rs:526
+ru: {} · лишнее {}
+en: {} · {} extra
+
+# dupes.rs:526
+ru: группа|группы|групп
+en: group|groups
+
+# dupes.rs:529
+ru: Одинаковые по содержимому файлы. Сама ничего не удаляю: лишние копии уходят в Корзину только по кнопке, оттуда можно вернуть.{}
+en: Files with identical content. I never delete anything on my own: extra copies go to the Trash only when you press the button, and you can restore them from there.{}
+
+# dupes.rs:533
+ru:  Искала не до конца (много файлов): часть файлов не просмотрена. «Поискать снова» начнёт поиск сначала.
+en:  I didn't finish searching (too many files): some files weren't checked. “Search again” starts over.
+
+# dupes.rs:541
+ru: Все лишние ({}) — в корзину
+en: All extras ({}) — to the Trash
+
+# dupes.rs:553
+ru: Копия: {}
+en: Copy: {}
+
+# dupes.rs:555
+ru: копия|копии|копий
+en: copy|copies
+
+# dupes.rs:557
+ru: Оставлю: {}. В корзину: {}.
+en: I'll keep: {}. To the Trash: {}.
+
+# dupes.rs:558
+ru: Лишние — в корзину
+en: Extras — to the Trash
+
+# dupes.rs:570
+ru: Не нашла твоих папок (Документы, Загрузки…) — искать негде.
+en: I couldn't find your folders (Documents, Downloads…) — nowhere to search.
+
+# dupes.rs:574
+ru: записала бы найденные копии в кэш
+en: would write the found copies to the cache
+
+# dupes.rs:580
+ru: Копий не нашла (искала {} с{}).
+en: No copies found (searched {} s{}).
+
+# dupes.rs:580
+ru: , успела посмотреть не всё
+en: , didn't get to check everything
+
+# dupes.rs:583
+ru: Нашла {} копий, лишнее — {}. Смотри вкладку «Система».
+en: Found {} of copies, {} extra. See the “System” tab.
+
+# dupes.rs:584
+ru: группу|группы|групп
+en: group|groups
+
+# dupes.rs:606
+ru: Сначала найди копии.
+en: Find copies first.
+
+# dupes.rs:608
+ru: Список копий изменился — посмотри его ещё раз, я ничего не трогала.
+en: The list of copies has changed — take another look, I haven't touched anything.
+
+# dupes.rs:618
+ru: не копия (изменилась или пропала) — не трогаю: {}
+en: not a copy (changed or gone) — leaving it: {}
+
+# dupes.rs:623
+ru: в корзину: {}
+en: to the Trash: {}
+
+# dupes.rs:647
+ru:  1 файл изменился после поиска — его не тронула.
+en:  1 file changed after the search — I left it alone.
+
+# dupes.rs:648
+ru:  {} изменились после поиска — их не тронула.
+en:  {} changed after the search — I left them alone.
+
+# dupes.rs:653
+ru: {} в Корзине, освободится {} после её очистки.{}
+en: {} in the Trash, {} will be freed once it's emptied.{}
+
+# dupes.rs:655
+ru: В корзину ушло {} из {}.{}
+en: Moved {} of {} to the Trash.{}
+
+# dupes.rs:754
+ru: Список копий изменился — найди копии заново, я ничего не трогала.
+en: The list of copies has changed — search for copies again, I haven't touched anything.
+
+# dupes.rs:790
+ru: {} в Корзине, освободится {} после её очистки.
+en: {} in the Trash, {} will be freed once it's emptied.
+
+# dupes.rs:792
+ru: В корзину ушло {} из {}.
+en: Moved {} of {} to the Trash.

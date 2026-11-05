@@ -1,0 +1,372 @@
+# spravka.rs:13
+ru: Мяудоктор Даня Н.Я.
+en: Dr. Meow Danya N.Ya.
+
+# spravka.rs:14
+ru: старшему лечащему врачу Claude A.
+en: senior attending physician Claude A.
+
+# spravka.rs:20
+ru: до 100 мс — отлично; 100–250 мс — нормально для VPN; больше 250 мс — видео и звонки начнут подлагивать. Джиттер (насколько пинг «скачет»): до 30 мс — хорошо, до 60 мс — терпимо, больше — связь рваная.
+en: under 100 ms — excellent; 100–250 ms — fine for a VPN; over 250 ms — video and calls will start to stutter. Jitter (how much the ping “jumps”): under 30 ms — good, under 60 ms — tolerable, more — the connection is choppy.
+
+# spravka.rs:26
+ru: от 20 Мбит/с — хватает даже на 4K-видео; 5–20 Мбит/с — HD без проблем; меньше 5 Мбит/с — тормоза.
+en: from 20 Mbit/s — enough even for 4K video; 5–20 Mbit/s — HD with no trouble; under 5 Mbit/s — sluggish.
+
+# spravka.rs:29
+ru: от 5 Мбит/с — видеозвонки и отправка файлов без проблем.
+en: from 5 Mbit/s — video calls and sending files with no trouble.
+
+# spravka.rs:30
+ru: ответ быстрее 50 мс.
+en: response faster than 50 ms.
+
+# spravka.rs:31
+ru: до 85 °C под нагрузкой, в покое 35–60 °C.
+en: up to 85 °C under load, 35–60 °C idle.
+
+# spravka.rs:32
+ru: до 80 °C, загрузка в покое — несколько процентов.
+en: up to 80 °C, idle load is a few percent.
+
+# spravka.rs:33
+ru: занято до 85 %.
+en: up to 85 % used.
+
+# spravka.rs:34
+ru: свободно больше 20 ГБ.
+en: more than 20 GB free.
+
+# spravka.rs:35
+ru: расхождение с точным временем меньше 90 секунд.
+en: less than 90 seconds off the exact time.
+
+# spravka.rs:36
+ru: до 14 дней.
+en: up to 14 days.
+
+# spravka.rs:37
+ru: загрузка в покое до 30 %.
+en: idle load up to 30 %.
+
+# spravka.rs:38
+ru: Связь с Claude API
+en: Connection to Claude API
+
+# spravka.rs:38
+ru: ответ быстрее 1500 мс.
+en: response faster than 1500 ms.
+
+# spravka.rs:39
+ru: Связь с claude.ai
+en: Connection to claude.ai
+
+# spravka.rs:40
+ru: отвечают все источники обновлений.
+en: all update sources respond.
+
+# spravka.rs:45
+ru: до 250 мс (через VPN), джиттер до 60 мс
+en: up to 250 ms (over VPN), jitter up to 60 ms
+
+# spravka.rs:46
+ru: от 20 Мбит/с
+en: from 20 Mbit/s
+
+# spravka.rs:47
+ru: от 5 Мбит/с
+en: from 5 Mbit/s
+
+# spravka.rs:48
+ru: до 50 мс
+en: up to 50 ms
+
+# spravka.rs:49
+ru: до 85 °C
+en: up to 85 °C
+
+# spravka.rs:50
+ru: до 80 °C
+en: up to 80 °C
+
+# spravka.rs:51
+ru: занято до 85 %
+en: up to 85 % used
+
+# spravka.rs:52
+ru: свободно от 20 ГБ
+en: from 20 GB free
+
+# spravka.rs:53
+ru: расхождение до 90 с
+en: up to 90 s off
+
+# spravka.rs:54
+ru: отвечают все
+en: all respond
+
+# spravka.rs:61
+ru: Переключитесь на ближайший сервер VPN (Европа обычно быстрее Америки); закройте торренты и большие загрузки; по возможности подключитесь кабелем вместо Wi-Fi. Самопроверка: в терминале «ping -c 30 1.1.1.1» — смотрите avg (средний пинг) и mdev (джиттер).
+en: Switch to the nearest VPN server (Europe is usually faster than America); close torrents and big downloads; if you can, use a cable instead of Wi-Fi. Self-check: run “ping -c 30 1.1.1.1” in a terminal and look at avg (average ping) and mdev (jitter).
+
+# spravka.rs:68
+ru: Сравните со скоростью без VPN: выключите его на минуту и нажмите «Измерить скорость». Если без VPN быстро — смените сервер VPN. Если медленно и без VPN — перезагрузите роутер и проверьте тариф. Независимая проверка: speedtest.net в браузере.
+en: Compare with the speed without VPN: turn it off for a minute and press “Measure speed”. If it is fast without VPN — change the VPN server. If it is slow without VPN too — restart the router and check your plan. Independent check: speedtest.net in a browser.
+
+# spravka.rs:75
+ru: Лечения не требуется: недомогание на стороне Anthropic. Наблюдать на status.claude.com, повторить приём через час.
+en: No fix needed: the trouble is on Anthropic’s side. Watch status.claude.com and come back for another visit in an hour.
+
+# spravka.rs:79
+ru: Связь с Claude
+en: Connection to Claude
+
+# spravka.rs:80
+ru: Проверьте, включён ли VPN; если включён — переподключитесь к другому серверу.
+en: Check whether the VPN is on; if it is, reconnect to a different server.
+
+# spravka.rs:85
+ru: Проверьте вручную: «sudo apt update» покажет, какой источник не отвечает. Часто помогает выключить или включить VPN.
+en: Check by hand: “sudo apt update” will show which source is not responding. Turning the VPN off or on often helps.
+
+# spravka.rs:90
+ru: Включите автосверку времени (кнопка в Аптечке) и проверьте часовой пояс в Настройках → Дата и время.
+en: Turn on automatic time sync (the button in First Aid Cat) and check the time zone in Settings → Date & Time.
+
+# spravka.rs:94
+ru: Температура
+en: Temperature
+
+# spravka.rs:95
+ru: Проверьте, не забиты ли пылью вентиляторы, и не работает ли что-то тяжёлое в фоне (Монитор системы).
+en: Check whether the fans are clogged with dust and whether something heavy is running in the background (System Monitor).
+
+# spravka.rs:98
+ru: Если горячо в покое — посмотрите, кто нагружает видеокарту: «nvidia-smi».
+en: If it is hot at idle, see what is loading the GPU: “nvidia-smi”.
+
+# spravka.rs:101
+ru: Закройте лишние вкладки и программы; посмотреть, кто ест память, — Монитор системы.
+en: Close extra tabs and programs; to see who is eating memory, use System Monitor.
+
+# spravka.rs:106
+ru: Очистите Загрузки и корзину; большие папки покажет «Анализатор использования дисков» (baobab).
+en: Empty Downloads and the Trash; “Disk Usage Analyzer” (baobab) will show the big folders.
+
+# spravka.rs:109
+ru: Перезагрузите компьютер — это лечит много странностей.
+en: Restart the computer — it cures a lot of oddities.
+
+# spravka.rs:110
+ru: Подробности: «systemctl --failed», затем «journalctl -u <имя службы>».
+en: Details: “systemctl --failed”, then “journalctl -u <service name>”.
+
+# spravka.rs:111
+ru: Тема
+en: Theme
+
+# spravka.rs:111
+ru: Если тема пропала после обновления — переустановите WhiteSur/Tahoe.
+en: If the theme disappeared after an update, reinstall WhiteSur/Tahoe.
+
+# spravka.rs:112
+ru: Расширение
+en: Extension
+
+# spravka.rs:112
+ru: Если не помог перезапуск — обновите расширение на extensions.gnome.org.
+en: If a restart did not help, update the extension on extensions.gnome.org.
+
+# spravka.rs:113
+ru: Откройте клиент VPN и подключитесь заново.
+en: Open the VPN client and connect again.
+
+# spravka.rs:114
+ru: Откройте Happ и нажмите «подключиться».
+en: Open Happ and press “connect”.
+
+# spravka.rs:117
+ru: Перезагрузите компьютер; если повторяется — переключите на NVIDIA (кнопка в Аптечке).
+en: Restart the computer; if it keeps happening, switch to NVIDIA (the button in First Aid Cat).
+
+# spravka.rs:177
+ru: хозяину компьютера
+en: the computer’s owner
+
+# spravka.rs:267
+ru: компьютер «{}»
+en: computer “{}”
+
+# spravka.rs:268
+ru: {}, ядро {}
+en: {}, kernel {}
+
+# spravka.rs:272
+ru: на смене
+en: on shift
+
+# spravka.rs:272
+ru: отдыхает
+en: off duty
+
+# spravka.rs:280
+ru: Диагноз
+en: Diagnosis
+
+# spravka.rs:280
+ru: Замечание
+en: Remark
+
+# spravka.rs:285
+ru: в Аптечке нажать «{}»
+en: in First Aid Cat, press “{}”
+
+# spravka.rs:295
+ru: в норме
+en: normal
+
+# spravka.rs:296
+ru: погранично
+en: borderline
+
+# spravka.rs:297
+ru: вне нормы
+en: abnormal
+
+# spravka.rs:444
+ru: Министерство уюта и котиков · Ветеринарно-компьютерная служба
+en: Ministry of Coziness and Kitties · Veterinary and Computer Service
+
+# spravka.rs:445
+ru: ПОЛИКЛИНИКА «АПТЕЧКА» №1
+en: CLINIC “FIRST AID CAT” No. 1
+
+# spravka.rs:446
+ru: отделение диагностики {}-пациентов · приём круглосуточно, без записи
+en: diagnostics ward for {} patients · open around the clock, no appointment needed
+
+# spravka.rs:449
+ru: СПРАВКА № {}
+en: MEDICAL NOTE No. {}
+
+# spravka.rs:450
+ru: о состоянии здоровья компьютера (форма 086/мяу)
+en: on the health of a computer (form 086/meow)
+
+# spravka.rs:452
+ru: Выдана
+en: Issued to
+
+# spravka.rs:453
+ru: Пациент
+en: Patient
+
+# spravka.rs:454
+ru: Порода (ОС)
+en: Breed (OS)
+
+# spravka.rs:455
+ru: Возраст без перезагрузки
+en: Age since last reboot
+
+# spravka.rs:456
+ru: Дежурный ассистент Claude
+en: Assistant on duty: Claude
+
+# spravka.rs:459
+ru: ЗАКЛЮЧЕНИЕ
+en: CONCLUSION
+
+# spravka.rs:462
+ru: Пациент осмотрен. В выполненных проверках проблем не найдено: сеть дышит ровно, VPN бьётся ритмично, темы на месте.
+en: Patient examined. No problems found in the completed checks: the network breathes evenly, the VPN beats in rhythm, the themes are in place.
+
+# spravka.rs:470
+ru: Годен к работе, учёбе и просмотру аниме. Справка — о проверенном на момент выдачи, а не обо всём на свете.
+en: Fit for work, study and watching anime. This note covers what was checked at the time of issue, not everything under the sun.
+
+# spravka.rs:478
+ru: Осмотр не закончен: проверки ещё идут или не выполнены. Данных для заключения недостаточно.
+en: Examination not finished: checks are still running or were not done. Not enough data for a conclusion.
+
+# spravka.rs:482
+ru: Пациент осмотрен. Выявлено: диагнозов — {}, замечаний — {}. Подробности и назначения ниже.
+en: Patient examined. Found: diagnoses — {}, remarks — {}. Details and prescriptions below.
+
+# spravka.rs:494
+ru: Норма:
+en: Normal:
+
+# spravka.rs:497
+ru: Процедура:
+en: Procedure:
+
+# spravka.rs:500
+ru: Если не помогло:
+en: If that doesn’t help:
+
+# spravka.rs:505
+ru: Направление к {}
+en: Referral to {}
+
+# spravka.rs:506
+ru:  — случай непростой, откройте Claude в терминале и опишите симптомы.
+en:  — a tricky case, open Claude in a terminal and describe the symptoms.
+
+# spravka.rs:522
+ru: ОСНОВНЫЕ ПОКАЗАТЕЛИ
+en: VITAL SIGNS
+
+# spravka.rs:536
+ru: Показатель
+en: Metric
+
+# spravka.rs:536
+ru: Результат
+en: Result
+
+# spravka.rs:536
+ru: Норма
+en: Normal
+
+# spravka.rs:536
+ru: Оценка
+en: Rating
+
+# spravka.rs:549
+ru: Справка дана для предъявления по месту требования. Действительна до следующей проверки.
+en: This note is issued for presentation wherever required. Valid until the next check.
+
+# spravka.rs:553
+ru: Дата выдачи: {}, {}
+en: Date issued: {}, {}
+
+# spravka.rs:555
+ru: Лечащий врач: ____________________
+en: Attending physician: ____________________
+
+# spravka.rs:559
+ru: Даня
+en: Danya
+
+# spravka.rs:561
+ru: М.П. (место лапки)
+en: Seal (paw goes here)
+
+# spravka.rs: подписи полей с двоеточием (на случай перевода до сборки строки)
+ru: Выдана:
+en: Issued to:
+
+ru: Пациент:
+en: Patient:
+
+ru: Порода (ОС):
+en: Breed (OS):
+
+ru: Возраст без перезагрузки:
+en: Age since last reboot:
+
+ru: Дежурный ассистент Claude:
+en: Assistant on duty: Claude:
+

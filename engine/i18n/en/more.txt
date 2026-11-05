@@ -1,0 +1,398 @@
+# more.rs:36
+ru: Звуковая служба
+en: Sound service
+
+# more.rs:36
+ru: не работает: {}
+en: not running: {}
+
+# more.rs:37
+ru: Без неё звука не будет нигде.
+en: Without it there will be no sound anywhere.
+
+# more.rs:44
+ru: Звук: вывод
+en: Sound: output
+
+# more.rs:44
+ru: Программа wpctl (PipeWire) не ответила.
+en: wpctl (PipeWire) did not respond.
+
+# more.rs:52
+ru: звуковой карты нет
+en: no sound card
+
+# more.rs:53
+ru: Система не нашла ни одной звуковой карты. Если она есть (встроенная, USB, HDMI) — не хватает драйвера (sof-firmware).
+en: The system found no sound card. If you have one (built-in, USB, HDMI), a driver is missing (sof-firmware).
+
+# more.rs:60
+ru: нет устройства (Dummy Output)
+en: no device (Dummy Output)
+
+# more.rs:61
+ru: Система не видит звуковую карту. Часто помогает перезапуск звука; если нет — не хватает драйвера (sof-firmware).
+en: The system can’t see the sound card. Restarting sound often helps; if not, a driver is missing (sof-firmware).
+
+# more.rs:69
+ru: {} — выключен
+en: {} — muted
+
+# more.rs:69
+ru: Звук выключен (беззвучный режим).
+en: Sound is muted.
+
+# more.rs:71
+ru: Включить звук
+en: Unmute
+
+# more.rs:76
+ru: {} — громкость 0
+en: {} — volume 0
+
+# more.rs:76
+ru: Громкость на нуле.
+en: The volume is at zero.
+
+# more.rs:78
+ru: Сделать 50%
+en: Set to 50%
+
+# more.rs:88
+ru: Микрофон
+en: Microphone
+
+# more.rs:88
+ru: Если тебя не слышат в звонках — включи.
+en: If people can’t hear you on calls, turn it on.
+
+# more.rs:90
+ru: Включить микрофон
+en: Unmute microphone
+
+# more.rs:124
+ru: выключен кнопкой
+en: off (hardware switch)
+
+# more.rs:125
+ru: Выключен переключателем на ноутбуке (или Fn-клавишей). Программно не включить.
+en: Turned off by the laptop’s switch (or an Fn key). Can’t be turned on from software.
+
+# more.rs:129
+ru: заблокирован
+en: blocked
+
+# more.rs:130
+ru: Bluetooth выключен программно (режим «в самолёте» или кнопкой в меню).
+en: Bluetooth is turned off in software (airplane mode or the menu button).
+
+# more.rs:131
+ru: Включить Bluetooth
+en: Turn on Bluetooth
+
+# more.rs:135
+ru: служба не работает
+en: service not running
+
+# more.rs:136
+ru: Служба bluetooth остановлена — устройства не подключатся.
+en: The bluetooth service is stopped — devices won’t connect.
+
+# more.rs:142
+ru: адаптер выключен
+en: adapter off
+
+# more.rs:142
+ru: Включить адаптер
+en: Turn on adapter
+
+# more.rs:144
+ru: включён
+en: on
+
+# more.rs:150
+ru: Выключен переключателем на ноутбуке.
+en: Turned off by the laptop’s switch.
+
+# more.rs:154
+ru: Wi-Fi выключен программно. Если сеть по кабелю — так и надо.
+en: Wi-Fi is turned off in software. If you’re on a cable, that’s fine.
+
+# more.rs:156
+ru: Включить Wi-Fi
+en: Turn on Wi-Fi
+
+# more.rs:178
+ru: служба CUPS не работает
+en: CUPS service not running
+
+# more.rs:185
+ru: Принтер {}
+en: Printer {}
+
+# more.rs:185
+ru: остановлен
+en: paused
+
+# more.rs:186
+ru: Принтер поставлен на паузу (часто после ошибки бумаги или связи).
+en: The printer is paused (often after a paper or connection error).
+
+# more.rs:187
+ru: Возобновить
+en: Resume
+
+# more.rs:190
+ru: готов
+en: ready
+
+# more.rs:197
+ru: Очередь печати
+en: Print queue
+
+# more.rs:197
+ru: {} в очереди
+en: {} queued
+
+# more.rs:198
+ru: Если задания не печатаются долго — очередь застряла.
+en: If jobs haven’t printed for a long time, the queue is stuck.
+
+# more.rs:199
+ru: Очистить мою очередь
+en: Clear my queue
+
+# more.rs:220
+ru: {} раскладки, но нечем переключать
+en: {} layouts, but no way to switch
+
+# more.rs:221
+ru: Сочетание для смены раскладки стёрлось.
+en: The shortcut for switching layouts is gone.
+
+# more.rs:222
+ru: Вернуть Super+Пробел
+en: Restore Super+Space
+
+# more.rs:230
+ru: Super+Пробел
+en: Super+Space
+
+# more.rs:233
+ru: Alt+Пробел
+en: Alt+Space
+
+# more.rs:239
+ru: переключение: {}
+en: switching: {}
+
+# more.rs:258
+ru: установщик пакетов
+en: package installer
+
+# more.rs:263
+ru: Установка пакетов
+en: Package installation
+
+# more.rs:263
+ru: идёт сейчас
+en: in progress
+
+# more.rs:263
+ru: Работает {}. Подожди, пока закончит.
+en: {} is running. Wait until it finishes.
+
+# more.rs:266
+ru: прервана
+en: interrupted
+
+# more.rs:267
+ru: Установка обновлений оборвалась на середине — пока не доделать, apt ничего не поставит.
+en: The update installation was cut off halfway — until it is finished, apt can’t install anything.
+
+# more.rs:268
+ru: Доделать установку
+en: Finish installation
+
+# more.rs:274
+ru: Пакеты
+en: Packages
+
+# more.rs:274
+ru: есть недоустановленные
+en: some half-installed
+
+# more.rs:275
+ru: dpkg --audit нашёл пакеты в непонятном состоянии.
+en: dpkg --audit found packages in an unclear state.
+
+# more.rs:276
+ru: Починить зависимости
+en: Fix dependencies
+
+# more.rs:285
+ru: Перезагрузка
+en: Reboot
+
+# more.rs:285
+ru: нужна после обновлений
+en: needed after updates
+
+# more.rs:286
+ru: Обновления вступят в силу после перезагрузки.
+en: Updates will take effect after a reboot.
+
+# more.rs:288
+ru: Ждут перезагрузки: {}.
+en: Waiting for a reboot: {}.
+
+# more.rs:295
+ru: занято {}%, свободно {} МБ
+en: {}% used, {} MB free
+
+# more.rs:297
+ru: Раздел /boot
+en: /boot partition
+
+# more.rs:297
+ru: Старые ядра заняли место — обновление ядра упадёт.
+en: Old kernels have filled it up — a kernel update will fail.
+
+# more.rs:299
+ru: Убрать старые ядра
+en: Remove old kernels
+
+# more.rs:368
+ru: больше {}
+en: over {}
+
+# more.rs:370
+ru: Корзина
+en: Trash
+
+# more.rs:372
+ru: Удалённые файлы всё ещё занимают место{}. Очистка удалит их насовсем{}.
+en: Deleted files still take up space{}. Emptying will delete them for good{}.
+
+# more.rs:373
+ru:  (считала 2 секунды, на деле больше)
+en:  (counted for 2 seconds, there is more)
+
+# more.rs:375
+ru:  — с этого компьютера и подключённых дисков ({} корзины)
+en:  — from this computer and connected disks ({} trash bins)
+
+# more.rs:380
+ru: Очистить корзину
+en: Empty trash
+
+# more.rs:391
+ru: Кэш миниатюр
+en: Thumbnail cache
+
+# more.rs:391
+ru: Картинки-превью файлов. Пересоздадутся сами.
+en: File preview images. They will be recreated on their own.
+
+# more.rs:393
+ru: Очистить
+en: Clear
+
+# more.rs:403
+ru: Системный журнал
+en: System log
+
+# more.rs:404
+ru: Старые записи журнала. Можно оставить последние 200 МБ.
+en: Old log entries. You can keep just the last 200 MB.
+
+# more.rs:405
+ru: Сжать до 200 МБ
+en: Shrink to 200 MB
+
+# more.rs:453
+ru: Журнал системы закрыт для этого пользователя (нужна группа adm или systemd-journal).
+en: The system log is closed to this user (the adm or systemd-journal group is needed).
+
+# more.rs:459
+ru: Журнал системы не прочитался.
+en: The system log could not be read.
+
+# more.rs:492
+ru: {} за сутки
+en: {} in 24 h
+
+# more.rs:493
+ru: Система закрывала программы, чтобы не зависнуть{}.
+en: The system closed programs to avoid freezing{}.
+
+# more.rs:499
+ru: Подкачка
+en: Swap
+
+# more.rs:499
+ru: Без подкачки при нехватке памяти программы закрываются сразу.
+en: Without swap, programs are closed right away when memory runs out.
+
+# more.rs:569
+ru: Занят процессор: {}
+en: CPU busy: {}
+
+# more.rs:569
+ru: {}% ядра
+en: {}% of a core
+
+# more.rs:570
+ru: Это часть системы, её закрывать нельзя. Обычно её нагружает какая-то программа или расширение; если тормозит долго — перезайди в систему.
+en: This is part of the system and must not be closed. Usually some program or extension is loading it; if it stays slow for long, log out and back in.
+
+# more.rs:573
+ru: Индексатор {}
+en: Indexer {}
+
+# more.rs:574
+ru: Составляет поиск по файлам. Обычно затихает сам через полчаса.
+en: Building the file search index. Usually it quiets down by itself within half an hour.
+
+# more.rs:590
+ru: Работает виртуальная машина
+en: A virtual machine is running
+
+# more.rs:591
+ru: Это виртуальный компьютер ({}). Он занят тем, что в нём запущено. Если его включил ты или твой ИИ-помощник — всё в порядке, закрывать не нужно.
+en: This is a virtual computer ({}). It is busy with whatever runs inside it. If you or your AI assistant started it, all is well and there is no need to close it.
+
+# more.rs:593
+ru: {} работает: {}
+en: {0} at work: {1}
+
+# more.rs:594
+ru: Эту программу запустил {} — он что-то проверяет, собирает или считает. Это нормально и обычно скоро заканчивается. Закрывать не нужно.
+en: {} started this program — it is checking, building or computing something. That is normal and usually ends soon. No need to close it.
+
+# more.rs:597
+ru: Похоже, идёт сборка программы или работает скрипт. Если это запустил ты или твой ИИ-помощник — подожди, это пройдёт. Если не знаешь, что это, и всё тормозит — можно закрыть.
+en: Looks like a program is being built or a script is running. If you or your AI assistant started it, wait, it will pass. If you don’t know what it is and everything is slow, you can close it.
+
+# more.rs:600
+ru: Программа сейчас много считает. Если она тебе нужна (игра, видео, сборка) — всё нормально. Если она зависла или ты её не запускал — можно закрыть.
+en: This program is computing a lot right now. If you need it (game, video, build), all is fine. If it froze or you didn’t start it, you can close it.
+
+# more.rs:624
+ru: драйвер не загружен
+en: driver not loaded
+
+# more.rs:625
+ru: Secure Boot не пускает неподписанный драйвер NVIDIA — экран рисует процессор. Нужно зарегистрировать ключ (MOK) с перезагрузкой или выключить Secure Boot в BIOS.
+en: Secure Boot blocks the unsigned NVIDIA driver, so the CPU draws the screen. You need to enroll a key (MOK) with a reboot, or turn Secure Boot off in the BIOS.
+
+# more.rs:492 (diag::plural)
+ru: раз|раза|раз
+en: time|times
+
+
+ru: systemctl --user не ответил (нет пользовательской сессии systemd?).
+en: systemctl --user did not answer (no systemd user session?).
+
+ru: dpkg --audit не ответил или завершился с ошибкой.
+en: dpkg --audit did not answer or ended with an error.

@@ -1,0 +1,88 @@
+# Фразы кота из assets/фразы_кота.txt (в самом коде их нет; свой файл фраз остаётся русским)
+
+# [Ухо]
+ru: Не тыкай, щекотно!
+en: Don't poke, it tickles!
+
+ru: Ай! Щекотно же~
+en: Eek! That tickles~
+
+ru: Э-эй, уши — это личное!
+en: Hey, ears are private!
+
+ru: Мяу?!
+en: Meow?!
+
+ru: Хи-хи… перестань!
+en: Hee-hee… stop it!
+
+ru: Я тут вообще-то работаю…
+en: I'm actually working here…
+
+ru: Уши не кнопки! Мур-р…
+en: Ears aren't buttons! Purr…
+
+ru: Ну ты чего… смущаешь.
+en: Come on… you're embarrassing me.
+
+# [Ножки]
+ru: Ножки не трогай, щекотно!
+en: Hands off my legs, they're ticklish!
+
+ru: Чулочки — не трогать!
+en: Stockings — no touching!
+
+ru: Ай! Я же сижу работаю…
+en: Hey! I'm sitting here working…
+
+ru: Хи-хи-хи… ну хватит!
+en: Hee-hee-hee… okay, enough!
+
+ru: Это неприлично, между прочим!
+en: That's improper, you know!
+
+# [Голова]
+ru: Не тыкай, у меня причёска!
+en: Don't poke, I just did my hair!
+
+ru: Ну всё, я обиделся.
+en: That's it, I'm offended.
+
+ru: Фыр!
+en: Hmph!
+
+ru: Не трогай голову, я думаю!
+en: Don't touch my head, I'm thinking!
+
+ru: Мяв! Больно же…
+en: Mew! That hurts…
+
+# [Хвост]
+ru: Хвост не трогать!!
+en: Don't touch the tail!!
+
+ru: А-а-а, хвост! Что случилось?!
+en: Aaah, my tail! What happened?!
+
+ru: Не дёргай за хвост, я и так нервничаю…
+en: Don't pull my tail, I'm nervous enough already…
+
+ru: Ой-ой… это к плохим новостям?
+en: Uh-oh… is this a sign of bad news?
+
+ru: Тише-тише, я спокоен.
+en: Easy, easy, I'm calm.
+
+# [Растения]
+ru: Осторожно, оно растёт!
+en: Careful, it's growing!
+
+ru: Цветочек не трогай, он отдыхает.
+en: Leave the flower alone, it's resting.
+
+ru: Поливать, а не тыкать!
+en: Water it, don't poke it!
+
+ru: Шелестит — значит, здоров.
+en: Rustling means it's healthy.
+

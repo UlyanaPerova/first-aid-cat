@@ -1,0 +1,209 @@
+# win.rs:234
+ru: Прокси WinHTTP
+en: WinHTTP proxy
+
+# win.rs:235
+ru: Службы Windows (обновления, Магазин) идут в пустой прокси.
+en: Windows services (updates, Store) are going to an empty proxy.
+
+# win.rs:236
+ru: Сбросить (нужны права)
+en: Reset (needs admin rights)
+
+# win.rs:285
+ru: включён (туннель)
+en: on (tunnel)
+
+# win.rs:287
+ru: запущен, не подключён
+en: running, not connected
+
+# win.rs:289
+ru: туннель остался без программы
+en: tunnel left without its app
+
+# win.rs:290
+ru: Программа VPN закрыта, а её сетевой интерфейс включён — интернет может идти в никуда. Запусти её и отключись, или перезапусти службу.
+en: The VPN app is closed but its network interface is still on — traffic may go nowhere. Start the app and disconnect, or restart the service.
+
+# win.rs:300
+ru: VPN-туннель без известного Аптечке клиента: {}.
+en: VPN tunnel with a client First Aid Cat doesn't know: {}.
+
+# win.rs:324
+ru: приложение из Магазина было открыто во время обновления — само пройдёт, когда оно закрыто
+en: a Store app was open during the update — it will pass by itself once it's closed
+
+# win.rs:325
+ru: другая установка уже шла — повторится сама
+en: another install was already running — it will retry by itself
+
+# win.rs:326
+ru: нет доступа — часто мешает антивирус
+en: access denied — often caused by antivirus
+
+# win.rs:327
+ru: не хватило места на диске
+en: not enough disk space
+
+# win.rs:328
+ru: не удалось связаться с серверами обновлений (VPN/прокси?) или мал раздел System Reserved
+en: couldn't reach the update servers (VPN/proxy?) or the System Reserved partition is too small
+
+# win.rs:329
+ru: нет связи с серверами обновлений — проверь интернет и прокси
+en: no connection to the update servers — check the internet and proxy
+
+# win.rs:330
+ru: повреждены файлы обновлений — поможет сброс компонентов
+en: update files are damaged — resetting the components will help
+
+# win.rs:341
+ru: Журнал Windows не прочитался вовремя.
+en: The Windows log wasn't read in time.
+
+# win.rs:344
+ru: ошибок за 2 недели нет
+en: no errors in 2 weeks
+
+# win.rs:363
+ru: {} за 2 недели ({} ×{})
+en: {} in 2 weeks ({} ×{})
+
+# win.rs:363
+ru: ошибка|ошибки|ошибок
+en: error|errors
+
+# win.rs:365
+ru: Последнее: {}.
+en: Latest: {}.
+
+# win.rs:366
+ru: Сбросить компоненты обновления
+en: Reset update components
+
+# win.rs:375
+ru: Внезапные выключения
+en: Sudden shutdowns
+
+# win.rs:375
+ru: {} за месяц, последнее {}
+en: {} in a month, last one {}
+
+# win.rs:376
+ru: Компьютер выключался, не завершив работу: падение системы, пропало питание или перегрев. Если часто — проверь блок питания и температуры.
+en: The computer shut down without a proper shutdown: a system crash, power loss or overheating. If it's frequent, check the power supply and temperatures.
+
+# win.rs:390
+ru: зависала
+en: froze
+
+# win.rs:390
+ru: падала
+en: crashed
+
+# win.rs:397
+ru: {} {} за неделю
+en: {} {} this week
+
+# win.rs:397
+ru: раз|раза|раз
+en: time|times
+
+# win.rs:399
+ru: Если программа мешает работать — переустанови или обнови её; часто падают оверлеи, подсветка и игры.
+en: If the app gets in the way, reinstall or update it; overlays, lighting software and games often crash.
+
+# win.rs:408
+ru: Проводник
+en: File Explorer
+
+# win.rs:408
+ru: Зависли панель задач и окна папок.
+en: The taskbar and folder windows are frozen.
+
+# win.rs:410
+ru: Перезапустить проводник
+en: Restart File Explorer
+
+# win.rs:415
+ru: Зависла: {}
+en: Frozen: {}
+
+# win.rs:416
+ru: Программа не отвечает. Закрыть её — несохранённое пропадёт.
+en: The app is not responding. Closing it will lose unsaved work.
+
+# win.rs:417
+ru: Закрыть принудительно
+en: Force quit
+
+# win.rs:425
+ru: Сверить часы
+en: Sync clock
+
+# win.rs:435
+ru: Звук Windows
+en: Windows Audio
+
+# win.rs:435
+ru: Диспетчер печати
+en: Print Spooler
+
+# win.rs:435
+ru: Служба Bluetooth
+en: Bluetooth service
+
+# win.rs:444
+ru: остановлена
+en: stopped
+
+# win.rs:444
+ru: Запустить
+en: Start
+
+# win.rs:458
+ru: Диск C:
+en: Disk C:
+
+# win.rs:458
+ru: свободно {} ГБ ({}%)
+en: {} GB free ({}%)
+
+# win.rs:462
+ru: Мало места: обновления не встанут, система тормозит.
+en: Low space: updates won't install and the system lags.
+
+# win.rs:462
+ru: Очистка диска
+en: Disk Cleanup
+
+# win.rs:477
+ru: {} {} (сборка {})
+en: {} {} (build {})
+
+# собираются в рантайме
+ru: {}: приложение из Магазина было открыто во время обновления — само пройдёт, когда оно закрыто.
+en: {}: a Store app was open during the update — it will pass by itself once it's closed.
+
+ru: {}: другая установка уже шла — повторится сама.
+en: {}: another install was already running — it will retry by itself.
+
+ru: {}: нет доступа — часто мешает антивирус.
+en: {}: access denied — often caused by antivirus.
+
+ru: {}: не хватило места на диске.
+en: {}: not enough disk space.
+
+ru: {}: не удалось связаться с серверами обновлений (VPN/прокси?) или мал раздел System Reserved.
+en: {}: couldn't reach the update servers (VPN/proxy?) or the System Reserved partition is too small.
+
+ru: {}: нет связи с серверами обновлений — проверь интернет и прокси.
+en: {}: no connection to the update servers — check the internet and proxy.
+
+ru: {}: повреждены файлы обновлений — поможет сброс компонентов.
+en: {}: update files are damaged — resetting the components will help.
+
+
+ru: PowerShell не ответил вовремя или вернул ошибку.
+en: PowerShell did not answer in time or returned an error.

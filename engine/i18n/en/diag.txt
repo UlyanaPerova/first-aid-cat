@@ -1,0 +1,878 @@
+# diag.rs:303
+ru: Переподключить сеть
+en: Reconnect network
+
+# diag.rs:310
+ru:  (только IPv6)
+en:  (IPv6 only)
+
+# diag.rs:317
+ru: Подключение
+en: Connection
+
+# diag.rs:317
+ru: через {}{}
+en: via {}{}
+
+# diag.rs:318
+ru: Мой локальный IP
+en: My local IP
+
+# diag.rs:322
+ru: не проверить
+en: can't check
+
+# diag.rs:322
+ru: Нет программы ip (iproute2) или она не ответила.
+en: ip (iproute2) is missing or didn't respond.
+
+# diag.rs:325
+ru: нет маршрута
+en: no route
+
+# diag.rs:325
+ru: Кабель/Wi-Fi не подключены или сеть выключена.
+en: Cable/Wi-Fi not connected, or the network is off.
+
+# diag.rs:389
+ru: туннель {}
+en: tunnel {}
+
+# diag.rs:553
+ru: Перезапустить {}
+en: Restart {}
+
+# diag.rs:559
+ru: прокси :{}
+en: proxy :{}
+
+# diag.rs:561
+ru: Канал {}
+en: Tunnel {}
+
+# diag.rs:566
+ru: включён: {}
+en: on: {}
+
+# diag.rs:567
+ru: приложение открыто
+en: app is open
+
+# diag.rs:567
+ru: работает в фоне
+en: running in the background
+
+# diag.rs:571
+ru: не установлен
+en: not installed
+
+# diag.rs:575
+ru: Перезапустить службу
+en: Restart service
+
+# diag.rs:578
+ru: служба {}
+en: service {}
+
+# diag.rs:579
+ru: Служба {} не работает, клиент не сможет подключиться.
+en: Service {} is not running, the client can't connect.
+
+# diag.rs:583
+ru:  (интерфейс {} лежит)
+en:  (interface {} is down)
+
+# diag.rs:584
+ru: служба готова{}
+en: service ready{}
+
+# diag.rs:584
+ru: , приложение открыто
+en: , app is open
+
+# diag.rs:585
+ru: выключен{}
+en: off{}
+
+# diag.rs:598
+ru: Туннель {}
+en: Tunnel {}
+
+# diag.rs:598
+ru: поднят
+en: up
+
+# diag.rs:599
+ru: {}: VPN-туннель без известного Аптечке клиента.
+en: {}: a VPN tunnel from a client First Aid Cat doesn't know.
+
+# diag.rs:618
+ru: Конфликт VPN
+en: VPN conflict
+
+# diag.rs:619
+ru: Включено сразу несколько VPN. Они могут драться за маршруты, и сеть начинает пропадать. Оставь один.
+en: Several VPNs are on at once. They can fight over routes, and the network starts dropping. Keep just one.
+
+# diag.rs:629
+ru: Маршрут
+en: Route
+
+# diag.rs:629
+ru: ведёт в лежащий {}
+en: leads to {}, which is down
+
+# diag.rs:630
+ru: Весь трафик идёт в выключенный туннель. Перезапусти VPN или переподключи сеть.
+en: All traffic goes into a tunnel that is off. Restart the VPN or reconnect the network.
+
+# diag.rs:636
+ru: Запустить {}
+en: Start {}
+
+# diag.rs:671
+ru: VPN (итог)
+en: VPN (total)
+
+# diag.rs:674
+ru: не проверить: нет интернета
+en: can't check: no internet
+
+# diag.rs:675
+ru: Сначала нужен интернет — смотри строки «Подключение», «Интернет», «DNS».
+en: Internet comes first — see the “Connection”, “Internet” and “DNS” rows.
+
+# diag.rs:680
+ru: {} включён, но через него не пускает
+en: {} is on, but nothing gets through it
+
+# diag.rs:681
+ru: Местные сайты открываются, а зарубежные — нет: трафик уходит в туннель и там теряется. Переподключи VPN или выбери другой сервер.
+en: Local sites open, foreign ones don't: traffic goes into the tunnel and gets lost there. Reconnect the VPN or pick another server.
+
+# diag.rs:695
+ru: Мой внешний IP
+en: My external IP
+
+# diag.rs:700
+ru: включён: {} · выход {}
+en: on: {} · exit {}
+
+# diag.rs:704
+ru: Трафик идёт в туннель, а выход — в твоей же стране: сервер VPN там же (рабочий VPN, свой сервер). Если нужен выход за границу — выбери другой сервер.
+en: Traffic goes into the tunnel, but the exit is in your own country: the VPN server is there too (work VPN, your own server). If you need an exit abroad, pick another server.
+
+# diag.rs:705
+ru: включён как прокси: {} · напрямую выход {}
+en: on as a proxy: {} · direct exit {}
+
+# diag.rs:706
+ru: VPN работает в режиме прокси: через него ходят программы, настроенные на его порт (браузер с расширением, системный прокси). Остальные — напрямую, это нормально для такого режима.
+en: The VPN runs in proxy mode: only programs set to its port go through it (a browser with an extension, the system proxy). The rest go direct, which is normal for this mode.
+
+# diag.rs:707
+ru: включён, но трафик мимо него (выход {})
+en: on, but traffic bypasses it (exit {})
+
+# diag.rs:708
+ru: Туннель поднят, но маршрут в интернет идёт не через него. Проверь режим (TUN/прокси) и правила маршрутизации в клиенте.
+en: The tunnel is up, but the route to the internet doesn't go through it. Check the mode (TUN/proxy) and the routing rules in the client.
+
+# diag.rs:711
+ru: Выход — в твоей же стране. Это нормально, если сервер VPN там же; если ждала другую страну — проверь сервер и режим в клиенте.
+en: The exit is in your own country. That's normal if the VPN server is there too; if you expected another country, check the server and mode in the client.
+
+# diag.rs:713
+ru: Страну выхода проверить не удалось (сервисы не ответили), но туннель поднят.
+en: I couldn't check the exit country (the services didn't respond), but the tunnel is up.
+
+# diag.rs:715
+ru: выход {} (похоже, {})
+en: exit {} (looks like {})
+
+# diag.rs:716
+ru: Интернет видит тебя из {} (компьютер настроен на {}). Туннеля на компьютере не видно, но запущен {} — скорее всего, трафик идёт через него (или через VPN на роутере).
+en: The internet sees you in {} (the computer is set to {}). There's no tunnel on the computer, but {} is running — traffic most likely goes through it (or through a VPN on the router).
+
+# diag.rs:717
+ru: выход {} (VPN вне компьютера)
+en: exit {} (VPN outside the computer)
+
+# diag.rs:718
+ru: На компьютере VPN не включён, но интернет видит тебя из {}, а компьютер настроен на {}: VPN работает на роутере или в сети.
+en: No VPN is on on the computer, but the internet sees you in {} while the computer is set to {}: the VPN runs on the router or in the network.
+
+# diag.rs:719
+ru: выход {}
+en: exit {}
+
+# diag.rs:720
+ru: Не знаю, в какой стране компьютер (часовой пояс и регион системы не подсказали), поэтому не сужу, включён ли VPN.
+en: I don't know which country the computer is in (the time zone and system region didn't tell), so I can't judge whether a VPN is on.
+
+# diag.rs:721
+ru: выключен
+en: off
+
+# diag.rs:722
+ru: VPN-клиент есть, но не включён: интернет видит тебя из {}, как и без VPN. Открой клиент и подключись.
+en: A VPN client is installed but not on: the internet sees you in {}, same as without a VPN. Open the client and connect.
+
+# diag.rs:724
+ru: не используется
+en: not in use
+
+# diag.rs:724
+ru: VPN не установлен; выход в интернет — из {}.
+en: No VPN installed; the internet exit is in {}.
+
+# diag.rs:725
+ru: не удалось проверить
+en: couldn't check
+
+# diag.rs:726
+ru: Сервисы, по которым видно страну выхода в интернет, не ответили. Проверю в следующий раз.
+en: The services that show the internet exit country didn't respond. I'll check next time.
+
+# diag.rs:901
+ru: Выключить системный прокси
+en: Turn off system proxy
+
+# diag.rs:904
+ru: Системный прокси
+en: System proxy
+
+# diag.rs:904
+ru: выключен (сеть напрямую)
+en: off (direct connection)
+
+# diag.rs:907
+ru: ручной, но без адреса
+en: manual, but no address
+
+# diag.rs:938
+ru:  · через прокси {}
+en:  · via proxy {}
+
+# diag.rs:941
+ru: {} мс{}
+en: {} ms{}
+
+# diag.rs:942
+ru: блок по стране (451)
+en: blocked by country (451)
+
+# diag.rs:942
+ru: Сайт не работает в этой стране. Нужен VPN.
+en: The site doesn't work in this country. You need a VPN.
+
+# diag.rs:943
+ru: доступ запрещён (403)
+en: access denied (403)
+
+# diag.rs:944
+ru: Сервер отказал. Так бывает при блоке по стране (тогда поможет VPN), при защите от ботов и в рабочих сетях с фильтром.
+en: The server refused. This happens with country blocks (a VPN helps then), bot protection and filtered work networks.
+
+# diag.rs:945
+ru: ошибка {}
+en: error {}
+
+# diag.rs:945
+ru: Похоже, сбой на их стороне.
+en: Looks like a failure on their side.
+
+# diag.rs:947
+ru: ошибка сертификата
+en: certificate error
+
+# diag.rs:948
+ru: Защищённое соединение не сложилось. Чаще всего — неверные часы (смотри «Системное время»); реже сеть подменяет сертификаты (антивирус, рабочий фильтр).
+en: The secure connection failed. Most often the clock is wrong (see “System time”); less often the network swaps certificates (antivirus, work filter).
+
+# diag.rs:952
+ru: нет ответа
+en: no response
+
+# diag.rs:953
+ru: Не достучаться. Проверь интернет и VPN.
+en: Can't reach it. Check the internet and VPN.
+
+# diag.rs:963
+ru: Связь с {}
+en: Connection to {}
+
+# diag.rs:975
+ru: всё работает
+en: all working
+
+# diag.rs:979
+ru: Серверы Anthropic
+en: Anthropic servers
+
+# diag.rs:982
+ru: Это проблема на их стороне, не у тебя.
+en: This is a problem on their side, not yours.
+
+# diag.rs:1019
+ru: Рисовать на NVIDIA (prime-select)
+en: Draw with NVIDIA (prime-select)
+
+# diag.rs:1027
+ru: встроенная AMD
+en: integrated AMD
+
+# diag.rs:1029
+ru: встроенная Intel
+en: integrated Intel
+
+# diag.rs:1031
+ru: другая видеокарта
+en: another GPU
+
+# diag.rs:1034
+ru: Кто рисует экран
+en: Screen drawn by
+
+# diag.rs:1034
+ru: не удалось узнать
+en: couldn't find out
+
+# diag.rs:1034
+ru: Нет программы glxinfo (mesa-utils) или она не ответила.
+en: glxinfo (mesa-utils) is missing or didn't respond.
+
+# diag.rs:1037
+ru: ПРОЦЕССОР (llvmpipe)
+en: CPU (llvmpipe)
+
+# diag.rs:1039
+ru: Видеокарта не нашлась — всё рисует процессор (так бывает в виртуальной машине).
+en: No GPU found — the CPU draws everything (that happens in a virtual machine).
+
+# diag.rs:1041
+ru: Видеокарта отвалилась, и всё рисует процессор: отсюда тормоза. Обычно лечится перезагрузкой.
+en: The GPU dropped out and the CPU draws everything, hence the lag. A reboot usually fixes it.
+
+# diag.rs:1051
+ru: Рисует {}, а не NVIDIA. Если игры и графика тормозят — переключи на NVIDIA.
+en: Drawing is done by {}, not NVIDIA. If games and graphics lag, switch to NVIDIA.
+
+# diag.rs:1080
+ru: Драйвер NVIDIA
+en: NVIDIA driver
+
+# diag.rs:1084
+ru: Видеокарта
+en: GPU
+
+# diag.rs:1086
+ru: {}°C · загрузка {}% · {}/{} ГБ
+en: {}°C · load {}% · {}/{} GB
+
+# diag.rs:1095
+ru: открытый (nouveau)
+en: open-source (nouveau)
+
+# diag.rs:1096
+ru: Работает открытый драйвер: для обычной работы хватает, для игр и ИИ лучше фирменный NVIDIA.
+en: The open-source driver is in use: fine for everyday work, but for games and AI the official NVIDIA one is better.
+
+# diag.rs:1100
+ru: не загружен
+en: not loaded
+
+# diag.rs:1101
+ru: Карта NVIDIA есть, но драйвер к ней не подключён. Часто после обновления ядра — перезагрузись.
+en: There's an NVIDIA card, but its driver isn't attached. Often happens after a kernel update — reboot.
+
+# diag.rs:1105
+ru: не отвечает
+en: not responding
+
+# diag.rs:1106
+ru: Драйвер загружен, но nvidia-smi не отвечает: драйвер сломался после обновления ядра. Перезагрузись.
+en: The driver is loaded, but nvidia-smi doesn't respond: the driver broke after a kernel update. Reboot.
+
+# diag.rs:1112
+ru: по запросу (гибрид)
+en: on demand (hybrid)
+
+# diag.rs:1112
+ru: всегда NVIDIA
+en: always NVIDIA
+
+# diag.rs:1112
+ru: всегда встроенная
+en: always integrated
+
+# diag.rs:1115
+ru: Режим PRIME
+en: PRIME mode
+
+# diag.rs:1116
+ru: «По запросу» иногда отдаёт рабочий стол встроенной карте.
+en: “On demand” sometimes gives the desktop to the integrated GPU.
+
+# diag.rs:1121
+ru: Сессия
+en: Session
+
+# diag.rs:1184
+ru: Системное время
+en: System time
+
+# diag.rs:1184
+ru: Не с чем сверить: сайты не ответили или назвали разное время.
+en: Nothing to compare with: the sites didn't respond or gave different times.
+
+# diag.rs:1190
+ru: точное ({} с)
+en: exact ({} s)
+
+# diag.rs:1194
+ru: сверено системой ({} с к сайтам)
+en: synced by the system ({} s vs sites)
+
+# diag.rs:1200
+ru: {} с
+en: {} s
+
+# diag.rs:1202
+ru: {} года
+en: {} years
+
+# diag.rs:1204
+ru: {} дн
+en: {} d
+
+# diag.rs:1206
+ru: {} ч {} мин
+en: {} h {} min
+
+# diag.rs:1208
+ru: {} мин
+en: {} min
+
+# diag.rs:1210
+ru: спешит
+en: fast
+
+# diag.rs:1210
+ru: отстаёт
+en: slow
+
+# diag.rs:1213
+ru: Ещё чуть-чуть — и VPN перестанет подключаться. Сверь часы.
+en: A little more and the VPN will stop connecting. Sync the clock.
+
+# diag.rs:1215
+ru: Из-за неверных часов VPN (VMess/xray) может не подключаться, а сайты — ругаться на сертификаты.
+en: A wrong clock can stop a VPN (VMess/xray) from connecting and make sites complain about certificates.
+
+# diag.rs:1217
+ru: {} на {}
+en: {} by {}
+
+# diag.rs:1252
+ru: Включить автосверку времени
+en: Turn on automatic time sync
+
+# diag.rs:1266
+ru: Часовой пояс
+en: Time zone
+
+# diag.rs:1267
+ru: Автосверка времени выключена.
+en: Automatic time sync is off.
+
+# diag.rs:1277
+ru: Тема окон (GTK)
+en: Window theme (GTK)
+
+# diag.rs:1278
+ru: Иконки
+en: Icons
+
+# diag.rs:1279
+ru: Курсор
+en: Cursor
+
+# diag.rs:1280
+ru: Светлая/тёмная
+en: Light/dark
+
+# diag.rs:1281
+ru: Кнопки окон
+en: Window buttons
+
+# diag.rs:1282
+ru: Тема панели (Shell)
+en: Panel theme (Shell)
+
+# diag.rs:1424
+ru: Настройка не прочиталась (gsettings/dconf не ответили).
+en: Couldn't read the setting (gsettings/dconf didn't respond).
+
+# diag.rs:1431
+ru: Сбилось! Было: {}
+en: It changed! Was: {}
+
+# diag.rs:1433
+ru: Вернуть как было
+en: Restore previous
+
+# diag.rs:1447
+ru: Тема выбрана, но её файлов нет. Её стёрло обновление, нужно переустановить.
+en: The theme is selected, but its files are gone. An update wiped them — reinstall it.
+
+# diag.rs:1455
+ru: Стиль GTK4/libadwaita
+en: GTK4/libadwaita style
+
+# diag.rs:1455
+ru: пропал gtk.css
+en: gtk.css is gone
+
+# diag.rs:1456
+ru: Новые приложения стали «стандартными». Переустанови WhiteSur/Tahoe с флагом -l.
+en: New apps went back to the default look. Reinstall WhiteSur/Tahoe with the -l flag.
+
+# diag.rs:1464
+ru: Расширения
+en: Extensions
+
+# diag.rs:1464
+ru: экран заблокирован
+en: screen locked
+
+# diag.rs:1465
+ru: Пока экран заблокирован, GNOME выключает расширения — проверю после разблокировки.
+en: GNOME turns extensions off while the screen is locked — I'll check after unlock.
+
+# diag.rs:1468
+ru: Эталон
+en: Baseline
+
+# diag.rs:1468
+ru: С этим состоянием сравниваются темы.
+en: Themes are compared with this state.
+
+# diag.rs:1470
+ru: Запомнить текущее как норму
+en: Save current as baseline
+
+# diag.rs:1477
+ru: gnome-extensions не ответил — не знаю, какие включены.
+en: gnome-extensions didn't respond — I don't know which are on.
+
+# diag.rs:1490
+ru: Перезапустить
+en: Restart
+
+# diag.rs:1491
+ru: Расширение {}
+en: Extension {}
+
+# diag.rs:1493
+ru: выключено
+en: off
+
+# diag.rs:1493
+ru: Было включено, а теперь нет.
+en: It was on, now it's off.
+
+# diag.rs:1495
+ru: Включить
+en: Turn on
+
+# diag.rs:1499
+ru: работает
+en: working
+
+# diag.rs:1504
+ru: Сломалось, скорее всего после обновления GNOME. Попробуй перезапустить или обновить на extensions.gnome.org.
+en: Broken, most likely after a GNOME update. Try restarting it or updating on extensions.gnome.org.
+
+# diag.rs:1542
+ru: окно
+en: window
+
+# diag.rs:1620
+ru: Починить док
+en: Fix dock
+
+# diag.rs:1637
+ru: Док
+en: Dock
+
+# diag.rs:1637
+ru: пропал с экрана
+en: gone from the screen
+
+# diag.rs:1639
+ru: Расширение дока включено, но самого дока на экране нет — так бывает после сбоя GNOME (например, когда док прятали на время полноэкранного окна). Нажми «Починить док».
+en: The dock extension is on, but the dock itself isn't on the screen — this happens after a GNOME glitch (for example, when the dock was hidden during a fullscreen window). Press “Fix dock”.
+
+# diag.rs:1644
+ru: на месте
+en: in place
+
+# diag.rs:1647
+ru: спрятан: {} на весь экран
+en: hidden: {} is fullscreen
+
+# diag.rs:1649
+ru: Это нормально: док прячется, пока окно в полноэкранном режиме (F11). Выйди из него — док вернётся сам.
+en: This is normal: the dock hides while a window is fullscreen (F11). Exit fullscreen and the dock comes back by itself.
+
+# diag.rs:1654
+ru: пропал
+en: gone
+
+# diag.rs:1655
+ru: Расширение дока не работает (состояние: {}). Нажми «Починить док».
+en: The dock extension isn't working (state: {}). Press “Fix dock”.
+
+# diag.rs:1768
+ru: {} из {}
+en: {} of {}
+
+# diag.rs:1770
+ru: Доступ к репозиториям
+en: Repository access
+
+# diag.rs:1770
+ru: Обновления системы и программ скачиваются.
+en: System and app updates can be downloaded.
+
+# diag.rs:1774
+ru:  (проверяла через прокси apt {})
+en:  (checked via apt proxy {})
+
+# diag.rs:1777
+ru: доступно {}
+en: reachable {}
+
+# diag.rs:1778
+ru: Не отвечают или не пускают: {}{}. Обновления от них не скачаются. Часто это из-за VPN или прокси.
+en: Not responding or refusing: {}{}. Updates from them won't download. Often caused by a VPN or proxy.
+
+# diag.rs:1853
+ru: Диск
+en: Disk
+
+# diag.rs:1853
+ru: Не удалось узнать разделы дисков.
+en: Couldn't read the disk partitions.
+
+# diag.rs:1870
+ru: Диск {}
+en: Disk {}
+
+# diag.rs:1872
+ru: только для чтения
+en: read-only
+
+# diag.rs:1873
+ru: Раздел перешёл в режим «только чтение» — так система защищает данные при ошибках диска. Сохранить ничего не получится. Перезагрузи компьютер; если повторится — диск пора проверить (sudo fsck) и, возможно, менять.
+en: The partition switched to “read-only” mode — the system does this to protect data when the disk has errors. Nothing can be saved. Reboot the computer; if it happens again, the disk needs checking (sudo fsck) and may need replacing.
+
+# diag.rs:1879
+ru: кончаются иноды ({}% свободно)
+en: running out of inodes ({}% free)
+
+# diag.rs:1880
+ru: Место есть, но кончились «номерки» для файлов: новые файлы не создаются. Обычно виноваты миллионы мелких файлов (кэш, почта, node_modules).
+en: There's space, but the file “slots” (inodes) ran out: new files can't be created. Usually millions of small files are to blame (cache, mail, node_modules).
+
+# diag.rs:1898
+ru: {} МБ
+en: {} MB
+
+# diag.rs:1898
+ru: {} ГБ
+en: {} GB
+
+# diag.rs:1900
+ru: свободно {} из {} ({}%)
+en: {} free of {} ({}%)
+
+# diag.rs:1904
+ru: Этот диск почти заполнен. Если на нём хранятся архивы или копии — это нормально; если на него пишут программы — освободи место.
+en: This disk is almost full. If it holds archives or backups, that's normal; if programs write to it, free up some space.
+
+# diag.rs:1906
+ru: Места мало: программы перестают сохранять файлы, обновления не ставятся. Почисти корзину, загрузки, кэш.
+en: Low on space: programs stop saving files and updates won't install. Clean the trash, downloads and cache.
+
+# diag.rs:1918
+ru: поток|потока|потоков
+en: thread|threads
+
+# diag.rs:1922
+ru: Процессор
+en: CPU
+
+# diag.rs:1922
+ru: занят на {}% ({})
+en: {}% busy ({})
+
+# diag.rs:1924
+ru: Очередь большая (средняя загрузка {}), а процессор свободен — программы ждут диск или сеть (зависшая сетевая папка, медленный диск).
+en: The queue is long (average load {}) but the CPU is idle — programs are waiting for the disk or network (a hung network folder, a slow disk).
+
+# diag.rs:1928
+ru: Не читается /proc/stat.
+en: Can't read /proc/stat.
+
+# diag.rs:1940
+ru: Температура CPU
+en: CPU temperature
+
+# diag.rs:1963
+ru: Память
+en: Memory
+
+# diag.rs:1971
+ru: {}% из {} ГБ
+en: {}% of {} GB
+
+# diag.rs:1982
+ru: Без перезагрузки
+en: Since last reboot
+
+# diag.rs:1984
+ru: {} д {} ч
+en: {} d {} h
+
+# diag.rs:1989
+ru: Давно не перезагружалась. Иногда это помогает от странностей.
+en: Hasn't been rebooted in a long time. Sometimes a reboot cures odd behavior.
+
+# diag.rs:1995
+ru: Упавшие службы
+en: Failed services
+
+# diag.rs:1995
+ru: Нет программы systemctl или она не ответила.
+en: systemctl is missing or didn't respond.
+
+# diag.rs:2010
+ru: Подробности: systemctl status {}
+en: Details: systemctl status {}
+
+# diag.rs:2013
+ru: нет
+en: none
+
+# diag.rs:2016
+ru: только старые snap ({})
+en: only old snaps ({})
+
+# diag.rs:2017
+ru: Безвредно: это снимки старых версий snap-программ.
+en: Harmless: these are snapshots of old snap app versions.
+
+# diag.rs:2051
+ru: не отвечает
+en: not responding
+
+# diag.rs:2052
+ru: Проверка не уложилась в 30 секунд.
+en: The check didn't finish in 30 seconds.
+
+# diag.rs:2057
+ru: не получилось проверить
+en: couldn't check
+
+# diag.rs:2057
+ru: Внутренняя ошибка проверки — подробности в журнале.
+en: Internal error in the check — details are in the log.
+
+# diag.rs:2218
+ru: (без названия)
+en: (untitled)
+
+# diag.rs:2580
+ru: Пинг
+en: Ping
+
+# diag.rs:2580
+ru: Скорость ↓ скачивание
+en: Speed ↓ download
+
+# diag.rs:2580
+ru: Скорость ↑ отдача
+en: Speed ↑ upload
+
+# diag.rs:2791
+ru: сервер замера не ответил
+en: test server not responding
+
+# diag.rs:2792
+ru: Интернет есть, но сервер замера скорости недоступен (бывает через VPN или в рабочей сети). Попробуй позже.
+en: The internet works, but the speed test server is unreachable (happens over a VPN or on a work network). Try later.
+
+# diag.rs:2795
+ru: Ни сервер замера, ни другие адреса не отвечают: похоже, интернета нет.
+en: Neither the test server nor other addresses respond: looks like there's no internet.
+
+# diag.rs:2805
+ru: {} мс · джиттер {} мс
+en: {} ms · jitter {} ms
+
+# diag.rs:2807
+ru: Большая задержка: видео и звонки будут подлагивать. Часто так бывает через дальний VPN-сервер.
+en: High latency: video and calls will stutter. Often happens through a distant VPN server.
+
+# diag.rs:2827
+ru: Сервер замера недоступен.
+en: The test server is unreachable.
+
+# diag.rs:2828
+ru: не измерить
+en: can't measure
+
+# diag.rs:2838
+ru: {} Мбит/с
+en: {} Mbit/s
+
+# diag.rs:2844
+ru: На {}% ниже обычного для этой сети (обычно {} Мбит/с). Проверь, не качает ли что-то в фоне, или смени VPN-сервер.
+en: {}% below normal for this network (usually {} Mbit/s). Check whether something is downloading in the background, or change the VPN server.
+
+# diag.rs:2849
+ru: Для этой сети это обычная скорость (обычно {} Мбит/с).
+en: This is normal speed for this network (usually {} Mbit/s).
+
+# diag.rs:2852
+ru: Медленно. Попробуй другой VPN-сервер или проверь, не качает ли что-то в фоне.
+en: Slow. Try another VPN server or check whether something is downloading in the background.
+
+# diag.rs:2856
+ru: Сеть лимитная — мерила понемногу, чтобы не тратить трафик.
+en: Metered network — I measured a little at a time to save data.
+
+# diag.rs:2856
+ru: {}{}Сеть лимитная — мерила понемногу, чтобы не тратить трафик.
+en: {}{}Metered network — I measured a little at a time to save data.
+
+# diag.rs:3005
+ru: Задержка сети
+en: Network latency
+
+# diag.rs:3012
+ru: Сервер замера не ответил.
+en: The test server didn't respond.
+
+# diag.rs:3033
+ru: {} мс
+en: {} ms
+
+# diag.rs:3078
+ru: ИИ
+en: AI
+
+ru: gsettings не ответил вовремя.
+en: gsettings did not answer in time.

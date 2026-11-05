@@ -1,0 +1,7 @@
+# clip.rs:20
+ru: нет экрана X11
+en: no X11 screen
+
+# clip.rs:28
+ru: не удалось занять буфер обмена
+en: couldn't take over the clipboard

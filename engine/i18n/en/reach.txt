@@ -1,0 +1,48 @@
+# reach.rs:173
+ru: Интернет
+en: Internet
+
+# reach.rs:173
+ru: есть
+en: OK
+
+# reach.rs:174
+ru: Ответил {}. Настоящий пинг и скорость — в строках «Пинг» и «Скорость».
+en: {} answered. Real ping and speed are in the “Ping” and “Speed” rows.
+
+# reach.rs:179
+ru: есть, через прокси {}
+en: OK, via proxy {}
+
+# reach.rs:180
+ru: Напрямую сеть закрыта, программы ходят через прокси — это нормально для рабочих сетей.
+en: Direct access is blocked and apps go through a proxy — that's normal for work networks.
+
+# reach.rs:181
+ru: недоступен
+en: unavailable
+
+# reach.rs:182
+ru: Не ответили ни Cloudflare, ни Яндекс, ни страницы проверки Google, Microsoft и Apple (две попытки). Проверь роутер, кабель или Wi-Fi.
+en: No answer from Cloudflare, Yandex, or the Google, Microsoft and Apple check pages (two tries). Check the router, cable or Wi-Fi.
+
+# reach.rs:192
+ru: новые имена не находятся
+en: new names aren't found
+
+# reach.rs:194
+ru: Знакомые сайты находятся (вероятно, из памяти), а прямой вопрос DNS-серверу системы остался без ответа. Бывает, что сеть закрывает обычный DNS (порт 53) и пускает только другой путь, — тогда всё в порядке. Если новые сайты правда не открываются — сбрось кэш DNS; не поможет — DNS, оставленный VPN, или провайдер.
+en: Familiar sites are found (probably from memory), but a direct question to the system DNS server got no answer. Sometimes a network blocks plain DNS (port 53) and allows only another route — then all is fine. If new sites really don't open, flush the DNS cache; if that doesn't help, it's a DNS left by a VPN, or the provider.
+
+# reach.rs:203
+ru: Имена сайтов находятся медленно — страницы будут открываться с задержкой.
+en: Site names resolve slowly — pages will open with a delay.
+
+# reach.rs:210
+ru: имена не находятся
+en: names aren't found
+
+# reach.rs:211
+ru: Интернет может быть, но адреса сайтов не определяются. Помогает сброс кэша DNS; иначе — DNS, оставленный VPN.
+en: The internet may be up, but site addresses don't resolve. Flushing the DNS cache helps; otherwise it's a DNS left by a VPN.
+

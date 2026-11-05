@@ -1,0 +1,3 @@
+# single.rs:103
+ru: ящик занят чужим процессом
+en: the socket is taken by another process

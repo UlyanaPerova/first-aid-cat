@@ -1,0 +1,779 @@
+# fixes.rs:54
+ru: Пустая команда.
+en: Empty command.
+
+# fixes.rs:67
+ru: Не запускаю «{}» с правами администратора: нет такой системной программы (или она не принадлежит root).
+en: I won't run “{}” as administrator: there's no such system program (or it isn't owned by root).
+
+# fixes.rs:75
+ru: Только для Linux.
+en: Linux only.
+
+# fixes.rs:85
+ru: В системе нет программы {}.
+en: The system doesn't have {}.
+
+# fixes.rs:89
+ru: Команда не ответила вовремя и не остановилась (она работает с правами администратора). Если открыто окно пароля — закрой его; иначе дождись, пока команда закончит сама.
+en: The command didn't respond in time and didn't stop (it runs as administrator). If a password window is open, close it; otherwise wait for the command to finish on its own.
+
+# fixes.rs:99
+ru: Команда не ответила вовремя, я её остановила.
+en: The command didn't respond in time, so I stopped it.
+
+# fixes.rs:108
+ru: Отменено: пароль администратора не введён.
+en: Cancelled: no administrator password entered.
+
+# fixes.rs:111
+ru: Не получилось спросить пароль администратора. Выполни в терминале: sudo {}
+en: I couldn't ask for the administrator password. Run this in a terminal: sudo {}
+
+# fixes.rs:115
+ru: Служба {} не найдена.
+en: Service {} not found.
+
+# fixes.rs:120
+ru: Команда завершилась с ошибкой (код {}).
+en: The command failed (code {}).
+
+# fixes.rs:160
+ru: Не знаю, чем открыть клиент заново (нет gtk-launch), поэтому закрывать не стала. Перезапусти его сама.
+en: I don't know how to reopen the client (no gtk-launch), so I didn't close it. Please restart it yourself.
+
+# fixes.rs:167
+ru: Открыла заново.
+en: Reopened.
+
+# fixes.rs:179
+ru: Клиент не закрылся — второй его копии запускать не стала. Закрой его вручную.
+en: The client didn't close, so I didn't start a second copy. Please close it manually.
+
+# fixes.rs:196
+ru: Открыла заново, подключись в окне клиента. Связь через VPN вернётся после подключения.
+en: Reopened. Connect in the client window; the VPN link will come back once it's connected.
+
+# fixes.rs:202
+ru: Запустила, но клиент так и не появился — открой его сама.
+en: I started it, but the client never appeared. Please open it yourself.
+
+# fixes.rs:204
+ru: Не удалось открыть клиент заново — открой его сама.
+en: I couldn't reopen the client. Please open it yourself.
+
+# fixes.rs:227
+ru: <устройство>
+en: <device>
+
+# fixes.rs:234
+ru: ок
+en: OK
+
+# fixes.rs:236
+ru: не нашла сетевых устройств
+en: I found no network devices
+
+# fixes.rs:243
+ru: Кэш DNS очищен.
+en: DNS cache cleared.
+
+# fixes.rs:261
+ru: Настройка не сохранилась: нет связи с сеансом рабочего стола (Аптечка запущена не из него?). Выполни команду в терминале своего сеанса.
+en: The setting wasn't saved: no connection to the desktop session (is First Aid Cat running outside it?). Run the command in your session's terminal.
+
+# fixes.rs:277
+ru: Настройка не сохранилась: нет связи с сеансом рабочего стола.
+en: The setting wasn't saved: no connection to the desktop session.
+
+# fixes.rs:286
+ru: Системный прокси выключен. Новые терминалы тоже его не возьмут, а в уже открытых выполни unset http_proxy https_proxy.
+en: System proxy is off. New terminals won't pick it up either; in terminals that are already open, run unset http_proxy https_proxy.
+
+# fixes.rs:303
+ru: Служба {} не упала — перезапускать её не стану.
+en: Service {} hasn't failed, so I won't restart it.
+
+# fixes.rs:311
+ru: Непонятное имя службы: {}
+en: Unclear service name: {}
+
+# fixes.rs:317
+ru: Служба {} перезапущена.
+en: Service {} restarted.
+
+# fixes.rs:331
+ru: Готово. Чтобы всё рисовала NVIDIA, выйди из системы и зайди снова (или перезагрузись).
+en: Done. For NVIDIA to render everything, log out and back in (or reboot).
+
+# fixes.rs:342
+ru: Расширение перезапущено.
+en: Extension restarted.
+
+# fixes.rs:347
+ru: Включено.
+en: Enabled.
+
+# fixes.rs:360
+ru: Перезапуск оболочки без выхода работает только в X11.
+en: Restarting the shell without logging out works only on X11.
+
+# fixes.rs:369
+ru: Оболочка только что перезапускалась. Подожди {} с и попробуй ещё раз.
+en: The shell was just restarted. Wait {} s and try again.
+
+# fixes.rs:375
+ru: Оболочка GNOME перезапускается, окна останутся на месте.
+en: GNOME Shell is restarting; your windows will stay where they are.
+
+# fixes.rs:388
+ru: Автосверка включена.
+en: Automatic time sync is on.
+
+# fixes.rs:393
+ru: Часы сверены с интернетом.
+en: Clock synced with the internet.
+
+# fixes.rs:397
+ru: Автосверка включена, но сверить часы не вышло за 30 с: сервер времени не отвечает (часто закрыт порт 123 — так бывает в рабочих и гостевых сетях). Попробуй в другой сети.
+en: Automatic time sync is on, but the clock didn't sync within 30 s: the time server isn't responding (port 123 is often blocked, as in work and guest networks). Try another network.
+
+# fixes.rs:407
+ru: Не знаю имя пользователя — не трогаю очередь печати.
+en: I don't know the user name, so I'm leaving the print queue alone.
+
+# fixes.rs:409
+ru: Мои задания печати удалены.
+en: Your print jobs were removed.
+
+# fixes.rs:417
+ru: Super+Пробел уже переключает раскладку.
+en: Super+Space already switches the layout.
+
+# fixes.rs:429
+ru: Раскладка снова переключается по Super+Пробел.
+en: The layout switches with Super+Space again.
+
+# fixes.rs:436
+ru: Не нашла расширение дока (Dash to Dock, Ubuntu Dock, Dash2Dock Lite).
+en: I couldn't find the dock extension (Dash to Dock, Ubuntu Dock, Dash2Dock Lite).
+
+# fixes.rs:443
+ru: расширение перезапущено
+en: extension restarted
+
+# fixes.rs:443
+ru: не включилось: {}
+en: failed to enable: {}
+
+# fixes.rs:447
+ru: сторож полноэкранного режима перезапущен
+en: fullscreen guard restarted
+
+# fixes.rs:457
+ru: Док починен: 
+en: Dock fixed: 
+
+# fixes.rs:457
+ru: Док не ожил: 
+en: Dock didn't come back: 
+
+# fixes.rs:461
+ru: . Если окно на весь экран — выйди из него (F11). Если не поможет — Alt+F2, r, Enter (перезапуск GNOME Shell).
+en: . If a window is fullscreen, exit it (F11). If that doesn't help, press Alt+F2, r, Enter (restarts GNOME Shell).
+
+# fixes.rs:470
+ru: В эталоне нет этого значения.
+en: This value isn't in the baseline.
+
+# fixes.rs:473
+ru: Непонятный ключ: {}
+en: Unclear key: {}
+
+# fixes.rs:482
+ru: Вернула как в эталоне: {} = {}.
+en: Restored to the baseline: {} = {}.
+
+# fixes.rs:489
+ru: Запомнила текущие темы и расширения как норму.
+en: I saved the current themes and extensions as the norm.
+
+# fixes.rs:493
+ru: Не удалось записать эталон: {}
+en: Couldn't save the baseline: {}
+
+# fixes.rs:500
+ru: Звук пропадёт на пару секунд.
+en: Sound will cut out for a couple of seconds.
+
+# fixes.rs:501
+ru: Строки с ключами удалятся из истории команд насовсем. Сами ключи лучше потом заменить новыми.
+en: Lines containing keys will be deleted from the command history for good. It's best to replace the keys themselves afterwards.
+
+# fixes.rs:502
+ru: Windows спросит разрешение администратора.
+en: Windows will ask for administrator permission.
+
+# fixes.rs:503
+ru: macOS спросит пароль администратора.
+en: macOS will ask for the administrator password.
+
+# fixes.rs:504
+ru: macOS спросит пароль. Локальные снимки Time Machine удалятся (резервные копии на внешнем диске останутся).
+en: macOS will ask for the password. Local Time Machine snapshots will be deleted (backups on an external disk stay).
+
+# fixes.rs:505
+ru: Окна Finder закроются и откроются заново.
+en: Finder windows will close and reopen.
+
+# fixes.rs:506
+ru: Dock и строка меню на секунду пропадут.
+en: The Dock and menu bar will disappear for a second.
+
+# fixes.rs:507
+ru: Программа закроется. Несохранённое в ней может пропасть.
+en: The program will close. Unsaved work in it may be lost.
+
+# fixes.rs:508
+ru: Windows спросит разрешение администратора. Остановлю службы обновления и начну их кэш заново.
+en: Windows will ask for administrator permission. I'll stop the update services and start their cache over.
+
+# fixes.rs:509
+ru: Панель задач и окна папок моргнут; открытые программы останутся.
+en: The taskbar and folder windows will flicker; open programs stay open.
+
+# fixes.rs:510
+ru: Программа закроется принудительно — несохранённое в ней пропадёт.
+en: The program will be force-closed — unsaved work in it will be lost.
+
+# fixes.rs:511
+ru: Понадобится пароль. Может занять несколько минут — не выключай компьютер.
+en: A password will be needed. This may take a few minutes — don't turn off the computer.
+
+# fixes.rs:512
+ru: Понадобится пароль. Удалю только старые ядра — работающее сейчас и по два самых новых каждого вида останутся; сначала проверю пробным прогоном, что apt не тронет ничего лишнего.
+en: A password will be needed. I'll remove only old kernels — the one running now and the two newest of each kind stay; first I'll do a dry run to make sure apt won't touch anything extra.
+
+# fixes.rs:513
+ru: Файлы из корзины удалятся насовсем — и из корзин на подключённых дисках.
+en: Files in the trash will be deleted for good — including trash on connected disks.
+
+# fixes.rs:514
+ru: Понадобится пароль. Старые записи журнала удалятся.
+en: A password will be needed. Old log entries will be deleted.
+
+# fixes.rs:515
+ru: Удалю твои задания из очереди печати.
+en: I'll remove your jobs from the print queue.
+
+# fixes.rs:517
+ru: Лишние копии уйдут в Корзину, в каждой группе один файл останется. Вернуть можно из Корзины.
+en: Extra copies will go to the Trash, leaving one file in each group. You can restore them from the Trash.
+
+# fixes.rs:518
+ru: Сеть пропадёт на несколько секунд.
+en: The network will drop for a few seconds.
+
+# fixes.rs:519
+ru: Happ закроется и откроется заново.
+en: Happ will close and reopen.
+
+# fixes.rs:520
+ru: Outline закроется и откроется заново.
+en: Outline will close and reopen.
+
+# fixes.rs:521
+ru: Proton VPN закроется и откроется заново.
+en: Proton VPN will close and reopen.
+
+# fixes.rs:522
+ru: Понадобится пароль администратора.
+en: The administrator password will be needed.
+
+# fixes.rs:523
+ru: Понадобится пароль, потом нужно перезайти в систему.
+en: A password will be needed, then you'll need to log in again.
+
+# fixes.rs:524
+ru: Текущее состояние тем станет эталоном.
+en: The current state of the themes will become the baseline.
+
+# fixes.rs:526
+ru: Док на секунду пропадёт и появится снова.
+en: The dock will vanish for a second and come back.
+
+# fixes.rs:527
+ru: Панель и док моргнут, окна останутся.
+en: The panel and dock will flicker; windows stay.
+
+# fixes.rs:660
+ru: Неизвестное действие: {}
+en: Unknown action: {}
+
+# fixes.rs:665
+ru: Странный параметр у действия «{}» — не выполняю.
+en: Odd parameter for the “{}” action — I won't run it.
+
+# fixes.rs:672
+ru: Действие «{}» — для другой системы, здесь его не выполняю.
+en: The “{}” action is for another system, so I won't run it here.
+
+# fixes.rs:680
+ru: Это уже выполняется — дождись, пока закончится.
+en: This is already running — wait for it to finish.
+
+# fixes.rs:685
+ru: ПРОБНО (на деле ничего не менялось): {}
+en: DRY RUN (nothing was actually changed): {}
+
+# fixes.rs:700
+ru: Не указана служба.
+en: No service specified.
+
+# fixes.rs:710
+ru: Не указан ключ темы.
+en: No theme key specified.
+
+# fixes.rs:723
+ru: Звук перезапущен. Если не появился — выбери устройство в настройках звука.
+en: Sound restarted. If it doesn't come back, pick a device in the sound settings.
+
+# fixes.rs:729
+ru: Звук включён.
+en: Sound is on.
+
+# fixes.rs:730
+ru: Громкость 50%.
+en: Volume 50%.
+
+# fixes.rs:731
+ru: Микрофон включён.
+en: Microphone is on.
+
+# fixes.rs:734
+ru: Bluetooth разблокирован.
+en: Bluetooth unblocked.
+
+# fixes.rs:736
+ru: Адаптер Bluetooth включён.
+en: Bluetooth adapter is on.
+
+# fixes.rs:737
+ru: Wi-Fi включён.
+en: Wi-Fi is on.
+
+# fixes.rs:741
+ru: Принтер {} снова печатает.
+en: Printer {} is printing again.
+
+# fixes.rs:743
+ru: Не указан принтер.
+en: No printer specified.
+
+# fixes.rs:747
+ru: Установка доделана.
+en: Installation finished.
+
+# fixes.rs:748
+ru: Зависимости починены.
+en: Dependencies fixed.
+
+# fixes.rs:750
+ru: Корзина очищена.
+en: Trash emptied.
+
+# fixes.rs:752
+ru: Журнал сжат до 200 МБ.
+en: Log trimmed to 200 MB.
+
+# fixes.rs:758
+ru: Прокси у git убран.
+en: Git proxy removed.
+
+# fixes.rs:759
+ru: Не указан ключ git.
+en: No git key specified.
+
+# fixes.rs:766
+ru: Прокси у npm убран.
+en: npm proxy removed.
+
+# fixes.rs:767
+ru: proxy убран, а https-proxy — нет: {}
+en: proxy removed, but https-proxy wasn't: {}
+
+# fixes.rs:768
+ru: https-proxy убран, а proxy — нет: {}
+en: https-proxy removed, but proxy wasn't: {}
+
+# fixes.rs:773
+ru: Список копий устарел — найди копии заново.
+en: The list of copies is out of date — search for copies again.
+
+# fixes.rs:776
+ru: Не указана группа копий.
+en: No group of copies specified.
+
+# fixes.rs:785
+ru: Не указан процесс.
+en: No process specified.
+
+# fixes.rs:795
+ru: Выключить системный прокси
+en: Turn off system proxy
+
+# fixes.rs:796
+ru: Сбросить кэш DNS
+en: Flush DNS cache
+
+# fixes.rs:797
+ru: Переподключить сеть
+en: Reconnect network
+
+# fixes.rs:798
+ru: Починить док
+en: Fix dock
+
+# fixes.rs:799
+ru: Перезапустить GNOME Shell
+en: Restart GNOME Shell
+
+# fixes.rs:805
+ru: Перезапустить Проводник и панель задач
+en: Restart Explorer and the taskbar
+
+# fixes.rs:811
+ru: Перезапустить Finder
+en: Restart Finder
+
+# fixes.rs:812
+ru: Перезапустить Dock
+en: Restart the Dock
+
+# fixes.rs:813
+ru: Перезапустить строку меню
+en: Restart the menu bar
+
+# fixes.rs:837
+ru: Отменено: права администратора не дали.
+en: Cancelled: administrator rights weren't granted.
+
+# fixes.rs:854
+ru: Системный прокси выключен. Браузер может понадобиться перезапустить.
+en: System proxy is off. You may need to restart your browser.
+
+# fixes.rs:856
+ru: Прокси WinHTTP сброшен.
+en: WinHTTP proxy reset.
+
+# fixes.rs:861
+ru: Сейчас Windows устанавливает обновления — подожди, пока закончит, и попробуй снова.
+en: Windows is installing updates right now — wait until it's done, then try again.
+
+# fixes.rs:870
+ru: Компоненты обновления сброшены (старые — в папке SoftwareDistribution с датой). Запусти проверку обновлений.
+en: Update components reset (the old ones are in a dated SoftwareDistribution folder). Run the update check.
+
+# fixes.rs:872
+ru: Проводник перезапущен.
+en: Explorer restarted.
+
+# fixes.rs:881
+ru: Программа уже закрыта.
+en: The program is already closed.
+
+# fixes.rs:885
+ru: {} — часть системы, её закрывать нельзя.
+en: {} is part of the system and can't be closed.
+
+# fixes.rs:885
+ru: Этот процесс
+en: This process
+
+# fixes.rs:888
+ru: Та программа уже закрылась (под этим номером теперь другая — её не трогаю).
+en: That program has already closed (this number now belongs to a different one — I'm leaving it alone).
+
+# fixes.rs:892
+ru: Программа закрыта.
+en: The program is closed.
+
+# fixes.rs:894
+ru: Windows не дала закрыть программу (нет прав?).
+en: Windows wouldn't let me close the program (no permission?).
+
+# fixes.rs:898
+ru: Этот процесс закрывать нельзя.
+en: This process can't be closed.
+
+# fixes.rs:905
+ru: открыть «Очистку диска» (cleanmgr)
+en: open Disk Cleanup (cleanmgr)
+
+# fixes.rs:906
+ru: Открыла «Очистку диска».
+en: Opened Disk Cleanup.
+
+# fixes.rs:910
+ru: Не удалось открыть «Очистку диска».
+en: Couldn't open Disk Cleanup.
+
+# fixes.rs:942
+ru: Команды прошли, но система всё ещё показывает включённый прокси.
+en: The commands ran, but the system still shows the proxy as on.
+
+# fixes.rs:944
+ru: Системный прокси выключен на всех сетевых службах.
+en: System proxy is off on all network services.
+
+# fixes.rs:947
+ru: Finder перезапущен.
+en: Finder restarted.
+
+# fixes.rs:948
+ru: Dock перезапущен.
+en: Dock restarted.
+
+# fixes.rs:952
+ru: Строка меню перезапущена.
+en: Menu bar restarted.
+
+# fixes.rs:954
+ru: Звук перезапущен.
+en: Sound restarted.
+
+# fixes.rs:956
+ru: Локальные снимки убраны.
+en: Local snapshots removed.
+
+# fixes.rs:971
+ru: Это часть системы, её закрывать нельзя.
+en: This is part of the system and can't be closed.
+
+# fixes.rs:975
+ru: Это программа другого пользователя — закрыть её может только он или администратор.
+en: This program belongs to another user — only they or an administrator can close it.
+
+# fixes.rs:998
+ru: Программа уже закрылась (или под этим номером теперь другая — её не трогаю).
+en: The program has already closed (or this number now belongs to a different one — I'm leaving it alone).
+
+# fixes.rs:1011
+ru: Программа закрыта принудительно.
+en: The program was force-closed.
+
+# fixes.rs:1013
+ru: Программа не закрылась.
+en: The program didn't close.
+
+# fixes.rs:1093
+ru: killall -3 gnome-shell   # только X11; на Wayland — выйти и войти
+en: killall -3 gnome-shell   # X11 only; on Wayland, log out and back in
+
+# fixes.rs:1104
+ru: gnome-control-center keyboard   # «Переключить на следующий источник ввода» → Super+Пробел
+en: gnome-control-center keyboard   # “Switch to next input source” → Super+Space
+
+# fixes.rs:1110
+ru: # старых ядер нет
+en: # no old kernels
+
+# fixes.rs:1150
+ru: netsh winhttp reset proxy   # PowerShell от администратора
+en: netsh winhttp reset proxy   # PowerShell as administrator
+
+# fixes.rs:1151
+ru: Restart-Service -Force {}   # от администратора
+en: Restart-Service -Force {}   # as administrator
+
+# fixes.rs:1156
+ru: w32tm /resync /force   # от администратора
+en: w32tm /resync /force   # as administrator
+
+# fixes.rs:1189
+ru: Забуду запомненные адреса сайтов, они узнаются заново.
+en: I'll forget the remembered website addresses; they'll be looked up again.
+
+# fixes.rs:1190
+ru: Файлы с ключами и доступами станут видны только тебе (другим учётным записям — нет).
+en: Files with keys and credentials will be visible only to you (not to other accounts).
+
+# fixes.rs:1191
+ru: Из истории команд пропадут строки, где были ключи. Вернуть их будет нельзя — так и задумано.
+en: Lines that contained keys will vanish from the command history. They can't be restored — that's by design.
+
+# fixes.rs:1192
+ru: Интернет пойдёт напрямую, без прокси. VPN-клиент сможет включить его снова.
+en: The internet will go direct, without a proxy. The VPN client can turn it on again.
+
+# fixes.rs:1193
+ru: Включу расширение обратно.
+en: I'll turn the extension back on.
+
+# fixes.rs:1194
+ru: Выключу и сразу включу расширение.
+en: I'll turn the extension off and right back on.
+
+# fixes.rs:1195
+ru: Верну эту настройку как в эталоне.
+en: I'll restore this setting to the baseline.
+
+# fixes.rs:1196
+ru: Выключу системный прокси Windows — интернет пойдёт напрямую.
+en: I'll turn off the Windows system proxy — the internet will go direct.
+
+# fixes.rs:1197
+ru: Выключу прокси на всех сетевых службах — интернет пойдёт напрямую. Если macOS попросит — введи пароль.
+en: I'll turn off the proxy on all network services — the internet will go direct. If macOS asks, enter your password.
+
+# fixes.rs:1198
+ru: Открою встроенную «Очистку диска».
+en: I'll open the built-in Disk Cleanup.
+
+# fixes.rs:1200
+ru: Включу звук.
+en: I'll turn the sound on.
+
+# fixes.rs:1201
+ru: Поставлю громкость 50%.
+en: I'll set the volume to 50%.
+
+# fixes.rs:1202
+ru: Включу микрофон.
+en: I'll turn the microphone on.
+
+# fixes.rs:1203
+ru: Сниму программную блокировку Bluetooth.
+en: I'll lift the software block on Bluetooth.
+
+# fixes.rs:1204
+ru: Включу адаптер Bluetooth.
+en: I'll turn the Bluetooth adapter on.
+
+# fixes.rs:1205
+ru: Включу Wi-Fi.
+en: I'll turn Wi-Fi on.
+
+# fixes.rs:1206
+ru: Сниму принтер с паузы.
+en: I'll unpause the printer.
+
+# fixes.rs:1207
+ru: Верну переключение раскладки по Super+Пробел.
+en: I'll bring back layout switching with Super+Space.
+
+# fixes.rs:1208
+ru: Удалю картинки-превью файлов, они пересоздадутся сами.
+en: I'll delete the file preview thumbnails; they'll be recreated on their own.
+
+# fixes.rs:1209
+ru: Закомментирую эту строку (рядом сохраню копию файла). Подействует в новых окнах терминала.
+en: I'll comment out this line (and keep a copy of the file next to it). It takes effect in new terminal windows.
+
+# fixes.rs:1210
+ru: Уберу прокси из настроек git.
+en: I'll remove the proxy from the git settings.
+
+# fixes.rs:1211
+ru: Уберу прокси из настроек npm.
+en: I'll remove the proxy from the npm settings.
+
+# fixes.rs:1212
+ru: Сделаю это сама.
+en: I'll do this myself.
+
+# fixes.rs:1229
+ru: Не нашла домашнюю папку.
+en: I couldn't find the home folder.
+
+# fixes.rs:1235
+ru: {} — ссылка, а не папка; очищать не стану.
+en: {} is a link, not a folder; I won't clear it.
+
+# fixes.rs:1237
+ru: Кэш миниатюр уже пуст.
+en: The thumbnail cache is already empty.
+
+# fixes.rs:1242
+ru: Кэш миниатюр очищен.
+en: Thumbnail cache cleared.
+
+# fixes.rs:1247
+ru: Не открыть папку миниатюр: {}
+en: Couldn't open the thumbnails folder: {}
+
+# fixes.rs:1265
+ru: Удалила {}, а проверить, что осталось, не вышло: {}
+en: I deleted {}, but couldn't check what's left: {}
+
+# fixes.rs:1270
+ru: Удалила {}, а {} не удалось (нет прав или заняты) — посмотри папку {}.
+en: I deleted {}, but {} couldn't be deleted (no permission or in use) — check the folder {}.
+
+# fixes.rs:1278
+ru: Странный адрес — открывать не буду.
+en: Odd address — I won't open it.
+
+# fixes.rs:1287
+ru: Открыла страницу входа в браузере.
+en: Opened the sign-in page in the browser.
+
+# fixes.rs:1376
+ru: Старых ядер нет — удалять нечего.
+en: No old kernels — nothing to remove.
+
+# fixes.rs:1385
+ru: Пробный прогон apt не удался — ничего не удаляю. Попробуй в терминале: sudo apt autoremove --purge
+en: The apt dry run failed, so I'm not removing anything. Try this in a terminal: sudo apt autoremove --purge
+
+# fixes.rs:1398
+ru: apt удалил бы заодно {} — это опасно, ничего не трогаю. Удали старые ядра в терминале: sudo apt autoremove --purge
+en: apt would also remove {} — that's risky, so I'm not touching anything. Remove old kernels in a terminal: sudo apt autoremove --purge
+
+# fixes.rs:1405
+ru: Странные имена пакетов — ничего не удаляю.
+en: Odd package names — I'm not removing anything.
+
+# fixes.rs:1412
+ru: Убрала старые ядра ({}): работающее и по два новых каждого вида остались.
+en: Removed the old kernels ({}): the running one and the two newest of each kind stay.
+
+# fixes.rs:1448
+ru: Не знаю, тот ли это процесс, — проверь заново и нажми кнопку из свежей строки.
+en: I'm not sure this is the same process — check again and press the button from the fresh row.
+
+# fixes.rs:1478
+ru: Не удалось послать программе сигнал закрыться.
+en: I couldn't send the program a signal to close.
+
+# fixes.rs:1483
+ru: Программа не закрылась сама. Закрыть принудительно: kill -9 {}
+en: The program didn't close on its own. To force-close it: kill -9 {}
+
+# fixes.rs:1544
+ru: Часы сверены.
+en: Clock synced.
+
+# fixes.rs:1547
+ru: Часы сверены (расхождение {} с).
+en: Clock synced (offset {} s).
+
+# fixes.rs:1548
+ru: Команда прошла, но часы всё ещё расходятся на {} с — сервер времени, похоже, недоступен.
+en: The command ran, but the clock is still off by {} s — the time server seems unreachable.
+
+# fixes.rs:1550
+ru: Команда сверки прошла, но проверить результат не с чем: сайты не ответили. Посмотри строку «Системное время» позже.
+en: The sync command ran, but there's nothing to verify the result against: the sites didn't respond. Check the “System time” row later.
+
+ru: Не могу занять замок действия: файл замка испорчен ({}). Удали его вручную: {}
+en: Cannot take the action lock: the lock file is damaged ({}). Delete it by hand: {}
+
+ru: Windows не дала открыть эту программу (отказано в доступе) — закрыть её может только администратор.
+en: Windows would not let me open this program (access denied) - only an administrator can close it.
+
+ru: Не удалось открыть программу, чтобы её закрыть — она могла остаться запущенной.
+en: Could not open the program to close it - it may still be running.
+
+ru: Не удалось получить доступ к этой программе (ядро не даёт или нет прав) — не трогаю её.
+en: Could not get access to this program (the kernel refuses or no permission) - leaving it alone.

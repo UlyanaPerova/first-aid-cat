@@ -1,0 +1,104 @@
+# mac.rs:31
+ru: scutil --proxy не ответил.
+en: scutil --proxy did not answer.
+
+# mac.rs:49
+ru: Системный прокси {}
+en: System proxy {}
+
+# mac.rs:50
+ru: включён, но без адреса
+en: on, but with no address
+
+# mac.rs:75
+ru: подключён
+en: connected
+
+# mac.rs:76
+ru: переподключается
+en: reconnecting
+
+# mac.rs:90
+ru: программа запущена
+en: app is running
+
+# mac.rs:124
+ru: свободно {} ГБ
+en: {} GB free
+
+# mac.rs:128
+ru: Мало места: обновления не встанут, программы тормозят. Часто место съедают локальные снимки Time Machine и кэши.
+en: Low space: updates won't install and apps lag. Local Time Machine snapshots and caches often eat the space.
+
+# mac.rs:135
+ru: Снимки Time Machine
+en: Time Machine snapshots
+
+# mac.rs:135
+ru: {} на диске
+en: {} on disk
+
+# mac.rs:136
+ru: Локальные снимки занимают место в «Системных данных». macOS удаляет их сама, когда место нужно; можно и вручную.
+en: Local snapshots take space in “System Data”. macOS removes them itself when it needs room; you can also do it by hand.
+
+# mac.rs:137
+ru: Убрать снимки
+en: Remove snapshots
+
+# mac.rs:162
+ru: Индексация Spotlight
+en: Spotlight indexing
+
+# mac.rs:162
+ru: {}% процессора
+en: {}% of CPU
+
+# mac.rs:163
+ru: Spotlight составляет поиск по файлам. Обычно затихает сам.
+en: Spotlight is building its file search index. It usually calms down by itself.
+
+# mac.rs:169
+ru: Закрыть программу
+en: Close app
+
+# mac.rs:182
+ru: Звук (coreaudiod)
+en: Audio (coreaudiod)
+
+# mac.rs:182
+ru: Перезапустить звук
+en: Restart audio
+
+# mac.rs:184
+ru: не запущен
+en: not running
+
+# mac.rs:309
+ru: Завис намертво: {}
+en: Stuck hard: {}
+
+# mac.rs:309
+ru: не реагирует даже на завершение
+en: doesn't react even to termination
+
+# mac.rs:310
+ru: Процесс ждёт диск или драйвер и не закрывается никак. Часто из-за отключённого диска или сетевой папки. Помогает перезагрузка.
+en: The process is waiting for a disk or driver and can't be closed at all. Often caused by a disconnected disk or network folder. A restart helps.
+
+# mac.rs:313
+ru: Остановлена: {}
+en: Paused: {}
+
+# mac.rs:313
+ru: на паузе
+en: paused
+
+# mac.rs:349
+ru: Открыта: {}
+en: Open: {}
+
+# mac.rs:350
+ru: Если программа зависла и не закрывается — нажми «Закрыть принудительно» (несохранённое пропадёт).
+en: If the app froze and won't close, press “Force quit” (unsaved work will be lost).
+

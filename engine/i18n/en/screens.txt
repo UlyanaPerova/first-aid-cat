@@ -1,0 +1,19 @@
+# screens.rs:69
+ru: Проверяю, мур…
+en: Checking, purr…
+
+# screens.rs:444
+ru: + АПТЕЧКА
+en: + FIRST AID
+
+# screens.rs:454
+ru: Клод
+en: Claude
+
+# screens.rs:464
+ru: ↓{} ↑{} Мбит/с  пинг {}
+en: ↓{} ↑{} Mbit/s  ping {}
+
+# screens.rs:468
+ru: СЕТЬ
+en: NET

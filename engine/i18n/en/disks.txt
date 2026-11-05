@@ -1,0 +1,66 @@
+# disks.rs:161
+ru: диск
+en: disk
+
+# disks.rs:177
+ru: кончается запас ячеек
+en: spare cells running out
+
+# disks.rs:178
+ru: перегрев
+en: overheating
+
+# disks.rs:179
+ru: надёжность снижена
+en: reliability reduced
+
+# disks.rs:180
+ru: перешёл в «только чтение»
+en: switched to “read-only”
+
+# disks.rs:181
+ru: сбой резервной памяти
+en: backup memory failure
+
+# disks.rs:182
+ru: предупреждение
+en: warning
+
+# disks.rs:196
+ru: диск сообщает, что скоро откажет
+en: the disk reports it will fail soon
+
+# disks.rs:198
+ru: плохих секторов: {}
+en: bad sectors: {}
+
+# disks.rs:235
+ru: Windows предупреждает о его здоровье
+en: Windows warns about its health
+
+# disks.rs:236
+ru: Windows считает его неисправным
+en: Windows considers it faulty
+
+# disks.rs:246
+ru: Здоровье дисков
+en: Disk health
+
+# disks.rs:246
+ru: в порядке ({})
+en: OK ({})
+
+# disks.rs:247
+ru: Сами диски не сообщают о неполадках: {}.
+en: The disks themselves report no problems: {}.
+
+# disks.rs:252
+ru: Здоровье диска {}
+en: Disk health: {}
+
+# disks.rs:253
+ru: Диск сам сообщает о неполадке. Сделай копию важных файлов как можно скорее и подумай о замене диска.
+en: The disk itself reports a problem. Back up your important files as soon as you can and think about replacing the disk.
+
+ru: Служба дисков (UDisks2) не ответила вовремя.
+en: The disk service (UDisks2) did not answer in time.

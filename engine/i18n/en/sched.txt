@@ -1,0 +1,23 @@
+# sched.rs:273
+ru: проверяю…
+en: checking…
+
+# sched.rs:300
+ru: не получилось проверить
+en: couldn't check
+
+# sched.rs:301
+ru: Внутренняя ошибка проверки — подробности в журнале.
+en: Internal error in the check — details are in the log.
+
+# sched.rs:307
+ru: не отвечает
+en: not responding
+
+# sched.rs:309
+ru: Проверка зависает раз за разом — больше не перезапускаю.
+en: This check keeps hanging — I won't restart it any more.
+
+# sched.rs:311
+ru: Проверка не уложилась в минуту — жду её.
+en: The check took over a minute — I'm waiting for it.

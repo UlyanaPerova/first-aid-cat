@@ -1,0 +1,367 @@
+# catalog.rs:37
+ru: Сеть
+en: Network
+
+# catalog.rs:38
+ru: ИИ
+en: AI
+
+# catalog.rs:39
+ru: Графика
+en: Graphics
+
+# catalog.rs:40
+ru: Устройства
+en: Devices
+
+# catalog.rs:41
+ru: Темы
+en: Themes
+
+# catalog.rs:42
+ru: Система
+en: System
+
+# catalog.rs:48
+ru: Интернет, DNS, прокси и VPN
+en: Internet, DNS, proxy and VPN
+
+# catalog.rs:49
+ru: Связь с ИИ-помощниками и их сессии в терминале
+en: Connection to AI assistants and their terminal sessions
+
+# catalog.rs:50
+ru: Видеокарта, драйвер, кто рисует экран
+en: GPU, driver, what draws the screen
+
+# catalog.rs:51
+ru: Звук, Bluetooth, принтер, клавиатура
+en: Sound, Bluetooth, printer, keyboard
+
+# catalog.rs:52
+ru: Темы, значки, расширения, док
+en: Themes, icons, extensions, dock
+
+# catalog.rs:53
+ru: Время, диск, память, обновления, службы
+en: Time, disk, memory, updates, services
+
+# catalog.rs:88
+ru: Часы
+en: Clock
+
+# catalog.rs:89
+ru: Не врут ли часы и включена ли автосверка времени
+en: Whether the clock is right and automatic time sync is on
+
+# catalog.rs:96
+ru: Подключение и DNS
+en: Connection and DNS
+
+# catalog.rs:97
+ru: Есть ли сеть, интернет, отвечает ли DNS
+en: Whether there's a network, internet, and DNS is responding
+
+# catalog.rs:104
+ru: Системный прокси
+en: System proxy
+
+# catalog.rs:105
+ru: Не остался ли прокси от выключенного VPN
+en: Whether a proxy is left over from a VPN that's off
+
+# catalog.rs:112
+ru: Прокси в браузерах и программах
+en: Proxy in browsers and apps
+
+# catalog.rs:113
+ru: Прокси-расширения браузеров (BlancVPN и т. п.), прокси в Firefox, http_proxy в терминале, git/npm/pip/apt
+en: Browser proxy extensions (BlancVPN etc.), proxy in Firefox, http_proxy in the terminal, git/npm/pip/apt
+
+# catalog.rs:118
+ru: Каналы Happ, Outline, Proton и внешний IP
+en: Happ, Outline, Proton tunnels and external IP
+
+# catalog.rs:123
+ru: Задержка сети
+en: Network latency
+
+# catalog.rs:124
+ru: Пинг и джиттер до сервера замера раз в 15 минут (без скачивания: трафика почти нет)
+en: Ping and jitter to the test server every 15 minutes (no downloads: almost no traffic)
+
+# catalog.rs:131
+ru: Вход в сеть
+en: Network sign-in
+
+# catalog.rs:132
+ru: Не просит ли сеть войти на своей странице (кафе, гостиница, вокзал)
+en: Whether the network asks you to sign in on its own page (café, hotel, station)
+
+# catalog.rs:139
+ru: Батарея
+en: Battery
+
+# catalog.rs:140
+ru: Заряд, заряжается ли от сети, износ (у ноутбуков)
+en: Charge, whether it's charging, wear (laptops)
+
+# catalog.rs:148
+ru: Не сообщают ли сами диски о скором отказе (S.M.A.R.T.)
+en: Whether the disks themselves report an upcoming failure (S.M.A.R.T.)
+
+# catalog.rs:155
+ru: Цифровой след
+en: Digital footprint
+
+# catalog.rs:156
+ru: Ключи API и доступы VPN открытым текстом: в истории команд, чатах ИИ, настройках; ключи SSH без пароля; шифрование диска
+en: API keys and VPN credentials in plain text: in command history, AI chats, settings; SSH keys without a passphrase; disk encryption
+
+# catalog.rs:163
+ru: Сигнал Wi-Fi
+en: Wi-Fi signal
+
+# catalog.rs:164
+ru: Не слабый ли сигнал Wi-Fi (частая причина «тормозит интернет»)
+en: Whether the Wi-Fi signal is weak (a common reason for “slow internet”)
+
+# catalog.rs:172
+ru: Связь с Claude API, claude.ai и статус серверов Anthropic
+en: Connection to Claude API, claude.ai and Anthropic server status
+
+# catalog.rs:180
+ru: OpenAI Codex CLI: связь, статус OpenAI, сессии
+en: OpenAI Codex CLI: connection, OpenAI status, sessions
+
+# catalog.rs:188
+ru: Qwen Code: связь с DashScope, сессии
+en: Qwen Code: connection to DashScope, sessions
+
+# catalog.rs:196
+ru: Kimi Code: связь с Kimi и Moonshot, сессии
+en: Kimi Code: connection to Kimi and Moonshot, sessions
+
+# catalog.rs:204
+ru: Gemini CLI: связь с Gemini API, сессии
+en: Gemini CLI: connection to Gemini API, sessions
+
+# catalog.rs:212
+ru: Cursor CLI (cursor-agent): связь, статус Cursor, сессии
+en: Cursor CLI (cursor-agent): connection, Cursor status, sessions
+
+# catalog.rs:220
+ru: OpenCode: связь с opencode.ai, сессии
+en: OpenCode: connection to opencode.ai, sessions
+
+# catalog.rs:228
+ru: Google Antigravity: связь с Google, разговоры
+en: Google Antigravity: connection to Google, conversations
+
+# catalog.rs:235
+ru: Док
+en: Dock
+
+# catalog.rs:236
+ru: На месте ли док и не пропал ли он после полноэкранных окон
+en: Whether the dock is in place and didn't vanish after full-screen windows
+
+# catalog.rs:241
+ru: Репозитории
+en: Repositories
+
+# catalog.rs:241
+ru: Доступны ли источники обновлений apt
+en: Whether apt update sources are reachable
+
+# catalog.rs:246
+ru: Видеокарта
+en: GPU
+
+# catalog.rs:247
+ru: Кто рисует экран, драйвер NVIDIA, температура, режим PRIME
+en: What draws the screen, NVIDIA driver, temperature, PRIME mode
+
+# catalog.rs:254
+ru: Темы и расширения
+en: Themes and extensions
+
+# catalog.rs:255
+ru: Не сбились ли темы и работают ли расширения GNOME
+en: Whether themes are intact and GNOME extensions work
+
+# catalog.rs:262
+ru: Звук
+en: Sound
+
+# catalog.rs:263
+ru: Работает ли звук, на каком устройстве, не выключен ли, микрофон
+en: Whether sound works, on which device, whether it's muted, microphone
+
+# catalog.rs:270
+ru: Bluetooth и Wi-Fi
+en: Bluetooth and Wi-Fi
+
+# catalog.rs:271
+ru: Не заблокированы ли, работает ли служба Bluetooth
+en: Whether they're blocked, whether the Bluetooth service works
+
+# catalog.rs:278
+ru: Печать
+en: Printing
+
+# catalog.rs:279
+ru: Принтер не на паузе, очередь не застряла
+en: Printer isn't paused, queue isn't stuck
+
+# catalog.rs:286
+ru: Раскладка
+en: Keyboard layout
+
+# catalog.rs:287
+ru: Есть ли чем переключать раскладку
+en: Whether there's a way to switch the layout
+
+# catalog.rs:294
+ru: Пакеты и /boot
+en: Packages and /boot
+
+# catalog.rs:295
+ru: Прерванная установка, сломанные зависимости, нужна ли перезагрузка, место в /boot
+en: Interrupted install, broken dependencies, whether a restart is needed, space in /boot
+
+# catalog.rs:302
+ru: Что занимает место
+en: What takes up space
+
+# catalog.rs:303
+ru: Корзина, кэш миниатюр, системный журнал
+en: Trash, thumbnail cache, system journal
+
+# catalog.rs:310
+ru: Копии файлов
+en: Duplicate files
+
+# catalog.rs:311
+ru: Одинаковые файлы в Загрузках, Документах, Изображениях и т. п. (ищет по кнопке)
+en: Identical files in Downloads, Documents, Pictures etc. (searches on button press)
+
+# catalog.rs:318
+ru: Нехватка памяти
+en: Low memory
+
+# catalog.rs:319
+ru: Закрывала ли система программы из-за памяти, есть ли подкачка
+en: Whether the system closed apps because of memory, whether swap exists
+
+# catalog.rs:326
+ru: Прожорливые программы
+en: Resource-hungry apps
+
+# catalog.rs:327
+ru: Кто сейчас грузит процессор
+en: What's loading the CPU right now
+
+# catalog.rs:334
+ru: Secure Boot и NVIDIA
+en: Secure Boot and NVIDIA
+
+# catalog.rs:335
+ru: Не мешает ли Secure Boot драйверу NVIDIA
+en: Whether Secure Boot blocks the NVIDIA driver
+
+# catalog.rs:342
+ru: Нагрузка и диск
+en: Load and disk
+
+# catalog.rs:343
+ru: Процессор, память, диск, упавшие службы
+en: CPU, memory, disk, failed services
+
+# catalog.rs:355
+ru: Версия Windows
+en: Windows version
+
+# catalog.rs:357
+ru: Интернет и DNS
+en: Internet and DNS
+
+# catalog.rs:357
+ru: Есть ли интернет, отвечает ли DNS
+en: Whether there's internet and DNS is responding
+
+# catalog.rs:363
+ru: Не остался ли прокси от закрытого VPN (Happ, v2rayN, Hiddify…), WinHTTP
+en: Whether a proxy is left over from a closed VPN (Happ, v2rayN, Hiddify…), WinHTTP
+
+# catalog.rs:371
+ru: Happ, Outline, Proton, Amnezia, Hiddify, v2rayN, WireGuard: запущен ли, не остался ли туннель
+en: Happ, Outline, Proton, Amnezia, Hiddify, v2rayN, WireGuard: whether it's running, whether a tunnel is left over
+
+# catalog.rs:482
+ru: Обновления Windows
+en: Windows updates
+
+# catalog.rs:483
+ru: Ошибки установки обновлений за 2 недели и что они значат
+en: Update install errors over 2 weeks and what they mean
+
+# catalog.rs:490
+ru: Сбои и зависания
+en: Crashes and freezes
+
+# catalog.rs:491
+ru: Внезапные выключения, падающие и зависшие программы, проводник
+en: Sudden shutdowns, crashing and frozen apps, Explorer
+
+# catalog.rs:495
+ru: Не врут ли часы
+en: Whether the clock is right
+
+# catalog.rs:499
+ru: Звук, печать, Bluetooth, диск
+en: Sound, printing, Bluetooth, disk
+
+# catalog.rs:500
+ru: Службы звука, печати и Bluetooth; место на диске C:
+en: Sound, printing and Bluetooth services; space on disk C:
+
+# catalog.rs:520
+ru: Версия macOS
+en: macOS version
+
+# catalog.rs:528
+ru: Не остался ли прокси от закрытого VPN
+en: Whether a proxy is left over from a closed VPN
+
+# catalog.rs:536
+ru: VPN-службы macOS (Happ, Outline, ProtonVPN, BlancVPN…): подключены ли
+en: macOS VPN services (Happ, Outline, ProtonVPN, BlancVPN…): whether they're connected
+
+# catalog.rs:584
+ru: Прокси-расширения браузеров, http_proxy в терминале, git/npm/pip
+en: Browser proxy extensions, http_proxy in the terminal, git/npm/pip
+
+# catalog.rs:653
+ru: Работает ли звуковая служба coreaudiod
+en: Whether the coreaudiod sound service works
+
+# catalog.rs:658
+ru: Диск и снимки
+en: Disk and snapshots
+
+# catalog.rs:659
+ru: Свободное место, локальные снимки Time Machine
+en: Free space, local Time Machine snapshots
+
+# catalog.rs:667
+ru: Кто грузит процессор; индексация Spotlight
+en: What's loading the CPU; Spotlight indexing
+
+# catalog.rs:674
+ru: Открытые и зависшие программы
+en: Open and frozen apps
+
+# catalog.rs:675
+ru: Закрыть зависшую программу, которая не закрывается; зависания и падения за неделю
+en: Close a frozen app that won't close; freezes and crashes over the past week

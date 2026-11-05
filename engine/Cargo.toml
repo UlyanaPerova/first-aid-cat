@@ -1,0 +1,38 @@
+[package]
+name = "aptechka"
+version = "0.9.0"
+edition = "2021"
+description = "Аптечка: живая слоёная пиксельная картинка (движок)"
+
+[build-dependencies]
+serde_json = "1"
+
+[dependencies]
+winit = { version = "0.30", default-features = false, features = ["x11", "rwh_06"] }
+softbuffer = { version = "0.4", default-features = false, features = ["x11", "x11-dlopen"] }
+png = "0.17"
+serde_json = "1"
+ureq = { version = "2", default-features = false, features = ["tls", "socks-proxy"] }
+tiny-skia = "0.11"
+ttf-parser = "0.25"
+md5 = "0.7"
+accesskit_winit = { version = "0.34", default-features = false, features = ["accesskit_unix", "async-io", "rwh_06"] }
+accesskit = "0.25"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+x11rb = { version = "0.13", default-features = false }
+
+[target.'cfg(windows)'.dependencies]
+clipboard-win = "5"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+# unwind, а не abort: сбой в одной проверке (своём потоке) не роняет всю Аптечку — пропадает только её строка
+panic = "unwind"
+strip = true
+
+# softbuffer с одной правкой: на macOS по желанию учитывает альфу (прозрачный виджет любой формы)
+[patch.crates-io]
+softbuffer = { path = "vendor/softbuffer" }

@@ -1,0 +1,123 @@
+# main.rs:107
+ru: PowerShell не запустился: {}
+en: PowerShell failed to start: {}
+
+# main.rs:123
+ru: Terminal не запустился
+en: Terminal failed to start
+
+# main.rs:150
+ru: не нашла программу-терминал (gnome-terminal, konsole, xterm…)
+en: I couldn't find a terminal app (gnome-terminal, konsole, xterm…)
+
+# main.rs:274
+ru: вкл · 
+en: on · 
+
+# main.rs:280
+ru: выключен
+en: off
+
+# main.rs:283
+ru: вкл · {} · {}
+en: on · {0} · {1}
+
+# main.rs:283
+ru: думает
+en: thinking
+
+# main.rs:283
+ru: ждёт
+en: waiting
+
+# main.rs:291
+ru: выкл
+en: off
+
+# main.rs:293
+ru: ПУСТО!
+en: EMPTY!
+
+# main.rs:295
+ru: вкл
+en: on
+
+# main.rs:297
+ru: Прокси
+en: Proxy
+
+# main.rs:304
+ru: СБОЙ
+en: FAIL
+
+# main.rs:337
+ru: Диск
+en: Disk
+
+# main.rs:338
+ru: {}Г
+en: {}G
+
+# main.rs:345
+ru: Ой! {}: {}
+en: Oops! {0}: {1}
+
+# main.rs:346
+ru: Хм, {}: {}
+en: Hmm, {0}: {1}
+
+# main.rs:347
+ru: Всё спокойно, мур! :3
+en: All calm, purr! :3
+
+# main.rs:422
+ru: Аптечка
+en: First Aid Cat
+
+# main.rs:573
+ru: Проверка начата…
+en: Check started…
+
+# main.rs:631
+ru: Не открылся терминал: {}
+en: Couldn't open a terminal: {}
+
+# main.rs:713
+ru: DRY_RUN: сохранила бы справку в {}
+en: DRY_RUN: would save the medical note to {}
+
+# main.rs:722
+ru: Справка сохранена: {}
+en: Medical note saved: {}
+
+# main.rs:723
+ru: Не удалось сохранить справку: {}
+en: Couldn't save the medical note: {}
+
+# main.rs:787
+ru: Аптечку обновили! Как только закончу дела — перезапущусь сама.
+en: First Aid Cat was updated! As soon as I'm done, I'll restart myself.
+
+# main.rs:1708
+ru: На macOS виджет Аптечки добавляется через «Изменить виджеты» на рабочем столе.
+en: On macOS, the First Aid Cat widget is added via “Edit Widgets” on the desktop.
+
+# main.rs:1718
+ru: Нужно: aptechka --fix <действие> [параметр]
+en: Usage: aptechka --fix <action> [parameter]
+
+# main.rs:1722
+ru: НЕ ВЫШЛО:
+en: FAILED:
+
+# main.rs:1884
+ru: Аптечке нужен экран: не нашла графическую сессию.\nЗапусти её из рабочего стола. Проверка без окна: aptechka --diag
+en: First Aid Cat needs a screen: I couldn't find a graphical session.\nLaunch it from the desktop. Check without a window: aptechka --diag
+
+# main.rs:1897
+ru: Окно Аптечки закрылось с ошибкой: {}
+en: The First Aid Cat window closed with an error: {}
+
+# main.rs: --help
+ru: Аптечка — проверка компьютера с котом-доктором.\n\naptechka                 открыть окно\naptechka --diag          все проверки таблицей в терминале\naptechka --sessions      сессии ИИ-агентов и как их продолжить\naptechka --speed         замер скорости в терминале\naptechka --widget        только виджет на рабочем столе (Linux, Windows)\naptechka --fix ID [ARG]  одна починка; DRY_RUN=1 — только показать, что было бы\n\nЯзык: APTECHKA_LANG=ru|en
+en: First Aid Cat — a computer health check with a doctor cat.\n\naptechka                 open the window\naptechka --diag          all checks as a table in the terminal\naptechka --sessions      AI agent sessions and how to resume them\naptechka --speed         speed test in the terminal\naptechka --widget        only the desktop widget (Linux, Windows)\naptechka --fix ID [ARG]  run one fix; DRY_RUN=1 shows what would happen\n\nLanguage: APTECHKA_LANG=ru|en

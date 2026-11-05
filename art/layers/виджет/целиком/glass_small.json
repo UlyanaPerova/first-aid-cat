@@ -1,0 +1,81 @@
+{
+ "w": 85,
+ "h": 93,
+ "step": [
+  12.38,
+  13.09
+ ],
+ "cat": [
+  5,
+  5,
+  75,
+  60
+ ],
+ "close": [
+  74,
+  3,
+  8,
+  8
+ ],
+ "list": [
+  5,
+  70,
+  75,
+  18
+ ],
+ "fields": [
+  {
+   "kind": "label",
+   "text": "Аптечка",
+   "rect": [
+    25,
+    71,
+    46,
+    8
+   ],
+   "color": "#061833",
+   "align": "left",
+   "bold": true,
+   "font": "sans-bold",
+   "font_px": 7.5,
+   "dx": 2.5,
+   "dy": -0.5,
+   "ls": -2.3
+  },
+  {
+   "kind": "total",
+   "rect": [
+    25,
+    80,
+    46,
+    8
+   ],
+   "color": "#4D5B74",
+   "bad_color": "#B0261C",
+   "align": "left",
+   "bold": false,
+   "font": "sans",
+   "font_px": 5.6,
+   "dx": 2.75,
+   "dy": -1
+  },
+  {
+   "kind": "status",
+   "of": "total",
+   "rect": [
+    71,
+    72,
+    7,
+    7
+   ],
+   "shape": "dot",
+   "colors": {
+    "ok": "#3CC24F",
+    "warn": "#F08A1C",
+    "bad": "#E5534B",
+    "info": "#8E9AAB"
+   }
+  }
+ ],
+ "cell_scale": 1.3333333333333333
+}

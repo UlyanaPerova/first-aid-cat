@@ -1,0 +1,70 @@
+# agents.rs:61
+ru: сервером входа OpenAI
+en: OpenAI sign-in server
+
+# agents.rs:106
+ru: сервером входа Google
+en: Google sign-in server
+
+# agents.rs:680
+ru: новая сессия
+en: new session
+
+# agents.rs:712
+ru: только что
+en: just now
+
+# agents.rs:714
+ru: {} мин назад
+en: {} min ago
+
+# agents.rs:716
+ru: {} ч назад
+en: {} h ago
+
+# agents.rs:718
+ru: {} дн назад
+en: {} d ago
+
+# agents.rs:732
+ru: {}: связь с {}
+en: {0}: connection to {1}
+
+# agents.rs:743
+ru: всё работает
+en: all working
+
+# agents.rs:747
+ru: {}: серверы
+en: {}: servers
+
+# agents.rs:750
+ru: Это проблема на их стороне, не у тебя.
+en: This is a problem on their side, not yours.
+
+# agents.rs:759
+ru: {} в терминале · {} думает
+en: {0} in terminal · {1} thinking
+
+# agents.rs:761
+ru: {} в терминале · ждёт
+en: {} in terminal · waiting
+
+# agents.rs:764
+ru: закрыт · последняя {}
+en: closed · last {}
+
+# agents.rs:766
+ru: сессий нет
+en: no sessions
+
+# agents.rs:769
+ru: Продолжить последнюю: {}
+en: Resume the last one: {}
+
+# agents.rs:772
+ru: {}: сессии
+en: {}: sessions
+
+ru: список не читаю (база SQLite)
+en: list not read (SQLite database)

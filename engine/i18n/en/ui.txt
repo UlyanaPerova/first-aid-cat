@@ -1,0 +1,809 @@
+# ui.rs:18
+ru: Показатели
+en: Metrics
+
+# ui.rs:211
+ru: Лечение
+en: Treatment
+
+# ui.rs:217
+ru: Журнал
+en: Log
+
+# ui.rs:219
+ru: Язык: как в системе
+en: Language: system default
+
+# ui.rs:223
+ru: Файл
+en: File
+
+# ui.rs:223
+ru: Текстовый режим (таблица в терминале)
+en: Text mode (table in terminal)
+
+# ui.rs:223
+ru: Выход
+en: Exit
+
+# ui.rs:225
+ru: Проверки
+en: Checks
+
+# ui.rs:227
+ru: Проверить всё
+en: Check all
+
+# ui.rs:228
+ru: Измерить скорость
+en: Measure speed
+
+# ui.rs:229
+ru: Проверять редко (экономно)
+en: Check rarely (saves power)
+
+# ui.rs:230
+ru: Проверять обычно
+en: Check normally
+
+# ui.rs:231
+ru: Проверять часто
+en: Check often
+
+# ui.rs:234
+ru: Вид
+en: View
+
+# ui.rs:235
+ru: Виджет
+en: Widget
+
+# ui.rs:237
+ru: Справка
+en: Help
+
+# ui.rs:237
+ru: Справка от Мяудоктора
+en: Medical Note from Dr. Meow
+
+# ui.rs:237
+ru: О программе
+en: About
+
+# ui.rs:255
+ru: Показать на рабочем столе
+en: Show on desktop
+
+# ui.rs:258
+ru: Вид: {}
+en: Style: {}
+
+# ui.rs:260
+ru: Размер: маленький
+en: Size: small
+
+# ui.rs:261
+ru: Размер: средний
+en: Size: medium
+
+# ui.rs:657
+ru: Аптечка запущена.
+en: First Aid Cat started.
+
+# ui.rs:830
+ru: внимание:
+en: attention:
+
+# ui.rs:831
+ru: ОШИБКА:
+en: ERROR:
+
+# ui.rs:840
+ru: {} теперь {}: {}
+en: {} is now {}: {}
+
+# ui.rs:853
+ru: Готово. Проблем: {}, предупреждений: {}.
+en: Done. Problems: {}, warnings: {}.
+
+# ui.rs:872
+ru:  И ещё {}.
+en:  And {} more.
+
+# ui.rs:873
+ru:  Нажми «{}».
+en:  Press “{}”.
+
+# ui.rs:874
+ru: Мур! Беда:
+en: Meow! Trouble:
+
+# ui.rs:874
+ru: Хм…
+en: Hmm…
+
+# ui.rs:927
+ru: Меряю скорость: пинг, скачивание и отдачу…
+en: Measuring speed: ping, download and upload…
+
+# ui.rs:928
+ru: Измеряю скорость…
+en: Measuring speed…
+
+# ui.rs:968
+ru: Скорость измерена.
+en: Speed measured.
+
+# ui.rs:994
+ru: Лечу: {}…
+en: Fixing: {}…
+
+# ui.rs:995
+ru: Лечение: {}…
+en: Fix: {}…
+
+# ui.rs:999
+ru: Вылечено: 
+en: Fixed: 
+
+# ui.rs:999
+ru: Не вышло: 
+en: Failed: 
+
+# ui.rs:1000
+ru: Готово! 
+en: Done! 
+
+# ui.rs:1000
+ru: Не получилось :( 
+en: Didn't work :( 
+
+# ui.rs:1310
+ru: Да, давай
+en: Yes, do it
+
+# ui.rs:1311
+ru: Отмена
+en: Cancel
+
+# ui.rs:1356
+ru: Эта сессия только началась — продолжать пока нечего, она и так открыта.
+en: This session has just started — nothing to resume yet, it's already open.
+
+# ui.rs:1358
+ru: У этой сессии странный номер — не стану запускать его в терминале.
+en: This session has a strange ID — I won't run it in a terminal.
+
+# ui.rs:1364
+ru: Открываю терминал с этой сессией, мур!
+en: Opening a terminal with this session, purr!
+
+# ui.rs:1383
+ru: снова проверяю
+en: checking again
+
+# ui.rs:1385
+ru: больше не проверяю (с компьютером ничего не делала)
+en: not checking anymore (I haven't touched your computer)
+
+# ui.rs:1425
+ru: Скопировала команду — вставь её в терминал (Ctrl+Shift+V).
+en: Copied the command — paste it into the terminal (Ctrl+Shift+V).
+
+# ui.rs:1440
+ru: Эта сессия только началась — у неё ещё нет номера.
+en: This session has just started — it has no ID yet.
+
+# ui.rs:1442
+ru: У этой сессии странный номер — копировать команду не стану.
+en: This session has a strange ID — I won't copy the command.
+
+# ui.rs:1446
+ru: Скопировал! Вставь в терминал: {}
+en: Copied! Paste it into the terminal: {}
+
+# ui.rs:1447
+ru: Команда resume скопирована в буфер обмена.
+en: The resume command was copied to the clipboard.
+
+# ui.rs:1498
+ru: Проверяю реже — бережёт батарею и трафик.
+en: Checking less often — saves battery and data.
+
+# ui.rs:1499
+ru: Проверяю чаще.
+en: Checking more often.
+
+# ui.rs:1500
+ru: Проверяю как обычно.
+en: Checking as usual.
+
+# ui.rs:1507
+ru: Офлайн-диагностика: сеть и VPN, графика, система и Клод. Один лёгкий файл, без GTK. Текстовый режим: aptechka --diag
+en: Offline diagnostics: network and VPN, graphics, system and Claude. One light file, no GTK. Text mode: aptechka --diag
+
+# ui.rs:1627
+ru: Выдана справка № {}.
+en: Medical note No. {} issued.
+
+# ui.rs:1643
+ru: {}/Справка_{}.png
+en: {}/Medical_note_{}.png
+
+# ui.rs:1693
+ru: внимание
+en: attention
+
+# ui.rs:1694
+ru: беда
+en: problem
+
+# ui.rs:1695
+ru: проверяю
+en: checking
+
+# ui.rs:1697
+ru: для сведения
+en: for info
+
+# ui.rs:1702
+ru: Прокрутить вверх
+en: Scroll up
+
+# ui.rs:1703
+ru: Прокрутить вниз
+en: Scroll down
+
+# ui.rs:1707
+ru: Сессии ИИ-помощников
+en: AI assistant sessions
+
+# ui.rs:1710
+ru: Скопировать команду продолжения: {}
+en: Copy resume command: {}
+
+# ui.rs:1714
+ru: Открыть сессию: {}
+en: Open session: {}
+
+# ui.rs:1729
+ru: Кот-доктор (погладить)
+en: Doctor cat (pet)
+
+# ui.rs:1730
+ru: Да
+en: Yes
+
+# ui.rs:1732
+ru: Скопировать команду
+en: Copy command
+
+# ui.rs:1733
+ru: Сохранить справку
+en: Save medical note
+
+# ui.rs:1734
+ru: Закрыть справку
+en: Close medical note
+
+# ui.rs:1740
+ru: Измерить скорость интернета
+en: Measure internet speed
+
+# ui.rs:1742
+ru: Скорость интернета: {}. Измерить заново
+en: Internet speed: {}. Measure again
+
+# ui.rs:1753
+ru: Сеть и VPN
+en: Network and VPN
+
+# ui.rs:1754
+ru: ИИ-помощники
+en: AI assistants
+
+# ui.rs:1759
+ru: Показатели: что проверять
+en: Metrics: what to check
+
+# ui.rs:1760
+ru: Журнал проверок
+en: Check log
+
+# ui.rs:1761
+ru: Полечить…
+en: Fix…
+
+# ui.rs:1767
+ru: Потяните, чтобы поменять высоту таблицы и журнала
+en: Drag to resize the table and log
+
+# ui.rs:1768
+ru: Свернуть
+en: Minimize
+
+# ui.rs:1769
+ru: Восстановить
+en: Restore
+
+# ui.rs:1769
+ru: Развернуть
+en: Maximize
+
+# ui.rs:1770
+ru: Закрыть
+en: Close
+
+# ui.rs:1771
+ru: Проверить всё заново
+en: Check all again
+
+# ui.rs:1772
+ru: Скорость интернета. Нажми, чтобы измерить заново
+en: Internet speed. Click to measure again
+
+# ui.rs:1773
+ru: Скопировать команду, чтобы продолжить эту сессию
+en: Copy the command to resume this session
+
+# ui.rs:1774
+ru: Скрыть подсказку
+en: Hide tip
+
+# ui.rs:1899
+ru: Сеть в порядке, Клод на связи. Мур~
+en: Network is fine, Claude is online. Purr~
+
+# ui.rs:1899
+ru: Клод думает рядом, а я сторожу сеть.
+en: Claude is thinking nearby while I guard the network.
+
+# ui.rs:1901
+ru: Сеть в порядке. Клод сейчас отдыхает, но до него можно дозвониться.
+en: Network is fine. Claude is resting right now, but can still be reached.
+
+# ui.rs:1901
+ru: Всё хорошо. Клод выключен — открой терминал, если соскучилась.
+en: All good. Claude is off — open a terminal if you miss it.
+
+# ui.rs:1903
+ru: Всё хорошо, мур! Можно спокойно работать.
+en: All good, purr! You can work in peace.
+
+# ui.rs:1904
+ru: Пульс ровный, сеть дышит. Я рядом!
+en: Steady pulse, the network is breathing. I'm right here!
+
+# ui.rs:1905
+ru: Проверил всё-всё. Ты молодец, что заглянула :3
+en: I checked everything. Good job stopping by :3
+
+# ui.rs:1906
+ru: Всё здорово! Не забудь попить водички.
+en: All great! Don't forget to drink some water.
+
+# ui.rs:1907
+ru: Сеть в порядке. Мур~
+en: Network is fine. Purr~
+
+# ui.rs:1916
+ru: Мур~
+en: Purr~
+
+# ui.rs:2225
+ru: ИИ-агенты в терминале
+en: AI agents in terminal
+
+# ui.rs:2238
+ru: {} · {} в терминале · {}
+en: {} · {} in terminal · {}
+
+# ui.rs:2238
+ru: ждёт тебя
+en: waiting for you
+
+# ui.rs:2239
+ru: Сессия: {} {}
+en: Session: {} {}
+
+# ui.rs:2243
+ru: Агенты выключены
+en: Agents are off
+
+# ui.rs:2243
+ru: Последняя: {} {}
+en: Last: {} {}
+
+# ui.rs:2245
+ru: сессий пока нет
+en: no sessions yet
+
+# ui.rs:2257
+ru: Копировать resume
+en: Copy resume
+
+# ui.rs:2258
+ru: Сессии
+en: Sessions
+
+# ui.rs:2431
+ru: ↓ {}   ↑ {} Мбит/с · пинг {} мс
+en: ↓ {}   ↑ {} Mbit/s · ping {} ms
+
+# ui.rs:2436
+ru: качаю
+en: downloading
+
+# ui.rs:2437
+ru: отдаю
+en: uploading
+
+# ui.rs:2469
+ru: Проверить
+en: Check
+
+# ui.rs:2518
+ru: Что проверяет
+en: What it checks
+
+# ui.rs:2520
+ru: Проверка
+en: Check
+
+# ui.rs:2520
+ru: Статус
+en: Status
+
+# ui.rs:2520
+ru: Действие
+en: Action
+
+# ui.rs:2538
+ru: Нет данных
+en: No data
+
+# ui.rs:2646
+ru: Проверка завершена: {} из {} · проблем: {} · предупреждений: {}
+en: Check complete: {} of {} · problems: {} · warnings: {}
+
+# ui.rs:2652
+ru: Обновлено в {}:{}:{} · сеть проверяю постоянно, остальное реже
+en: Updated at {}:{}:{} · I check the network constantly, the rest less often
+
+# ui.rs:2654
+ru: Первая проверка…
+en: First check…
+
+# ui.rs:2724
+ru: Справка № {} — {}
+en: Medical note No. {} — {}
+
+# ui.rs:2735
+ru: Сохранить как картинку…
+en: Save as image…
+
+# ui.rs:2882
+ru:  · думает
+en:  · thinking
+
+# ui.rs:2883
+ru:  · ждёт
+en:  · waiting
+
+# ui.rs:2924
+ru: Или сама, в терминале:
+en: Or do it yourself, in a terminal:
+
+# ui.rs:2989
+ru: Копировать команду
+en: Copy command
+
+# ui.rs:3017
+ru: Категория «{}»: {}
+en: Category “{}”: {}
+
+# ui.rs:3027
+ru: Не проверять
+en: Don't check
+
+# ui.rs:3027
+ru: Проверять
+en: Check
+
+# ui.rs:3052
+ru: работают
+en: working
+
+# ui.rs:3053
+ru: через enp7s0
+en: via enp7s0
+
+# ui.rs:3055
+ru: 2 мс
+en: 2 ms
+
+# ui.rs:3057
+ru: включён, но пустой (сайты не открываются)
+en: on, but empty (sites won't open)
+
+# ui.rs:3061
+ru: мир видит CA
+en: the world sees CA
+
+# ui.rs:3062
+ru: 750 мс
+en: 750 ms
+
+# ui.rs:3063
+ru: 635 мс
+en: 635 ms
+
+# ui.rs:3065
+ru: Канал Happ
+en: Tunnel Happ
+
+# ui.rs:3065
+ru: Перезапустить Happ
+en: Restart Happ
+
+# ui.rs:3066
+ru: Канал Outline
+en: Tunnel Outline
+
+# ui.rs:3066
+ru: Перезапустить Outline
+en: Restart Outline
+
+# ui.rs:3067
+ru: 41°C · загрузка 2 %
+en: 41°C · load 2 %
+
+# ui.rs:3068
+ru: загрузка 1% (32 потока)
+en: load 1% (32 threads)
+
+# ui.rs:3069
+ru: 15% из 92 ГБ
+en: 15% of 92 GB
+
+# ui.rs:3070
+ru: свободно 2249 ГБ из 2951
+en: 2249 GB free of 2951
+
+# ui.rs:3071
+ru: OK (7 из 7)
+en: OK (7 of 7)
+
+# ui.rs:3074
+ru: Сбилось! Было: Yaru-dark
+en: Changed! Was: Yaru-dark
+
+# ui.rs:3082
+ru: Расширение Vitals
+en: Vitals extension
+
+# ui.rs:3085
+ru: Расширение space-bar
+en: space-bar extension
+
+# ui.rs:3107
+ru: 172 мс · джиттер 15 мс
+en: 172 ms · jitter 15 ms
+
+# ui.rs:3108
+ru: 158 Мбит/с
+en: 158 Mbit/s
+
+# ui.rs:3109
+ru: 86 Мбит/с
+en: 86 Mbit/s
+
+# ui.rs:3126
+ru: собери окно в стиле XP
+en: build a window in XP style
+
+# ui.rs:3127
+ru: почини прокси
+en: fix the proxy
+
+# ui.rs:3128
+ru: что с видеокартой
+en: what's up with the GPU
+
+# дополнительные шаблоны и части составных строк
+
+ru: Проверяю…
+en: Checking…
+
+ru: Скорость ↓ скачивание
+en: Speed ↓ download
+
+ru: Скорость ↑ отдача
+en: Speed ↑ upload
+
+ru: Пинг
+en: Ping
+
+ru: Аптечка
+en: First Aid Cat
+
+ru: в порядке
+en: OK
+
+ru: выключено
+en: off
+
+ru: Графика
+en: Graphics
+
+ru: Устройства
+en: Devices
+
+ru: Темы и расширения
+en: Themes and extensions
+
+ru: Система
+en: System
+
+ru: думает
+en: thinking
+
+ru: пинг
+en: ping
+
+ru: Показатель
+en: Metric
+
+ru: сессий нет
+en: no sessions
+
+ru: Серверы Anthropic
+en: Anthropic servers
+
+ru: Подключение
+en: Connection
+
+ru: Интернет
+en: Internet
+
+ru: есть
+en: OK
+
+ru: Системный прокси
+en: System proxy
+
+ru: Выключить системный прокси
+en: Turn off system proxy
+
+ru: выключен (сеть напрямую)
+en: off (direct connection)
+
+ru: VPN (итог)
+en: VPN (total)
+
+ru: Связь с Claude API
+en: Connection to Claude API
+
+ru: Связь с claude.ai
+en: Connection to claude.ai
+
+ru: Мой локальный IP
+en: My local IP
+
+ru: выключен
+en: off
+
+ru: Видеокарта
+en: GPU
+
+ru: Процессор
+en: CPU
+
+ru: Память
+en: Memory
+
+ru: Диск
+en: Disk
+
+ru: Доступ к репозиториям
+en: Repository access
+
+ru: Тема окон (GTK)
+en: Window theme (GTK)
+
+ru: Вернуть как было
+en: Restore previous
+
+ru: Иконки
+en: Icons
+
+ru: Курсор
+en: Cursor
+
+ru: Тема панели (Shell)
+en: Panel theme (Shell)
+
+ru: Док
+en: Dock
+
+ru: на месте
+en: in place
+
+ru: Починить док
+en: Fix dock
+
+ru: Перезапустить
+en: Restart
+
+ru: Включить
+en: Turn on
+
+ru: Было включено, а теперь нет.
+en: It was on, now it's off.
+
+ru: Эталон
+en: Baseline
+
+ru: Запомнить текущее как норму
+en: Save current as baseline
+
+ru: С этим состоянием сравниваются темы.
+en: Themes are compared with this state.
+
+ru: ждёт
+en: waiting
+
+ru: ОШИБКА
+en: ERROR
+
+ru: снова проверяю.
+en: checking again.
+
+ru: больше не проверяю (с компьютером ничего не делала).
+en: not checking anymore (I haven't touched your computer).
+
+ru: Мур! Беда: {} — {}.
+en: Meow! Trouble: {} — {}.
+
+ru: Хм… {} — {}.
+en: Hmm… {} — {}.
+
+ru: Нажми «{}»
+en: Press “{}”
+
+ru: И ещё {}
+en: And {} more
+
+ru: Вылечено: {}
+en: Fixed: {}
+
+ru: Не вышло: {}
+en: Failed: {}
+
+ru: Готово! {}
+en: Done! {}
+
+ru: Не получилось :( {}
+en: Didn't work :( {}
+
+ru: ↓ {}   ↑ {} Мбит/с
+en: ↓ {}   ↑ {} Mbit/s
+
+ru: ↓ {}   ↑ {} Мбит/с · пинг {} мс  ({}…)
+en: ↓ {}   ↑ {} Mbit/s · ping {} ms  ({}…)
+
+ru: пинг {} мс  ({}…)
+en: ping {} ms  ({}…)
+
+ru: [{}:{}:{}] {}
+en: [{0}:{1}:{2}] {3}
+
+ru: {}... {}
+en: {0}... {1}
+
+ru: {}?
+en: {}?
+
+# ui.rs: «О программе» с версией
+ru: Аптечка {}
+en: First Aid Cat {}

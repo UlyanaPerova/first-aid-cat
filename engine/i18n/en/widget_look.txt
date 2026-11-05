@@ -1,0 +1,11 @@
+# widget_look.rs:26
+ru: Окно
+en: Window
+
+# widget_look.rs:27
+ru: Монитор
+en: Monitor
+
+# widget_look.rs:28
+ru: Стекло
+en: Glass

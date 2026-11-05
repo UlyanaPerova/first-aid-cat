@@ -1,0 +1,213 @@
+# footprint.rs:29
+ru: OpenAI или похожий
+en: OpenAI or similar
+
+# footprint.rs:39
+ru: закрытый ключ
+en: private key
+
+# footprint.rs:306
+ru: файл .env
+en: .env file
+
+# footprint.rs:349
+ru: След: ключи в истории команд
+en: Footprint: keys in command history
+
+# footprint.rs:351
+ru: В {} лежат ключи, набранные в терминале. Любая программа, запущенная от твоего имени, прочитает их за секунду. Кнопка уберёт эти строки из истории; ключи лучше заменить новыми.
+en: {} contains keys typed in the terminal. Any program running as you can read them in a second. The button removes these lines from the history; it's better to replace the keys with new ones.
+
+# footprint.rs:355
+ru: Убрать ключи из истории
+en: Remove keys from history
+
+# footprint.rs:371
+ru: След: ключи в настройках оболочки
+en: Footprint: keys in shell settings
+
+# footprint.rs:372
+ru: Ключ в переменной окружения видят все программы, запущенные из терминала. Надёжнее — хранилище паролей системы (Связка ключей / «Пароли и ключи»).
+en: A key in an environment variable is visible to every program started from the terminal. Safer: the system password store (Keychain / “Passwords and Keys”).
+
+# footprint.rs:392
+ru: OpenCode (база SQLite)
+en: OpenCode (SQLite database)
+
+# footprint.rs:428
+ru: След: ключи в чатах ИИ
+en: Footprint: keys in AI chats
+
+# footprint.rs:430
+ru: чат|чата|чатов
+en: chat|chats
+
+# footprint.rs:433
+ru: Эти ключи были в переписке с ИИ: их видела модель, и они лежат открытым текстом в файлах сессий (например, {}). Замени ключи новыми у поставщика; старые сессии с ними можно удалить.{}
+en: These keys were in conversations with an AI: the model saw them, and they sit as plain text in session files (for example, {}). Replace the keys with new ones at the provider; old sessions that contain them can be deleted.{}
+
+# footprint.rs:436
+ru:  Проверила не все чаты — продолжу в следующий раз.
+en:  I haven't checked all chats — I'll continue next time.
+
+# footprint.rs:459
+ru: След: входы программ
+en: Footprint: program logins
+
+# footprint.rs:460
+ru: Токены входа этих программ лежат файлами в домашней папке — так они устроены. Программа под твоим именем может их прочитать; если вышла из учётной записи на сайте — «выйди» и в программе, токен перестанет работать.
+en: These programs keep their login tokens as files in your home folder — that's how they work. A program running as you can read them. If you signed out on the website, sign out in the program too, and the token will stop working.
+
+# footprint.rs:481
+ru: След: ключ WireGuard
+en: Footprint: WireGuard key
+
+# footprint.rs:481
+ru: читается без прав администратора
+en: readable without admin rights
+
+# footprint.rs:482
+ru: Закрытый ключ WireGuard в /etc/wireguard виден обычным программам — по нему можно подключиться к твоему VPN. Выполни: sudo chmod 600 /etc/wireguard/*.conf
+en: The WireGuard private key in /etc/wireguard is visible to ordinary programs — it can be used to connect to your VPN. Run: sudo chmod 600 /etc/wireguard/*.conf
+
+# footprint.rs:487
+ru: След: доступы VPN
+en: Footprint: VPN access
+
+# footprint.rs:488
+ru: В настройках этих клиентов — адреса серверов и ключи доступа. Любая программа под твоим именем может их прочитать и подключиться к твоему VPN. Если ключ мог утечь — перевыпусти подписку/ключ у поставщика.
+en: These clients' settings hold server addresses and access keys. Any program running as you can read them and connect to your VPN. If a key may have leaked, reissue the subscription/key at the provider.
+
+# footprint.rs:507
+ru: След: ключи SSH без пароля
+en: Footprint: SSH keys without a passphrase
+
+# footprint.rs:508
+ru: Скопировав этот файл, можно войти на твои серверы и в GitHub. Поставь пароль на ключ: ssh-keygen -p -f ~/.ssh/<ключ> (ключ останется тем же).
+en: Anyone who copies this file can log in to your servers and GitHub. Set a passphrase on the key: ssh-keygen -p -f ~/.ssh/<key> (the key itself stays the same).
+
+# footprint.rs:521
+ru: След: домашняя папка
+en: Footprint: home folder
+
+# footprint.rs:523
+ru: открыта ещё {} на компьютере
+en: also open to {} on this computer
+
+# footprint.rs:523
+ru: пользователю|пользователям|пользователям
+en: user|users
+
+# footprint.rs:525
+ru: Права {}: другие учётные записи могут читать твои файлы. Закрыть: chmod 750 ~
+en: Permissions {}: other accounts can read your files. To lock it: chmod 750 ~
+
+# footprint.rs:533
+ru: След: шифрование диска
+en: Footprint: disk encryption
+
+# footprint.rs:533
+ru: включено
+en: on
+
+# footprint.rs:536
+ru: Без шифрования украденный ноутбук читается целиком: ключи, чаты, пароли браузера. Шифрование включается при установке системы (Linux), FileVault (macOS), BitLocker (Windows).
+en: Without encryption a stolen laptop can be read in full: keys, chats, browser passwords. Encryption is enabled at system install (Linux), with FileVault (macOS) or BitLocker (Windows).
+
+# footprint.rs:550
+ru: След: файлы открыты другим
+en: Footprint: files open to others
+
+# footprint.rs:550
+ru: файл|файла|файлов
+en: file|files
+
+# footprint.rs:552
+ru: Их могут читать другие пользователи компьютера: {}.
+en: Other users of this computer can read them: {}.
+
+# footprint.rs:554
+ru: По правам их могли бы читать другие учётные записи ({}), но сейчас других людей на компьютере нет или домашняя папка закрыта. Закрыть на будущее — кнопкой.
+en: By permissions other accounts could read them ({}), but right now there are no other people on this computer, or the home folder is closed. Use the button to lock them for the future.
+
+# footprint.rs:556
+ru: Закрыть от других
+en: Lock from others
+
+# footprint.rs:563
+ru: часть чатов не успела просмотреть (продолжу в следующий раз)
+en: didn't get through some chats (I'll continue next time)
+
+# footprint.rs:566
+ru: не умею читать чаты: {}
+en: can't read chats of: {}
+
+# footprint.rs:569
+ru: Цифровой след: охват
+en: Digital footprint: coverage
+
+# footprint.rs:569
+ru: проверила не всё
+en: didn't check everything
+
+# footprint.rs:570
+ru: {}. Если ключей не нашла — это не значит, что их там нет.
+en: {}. If I found no keys, that doesn't mean there are none.
+
+# footprint.rs:575
+ru: в просмотренном ключей на виду нет
+en: no exposed keys in what I checked
+
+# footprint.rs:576
+ru: Просмотрела историю команд, файлы оболочки и чаты ИИ-агентов. Это не доказательство, что ключей нет нигде.
+en: I checked command history, shell files and AI agent chats. That doesn't prove there are no keys anywhere.
+
+# footprint.rs:715
+ru: права изменены: {}
+en: permissions changed: {}
+
+# footprint.rs:717
+ru: Закрыла от других пользователей: {}.
+en: Locked from other users: {}.
+
+# footprint.rs:721
+ru: На этой системе права устроены иначе.
+en: Permissions work differently on this system.
+
+# footprint.rs:775
+ru: {} всё время меняется (открыт терминал?) — закрой терминалы и нажми ещё раз.
+en: {} keeps changing (is a terminal open?) — close the terminals and press again.
+
+# footprint.rs:784
+ru: Не удалось переписать {}: {}
+en: Couldn't rewrite {}: {}
+
+# footprint.rs:791
+ru: В истории команд не нашла записей с ключами.
+en: I found no entries with keys in the command history.
+
+# footprint.rs:796
+ru: Убрала из истории {}. Открытые терминалы помнят историю и могут записать её снова — закрой их. Удаление строки не отзывает ключ: замени его у поставщика.
+en: Removed {} from the history. Open terminals remember the history and may write it back — close them. Deleting a line doesn't revoke the key: replace it at the provider.
+
+# footprint.rs:798
+ru: запись|записи|записей
+en: entry|entries
+
+ru: в папках чатов файлов больше, чем я просматриваю (самые свежие, до 3000 в каждой папке)
+en: some chat folders hold more files than I scan (the newest, up to 3000 per folder)
+
+ru: не смогла прочитать до конца: {}
+en: couldn't read to the end: {}
+
+ru: Не смогла закрыть ({}): {} — это ссылка, чужой файл или нет прав.
+en: Couldn't lock ({}): {} — a symlink, someone else's file or no permission.
+
+ru: Не смогла обработать: {} — записи с ключами там могли остаться. Убрано из остальных: {}. Проверь эти файлы вручную.
+en: Couldn't process: {} — entries with keys may remain there. Removed from the others: {}. Check these files by hand.
+
+ru: ссылка ведёт за пределы домашней папки
+en: the symlink leads outside the home folder
+
+ru: цель ссылки принадлежит не тебе
+en: the symlink target isn't yours

@@ -1,0 +1,40 @@
+# shellcfg.rs:324
+ru: У файла несколько имён (жёсткая ссылка) — правка разорвала бы связь, поправь его вручную.
+en: The file has several names (a hard link) — editing it would break the link, so fix it by hand.
+
+# shellcfg.rs:326
+ru: Не прочитать {}: {}
+en: Can't read {}: {}
+
+# shellcfg.rs:330
+ru: Файл {} изменился с прошлой проверки (строка {} уже другая) — проверь ещё раз, я ничего не трогала.
+en: File {} changed since the last check (line {} is different now) — check again, I touched nothing.
+
+# shellcfg.rs:338
+ru: В строке {} кроме прокси есть другие настройки (например, PATH): если закомментировать её, пропадут и они. Убери из неё только прокси вручную.
+en: Line {} has other settings besides the proxy (such as PATH): commenting it out would remove them too. Remove only the proxy from it by hand.
+
+# shellcfg.rs:339
+ru: Строка внутри условия или функции — закомментировать её одну небезопасно, поправь файл вручную.
+en: The line is inside a condition or function — commenting it out alone is unsafe, so fix the file by hand.
+
+# shellcfg.rs:340
+ru: Файл {} изменился с прошлой проверки — проверь ещё раз, я ничего не трогала.
+en: File {} changed since the last check — check again, I touched nothing.
+
+# shellcfg.rs:364
+ru: Копия с таким временем уже есть — попробуй через секунду.
+en: A backup with this timestamp already exists — try again in a second.
+
+# shellcfg.rs:366
+ru: Не удалось сделать копию файла — ничего не меняю.
+en: Couldn't make a backup of the file — I'm changing nothing.
+
+# shellcfg.rs:368
+ru: Файл изменился, пока я его правила — проверь ещё раз, я ничего не трогала.
+en: The file changed while I was editing it — check again, I touched nothing.
+
+# shellcfg.rs:359 (written into the user file; not shown in UI)
+ru: # {}   # выключено Аптечкой{}
+en: # {}   # turned off by First Aid Cat{}
+

@@ -1,0 +1,100 @@
+# proxyaddr.rs:250
+ru: Прокси в переменных сеанса
+en: Proxy in session variables
+
+# proxyaddr.rs:253
+ru: Программы этого сеанса ходят через {}.
+en: Programs in this session go through {}.
+
+# proxyaddr.rs:256
+ru: Переменная {} указывает на мёртвый порт: программы, запущенные с ней (терминал, curl, git, pip), без сети. Найди, где она задана (строка «Прокси в …» ниже), или в терминале выполни: {}
+en: The variable {} points to a dead port: programs started with it (terminal, curl, git, pip) have no network. Find where it is set (the “Proxy in …” row below) or run in a terminal: {}
+
+# proxyaddr.rs:265
+ru: В {} записан адрес, который не получается разобрать.
+en: {} holds an address I can't parse.
+
+# proxyaddr.rs:276
+ru: VPN-клиент закрылся и оставил прокси — сайты и программы без сети. Выключи прокси.
+en: The VPN client closed and left its proxy behind — sites and apps have no network. Turn the proxy off.
+
+# proxyaddr.rs:278
+ru: Прокси-сервер не отвечает — сайты и программы без сети. Выключи прокси или проверь его адрес.
+en: The proxy server is not responding — sites and apps have no network. Turn the proxy off or check its address.
+
+# proxyaddr.rs:280
+ru: включён на {}, но там пусто!
+en: on at {}, but nothing is there!
+
+# proxyaddr.rs:283
+ru: работает ({})
+en: working ({})
+
+# proxyaddr.rs:283
+ru: Сеть идёт через прокси.
+en: Traffic goes through the proxy.
+
+# proxyaddr.rs:284
+ru: {} просит логин и пароль
+en: {} asks for a login and password
+
+# proxyaddr.rs:285
+ru: Прокси работает, но без логина и пароля не пускает. Программы, где пароль не сохранён, останутся без сети.
+en: The proxy works but won't let you in without a login and password. Apps with no saved password will have no network.
+
+# proxyaddr.rs:286
+ru: {} не пускает (код {})
+en: {} refuses (code {})
+
+# proxyaddr.rs:287
+ru: Прокси работает, но запрещает выход в интернет с этого компьютера.
+en: The proxy works but blocks internet access from this computer.
+
+# proxyaddr.rs:288
+ru: {} не пускает в интернет
+en: {} doesn't let traffic out
+
+# proxyaddr.rs:289
+ru: Порт открыт, но через него сайты не грузятся: сервер VPN недоступен. Перезапусти VPN или выключи прокси.
+en: The port is open, but sites don't load through it: the VPN server is unreachable. Restart the VPN or turn the proxy off.
+
+# proxyaddr.rs:302
+ru: файл на этом компьютере
+en: file on this computer
+
+# proxyaddr.rs:303
+ru: адрес задан
+en: address is set
+
+# proxyaddr.rs:314
+ru: Прокси по PAC-файлу
+en: Proxy via PAC file
+
+# proxyaddr.rs:314
+ru: без адреса
+en: no address
+
+# proxyaddr.rs:314
+ru: Автонастройка прокси включена, но адрес файла пустой.
+en: Automatic proxy setup is on, but the file address is empty.
+
+# proxyaddr.rs:326
+ru: Правила прокси берутся из файла на этом компьютере.
+en: Proxy rules come from a file on this computer.
+
+# proxyaddr.rs:328
+ru: Файла автонастройки прокси нет на месте.
+en: The proxy setup file is missing.
+
+# proxyaddr.rs:333
+ru: Правила прокси берутся из PAC-файла.
+en: Proxy rules come from a PAC file.
+
+# proxyaddr.rs:334
+ru: {} — ошибка {}
+en: {} — error {}
+
+# proxyaddr.rs:335
+ru: Файл автонастройки прокси не открывается.
+en: The proxy setup file won't open.
+

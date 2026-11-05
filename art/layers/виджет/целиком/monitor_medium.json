@@ -1,0 +1,184 @@
+{
+ "w": 169,
+ "h": 151,
+ "step": [
+  7.14,
+  7.38
+ ],
+ "cat": [
+  30,
+  0,
+  110,
+  52
+ ],
+ "close": [
+  150,
+  52,
+  9,
+  9
+ ],
+ "list": [
+  16,
+  60,
+  140,
+  75
+ ],
+ "fields": [
+  {
+   "kind": "clock",
+   "rect": [
+    118,
+    64,
+    37,
+    12
+   ],
+   "color": "#0B3A66",
+   "align": "right",
+   "bold": false
+  },
+  {
+   "kind": "row",
+   "index": 0,
+   "rect": [
+    37,
+    79,
+    78,
+    10
+   ],
+   "color": "#0B3A66",
+   "bad_color": "#9A1830",
+   "bold": false
+  },
+  {
+   "kind": "row",
+   "index": 1,
+   "rect": [
+    37,
+    89,
+    78,
+    10
+   ],
+   "color": "#0B3A66",
+   "bad_color": "#9A1830",
+   "bold": false
+  },
+  {
+   "kind": "row",
+   "index": 2,
+   "rect": [
+    37,
+    99,
+    78,
+    10
+   ],
+   "color": "#0B3A66",
+   "bad_color": "#9A1830",
+   "bold": false
+  },
+  {
+   "kind": "row",
+   "index": 3,
+   "rect": [
+    37,
+    109,
+    78,
+    10
+   ],
+   "color": "#0B3A66",
+   "bad_color": "#9A1830",
+   "bold": false
+  },
+  {
+   "kind": "row",
+   "index": 4,
+   "rect": [
+    37,
+    119,
+    78,
+    10
+   ],
+   "color": "#0B3A66",
+   "bad_color": "#9A1830",
+   "bold": false
+  },
+  {
+   "kind": "signal",
+   "of": 0,
+   "rect": [
+    133,
+    81,
+    17,
+    8
+   ],
+   "color": "#0B3A66",
+   "off": "#7FC4E6"
+  },
+  {
+   "kind": "toggle",
+   "of": 1,
+   "rect": [
+    134,
+    91,
+    16,
+    9
+   ],
+   "on": "#1F5FA8",
+   "off": "#7FA9C6"
+  },
+  {
+   "kind": "dots",
+   "of": 2,
+   "rect": [
+    135,
+    104,
+    15,
+    4
+   ],
+   "color": "#0B3A66"
+  },
+  {
+   "kind": "bar",
+   "of": 3,
+   "rect": [
+    115,
+    114,
+    35,
+    7
+   ],
+   "fill": "#0B3A66",
+   "back": "#8ACDEB"
+  },
+  {
+   "kind": "bar",
+   "of": 4,
+   "rect": [
+    115,
+    124,
+    35,
+    7
+   ],
+   "fill": "#0B3A66",
+   "back": "#8ACDEB"
+  },
+  {
+   "kind": "retitle",
+   "rect": [
+    38,
+    65,
+    76,
+    9
+   ],
+   "src": 85,
+   "text": "АПТЕЧКА",
+   "color": "#0B3A66",
+   "bold": true
+  }
+ ],
+ "crt": [
+  12,
+  60,
+  146,
+  76
+ ],
+ "graded": true
+}
