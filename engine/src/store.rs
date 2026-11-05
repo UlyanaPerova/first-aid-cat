@@ -40,16 +40,8 @@ fn read_bytes_opts(path: &Path, max: u64, follow: bool) -> std::io::Result<Vec<u
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        // O_NONBLOCK | O_NOFOLLOW (значения Linux; на macOS — свои)
-        // O_NOFOLLOW на Linux зависит от процессора: 0o400000 на x86, 0o100000 на ARM
-        #[cfg(all(target_os = "linux", any(target_arch = "aarch64", target_arch = "arm")))]
-        let (nonblock, nofollow) = (0o4000, 0o100000);
-        #[cfg(all(target_os = "linux", not(any(target_arch = "aarch64", target_arch = "arm"))))]
-        let (nonblock, nofollow) = (0o4000, 0o400000);
-        #[cfg(target_os = "macos")]
-        let (nonblock, nofollow) = (0x0004, 0x0100);
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
-        o.custom_flags(nonblock | if follow { 0 } else { nofollow });
+        // значения флагов — из libc (на Linux они зависят от процессора)
+        o.custom_flags(libc::O_NONBLOCK | if follow { 0 } else { libc::O_NOFOLLOW });
     }
     let f = o.open(path)?;
     let m = f.metadata()?;
@@ -80,13 +72,17 @@ pub fn read_text_lossy(path: impl AsRef<Path>) -> std::io::Result<String> {
 
 /// Открыть чужой файл для чтения по частям (сессии агентов): только обычный файл, без ожидания FIFO.
 pub fn open_regular(path: impl AsRef<Path>) -> std::io::Result<std::fs::File> {
-    let path = path.as_ref();
+    open_regular_opts(path.as_ref(), true)
+}
+
+/// То же, но follow=false не идёт по ссылке на последнем шаге (O_NOFOLLOW).
+pub fn open_regular_opts(path: &Path, follow: bool) -> std::io::Result<std::fs::File> {
+    #[cfg(not(unix))]
+    let _ = follow;
     let mut o = std::fs::OpenOptions::new();
     o.read(true);
-    #[cfg(target_os = "linux")]
-    std::os::unix::fs::OpenOptionsExt::custom_flags(&mut o, 0o4000);
-    #[cfg(target_os = "macos")]
-    std::os::unix::fs::OpenOptionsExt::custom_flags(&mut o, 0x0004);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::custom_flags(&mut o, libc::O_NONBLOCK | if follow { 0 } else { libc::O_NOFOLLOW });
     let f = o.open(path)?;
     if !f.metadata()?.is_file() {
         return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "не обычный файл"));
@@ -227,9 +223,19 @@ pub fn housekeeping() {
     let age = |p: &Path| std::fs::symlink_metadata(p).ok().and_then(|m| m.modified().ok()).and_then(|t| now.duration_since(t).ok());
     let day = std::time::Duration::from_secs(86400);
     // копии правок
-    if let Ok(rd) = std::fs::read_dir(d.join("backups")) {
-        let mut v: Vec<(PathBuf, std::time::Duration)> =
-            rd.flatten().filter(|e| e.file_type().is_ok_and(|t| t.is_file())).filter_map(|e| Some((e.path(), age(&e.path())?))).collect();
+    // backups — настоящая папка (не ссылка на чужую); удаляем только свои файлы вида «имя.<число>.bak»
+    let bdir = d.join("backups");
+    let bdir_ok = std::fs::symlink_metadata(&bdir).is_ok_and(|m| m.is_dir() && !m.file_type().is_symlink());
+    let is_backup = |p: &Path| {
+        let n = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        n.strip_suffix(".bak").and_then(|r| r.rsplit_once('.')).is_some_and(|(_, num)| !num.is_empty() && num.bytes().all(|b| b.is_ascii_digit()))
+    };
+    if let Ok(rd) = std::fs::read_dir(if bdir_ok { bdir.clone() } else { PathBuf::from("/nonexistent-aptechka") }) {
+        let mut v: Vec<(PathBuf, std::time::Duration)> = rd
+            .flatten()
+            .filter(|e| e.file_type().is_ok_and(|t| t.is_file()) && is_backup(&e.path()))
+            .filter_map(|e| Some((e.path(), age(&e.path())?)))
+            .collect();
         v.sort_by_key(|x| x.1);
         for (i, (p, a)) in v.iter().enumerate() {
             if i >= 10 || *a > 7 * day {
@@ -264,9 +270,35 @@ pub fn housekeeping() {
             }
         }
     }
+    // забытые копии базы OpenCode (oc_<pid>_<ns>_<n>): только свои каталоги (не ссылки), старше 10 минут
+    if let Ok(rd) = std::fs::read_dir(&d) {
+        for e in rd.flatten() {
+            let p = e.path();
+            let ours = e.file_name().to_str().is_some_and(|n| n.starts_with("oc_"));
+            if ours && e.file_type().is_ok_and(|t| t.is_dir() && !t.is_symlink()) && age(&p).is_some_and(|a| a > std::time::Duration::from_secs(600))
+            {
+                remove_tree_nofollow(&p);
+            }
+        }
+    }
     for old in ["footprint.json", "footprint-v2.json", "footprint-v3.json"] {
         let _ = std::fs::remove_file(d.join(old));
     }
+}
+
+/// Удалить каталог со своими временными файлами, не переходя по ссылкам (ссылка внутри удаляется сама).
+fn remove_tree_nofollow(p: &Path) {
+    if let Ok(rd) = std::fs::read_dir(p) {
+        for e in rd.flatten() {
+            let q = e.path();
+            if e.file_type().is_ok_and(|t| t.is_dir() && !t.is_symlink()) {
+                remove_tree_nofollow(&q);
+            } else {
+                let _ = std::fs::remove_file(&q);
+            }
+        }
+    }
+    let _ = std::fs::remove_dir(p);
 }
 
 /// Оставить в журнале JSON-строк (по одной на строку) только свежие (поле "t" — секунды, не старше `max_age`
@@ -327,14 +359,7 @@ pub mod lock {
     fn open_unix(p: &Path) -> std::io::Result<File> {
         use std::os::unix::fs::OpenOptionsExt;
         // без перехода по ссылке и без ожидания (подложенный FIFO не повесит планировщик); только обычный файл
-        #[cfg(all(target_os = "linux", any(target_arch = "aarch64", target_arch = "arm")))]
-        let flags = 0o4000 | 0o100000;
-        #[cfg(all(target_os = "linux", not(any(target_arch = "aarch64", target_arch = "arm"))))]
-        let flags = 0o4000 | 0o400000;
-        #[cfg(target_os = "macos")]
-        let flags = 0x0004 | 0x0100;
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-        let flags = 0;
+        let flags = libc::O_NONBLOCK | libc::O_NOFOLLOW;
         let f = OpenOptions::new().create(true).truncate(false).write(true).mode(0o600).custom_flags(flags).open(p)?;
         if !f.metadata()?.is_file() {
             return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "замок — не обычный файл"));
@@ -557,4 +582,49 @@ fn history_trim() {
     trim_history(&p, 90 * 86400, 3);
     assert!(!p.exists());
     let _ = std::fs::remove_dir_all(&d);
+}
+
+/// Уборка при запуске: забытые копии базы OpenCode (старше 10 минут, только свои каталоги, ссылки не трогаем),
+/// а `backups` — ссылка на чужую папку — не очищается.
+#[cfg(all(test, unix))]
+#[test]
+fn housekeeping_stale_oc_dirs_and_backups_symlink() {
+    let _g = crate::ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let root = std::env::temp_dir().join(format!("aptechka_hk_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    let old = std::env::var_os("XDG_CONFIG_HOME");
+    std::env::set_var("XDG_CONFIG_HOME", &root);
+    let d = private_dir();
+    let age = |p: &Path, secs: u64| {
+        let t = std::time::SystemTime::now() - std::time::Duration::from_secs(secs);
+        std::fs::File::open(p).unwrap().set_modified(t).unwrap();
+    };
+    // старый и свежий каталоги копий; в старом лежит файл и ссылка на чужой файл
+    let victim = root.join("victim.txt");
+    std::fs::write(&victim, "INTACT").unwrap();
+    std::fs::create_dir(d.join("oc_1_2_3")).unwrap();
+    std::fs::write(d.join("oc_1_2_3/opencode.db"), "x").unwrap();
+    std::os::unix::fs::symlink(&victim, d.join("oc_1_2_3/link")).unwrap();
+    age(&d.join("oc_1_2_3"), 3600);
+    std::fs::create_dir(d.join("oc_9_9_9")).unwrap(); // свежий — не трогаем
+                                                      // ссылка с именем oc_*: удаляется не её цель и не она сама (это не наш каталог)
+    let other = root.join("other_dir");
+    std::fs::create_dir(&other).unwrap();
+    std::fs::write(other.join("keep"), "1").unwrap();
+    std::os::unix::fs::symlink(&other, d.join("oc_link")).unwrap();
+    // backups — ссылка на чужую папку со старыми файлами
+    std::fs::write(other.join("a.1.bak"), "1").unwrap();
+    age(&other.join("a.1.bak"), 30 * 86400);
+    std::os::unix::fs::symlink(&other, d.join("backups")).unwrap();
+    housekeeping();
+    assert!(!d.join("oc_1_2_3").exists());
+    assert_eq!(std::fs::read_to_string(&victim).unwrap(), "INTACT");
+    assert!(d.join("oc_9_9_9").exists());
+    assert!(other.join("keep").exists() && other.join("a.1.bak").exists());
+    match old {
+        Some(v) => std::env::set_var("XDG_CONFIG_HOME", v),
+        None => std::env::remove_var("XDG_CONFIG_HOME"),
+    }
+    let _ = std::fs::remove_dir_all(&root);
 }

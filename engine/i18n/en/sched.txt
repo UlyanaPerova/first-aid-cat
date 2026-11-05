@@ -21,3 +21,22 @@ en: This check keeps hanging — I won't restart it any more.
 # sched.rs:311
 ru: Проверка не уложилась в минуту — жду её.
 en: The check took over a minute — I'm waiting for it.
+
+# sched.rs: economy mode notes
+ru: На батарее — проверяю реже.
+en: On battery — checking less often.
+
+ru: Сеть лимитная — проверяю реже.
+en: Metered network — checking less often.
+
+ru: Питание и сеть обычные — проверяю как обычно.
+en: Normal power and network — checking as usual.
+
+ru: проверки: на батарее — проверяю реже
+en: checks: on battery — checking less often
+
+ru: проверки: сеть лимитная — проверяю реже
+en: checks: metered network — checking less often
+
+ru: проверки: обычный режим
+en: checks: normal mode

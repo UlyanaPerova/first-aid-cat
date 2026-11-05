@@ -538,6 +538,11 @@ impl App {
 
     /// Всё, что пришло из фоновых потоков.
     fn drain_bg(&mut self, t: f64) {
+        if let Some(note) = crate::sched::take_eco_note() {
+            if let Some(u) = self.ui.as_mut() {
+                u.log(note);
+            }
+        }
         while let Ok(m) = self.bg_rx.try_recv() {
             match m {
                 Bg::Sessions(ss) => self.apply_sessions(ss, t),
@@ -778,8 +783,9 @@ impl App {
         if let Some(scr) = self.screens.as_mut() {
             if t - self.screens_t >= 1.0 / 12.0 {
                 self.screens_t = t;
-                scr.draw(t, &self.sstate);
-                self.screens_dirty = true;
+                if scr.draw(t, &self.sstate) {
+                    self.screens_dirty = true;
+                }
             }
         }
         // часы в строке состояния
@@ -869,7 +875,16 @@ impl App {
         self.stat.0 += 1;
         self.stat.1 += t0.elapsed();
         if self.stat.2.elapsed() >= Duration::from_secs(10) {
-            log(&format!("за 10 с: тиков {}, работа {:.3} мс на тик", self.stat.0, self.stat.1.as_secs_f64() * 1000.0 / self.stat.0 as f64));
+            let (redrawn, checked) = self.screens.as_ref().map_or((0, 0), |s| (s.redrawn, s.checked));
+            log(&format!(
+                "за 10 с: тиков {}, работа {:.3} мс на тик, экраны: перерисовано {redrawn} из {checked}",
+                self.stat.0,
+                self.stat.1.as_secs_f64() * 1000.0 / self.stat.0 as f64
+            ));
+            if let Some(s) = self.screens.as_mut() {
+                s.redrawn = 0;
+                s.checked = 0;
+            }
             self.stat = (0, Duration::ZERO, Instant::now());
         }
     }

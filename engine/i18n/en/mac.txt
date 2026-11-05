@@ -102,3 +102,7 @@ en: Open: {}
 ru: Если программа зависла и не закрывается — нажми «Закрыть принудительно» (несохранённое пропадёт).
 en: If the app froze and won't close, press “Force quit” (unsaved work will be lost).
 
+
+# mac.rs: служба VPN выключена, а программа работает своим туннелем
+ru: служба выключена, программа запущена (свой туннель)
+en: service off, app running (own tunnel)

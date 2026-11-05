@@ -148,6 +148,7 @@ dependencies = [
  "accesskit",
  "accesskit_winit",
  "clipboard-win",
+ "libc",
  "md5",
  "png",
  "rusqlite",

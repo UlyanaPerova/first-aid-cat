@@ -959,9 +959,9 @@ pub fn export_mac(all: &[Check]) {
             let _ = std::fs::remove_file(data.join(old));
         }
     }
-    let sup = home.join("Library/Application Support/aptechka");
-    let _ = std::fs::create_dir_all(&sup);
-    let _ = crate::store::write_private(&sup.join("widget.json"), j.as_bytes());
+    // копия в ~/Library/Application Support/aptechka — это и есть папка настроек: private_dir() создаёт её 0700 и
+    // проверяет владельца (чужая папка или ссылка — не пишем)
+    let _ = crate::store::write_private(&crate::store::private_dir().join("widget.json"), j.as_bytes());
 }
 
 /// widget.json для виджета macOS. concept — данные как на концепте (для сверки: WIDGET_MAC=… WIDGET_CONCEPT=1).

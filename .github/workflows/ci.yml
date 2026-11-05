@@ -24,6 +24,16 @@ jobs:
         working-directory: engine
     steps:
       - uses: actions/checkout@v4
+      - name: Cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            engine/target
+          key: ${{ runner.os }}-${{ github.job }}-cargo-${{ hashFiles('engine/Cargo.lock', 'engine/build.rs', 'engine/.cargo/config.toml') }}
+          restore-keys: ${{ runner.os }}-${{ github.job }}-cargo-
       - name: Toolchain
         run: |
           rustup update stable --no-self-update
@@ -52,6 +62,16 @@ jobs:
         working-directory: engine
     steps:
       - uses: actions/checkout@v4
+      - name: Cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            engine/target
+          key: ${{ runner.os }}-${{ github.job }}-cargo-${{ hashFiles('engine/Cargo.lock', 'engine/build.rs', 'engine/.cargo/config.toml') }}
+          restore-keys: ${{ runner.os }}-${{ github.job }}-cargo-
       - run: rustup update stable --no-self-update && rustup default stable
       - name: Tests
         run: cargo test --release --locked
@@ -62,6 +82,16 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+      - name: Cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            engine/target
+          key: ${{ runner.os }}-${{ github.job }}-cargo-${{ hashFiles('engine/Cargo.lock', 'engine/build.rs', 'engine/.cargo/config.toml') }}
+          restore-keys: ${{ runner.os }}-${{ github.job }}-cargo-
       - run: rustup update stable --no-self-update && rustup default stable
       - name: Tests
         working-directory: engine
@@ -75,6 +105,16 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+      - name: Cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            engine/target
+          key: ${{ runner.os }}-${{ github.job }}-cargo-${{ hashFiles('engine/Cargo.lock', 'engine/build.rs', 'engine/.cargo/config.toml') }}
+          restore-keys: ${{ runner.os }}-${{ github.job }}-cargo-
       - name: cargo audit
         working-directory: engine
         run: |

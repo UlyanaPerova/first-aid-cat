@@ -777,3 +777,7 @@ en: Could not open the program to close it - it may still be running.
 
 ru: Не удалось получить доступ к этой программе (ядро не даёт или нет прав) — не трогаю её.
 en: Could not get access to this program (the kernel refuses or no permission) - leaving it alone.
+
+# fixes.rs: macOS — номер достался другой программе
+ru: Под этим номером теперь другая программа — её не трогаю. Проверь ещё раз.
+en: That number now belongs to a different program, so I am leaving it alone. Check again.

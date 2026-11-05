@@ -509,6 +509,58 @@ fn captive_label_shows_real_host() {
 
 // ───────────────────────────── Батарея ─────────────────────────────
 
+/// Ноутбук сейчас работает от батареи (не от сети). Настольный компьютер без батареи — всегда false.
+/// Дёшево: чтение sysfs, один вызов GetSystemPowerStatus, у macOS — pmset (с пределом времени).
+pub fn on_battery() -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        let Ok(rd) = std::fs::read_dir("/sys/class/power_supply") else { return false };
+        let (mut has_battery, mut ac_online) = (false, false);
+        for e in rd.flatten() {
+            let p = e.path();
+            let rd_s = |f: &str| crate::store::read_text(p.join(f)).unwrap_or_default().trim().to_string();
+            match rd_s("type").as_str() {
+                "Battery" if rd_s("scope") != "Device" => has_battery = true,
+                "Mains" | "USB" | "USB_C" | "USB_PD" | "USB_PD_DRP" => ac_online |= rd_s("online") == "1",
+                _ => {}
+            }
+        }
+        return has_battery && !ac_online;
+    }
+    #[cfg(windows)]
+    {
+        #[repr(C)]
+        struct Sps {
+            ac: u8,
+            flag: u8,
+            pct: u8,
+            saver: u8,
+            life: u32,
+            full: u32,
+        }
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn GetSystemPowerStatus(s: *mut Sps) -> i32;
+        }
+        let mut s = Sps { ac: 0, flag: 0, pct: 0, saver: 0, life: 0, full: 0 };
+        // ac 0 — не от сети; flag 128 — батареи нет
+        return unsafe { GetSystemPowerStatus(&mut s) } != 0 && s.flag & 128 == 0 && s.pct != 255 && s.ac == 0;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let (_, t) = crate::diag::run(&["pmset", "-g", "batt"], 6);
+        return pmset_on_battery(&t);
+    }
+    #[allow(unreachable_code)]
+    false
+}
+
+/// По выводу `pmset -g batt`: питание от батареи («Now drawing from 'Battery Power'»), и батарея есть.
+#[cfg(any(target_os = "macos", test))]
+pub(crate) fn pmset_on_battery(t: &str) -> bool {
+    t.contains("InternalBattery") && t.contains("'Battery Power'")
+}
+
 /// Батарея ноутбука: заряд, заряжается ли от сети, износ. Linux — /sys/class/power_supply, Windows —
 /// GetSystemPowerStatus, macOS — pmset. Нет батареи (настольный) — строки нет.
 pub fn check_battery() -> Vec<Check> {

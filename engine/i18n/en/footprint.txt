@@ -209,5 +209,8 @@ en: Couldn't process: {} — entries with keys may remain there. Removed from th
 ru: ссылка ведёт за пределы домашней папки
 en: the symlink leads outside the home folder
 
+ru: ссылка ведёт не в файл истории
+en: the symlink doesn't lead to a history file
+
 ru: цель ссылки принадлежит не тебе
 en: the symlink target isn't yours

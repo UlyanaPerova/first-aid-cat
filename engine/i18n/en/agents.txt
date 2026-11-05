@@ -77,3 +77,9 @@ en: took too long
 
 ru: незнакомая схема базы
 en: unknown database schema
+
+ru: база слишком большая, не читаю
+en: the database is too big, not reading it
+
+ru: нет файла
+en: no file

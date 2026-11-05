@@ -373,8 +373,18 @@ fn missing(s: &str) {
     let mut g = SEEN.lock().unwrap_or_else(|e| e.into_inner());
     if g.get_or_insert_with(HashSet::new).insert(s.to_string()) {
         use std::io::Write;
-        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(p) {
-            let _ = writeln!(f, "{}", s.replace('\\', "\\\\").replace('\n', "\\n"));
+        // без перехода по ссылке, права 0600, файл не больше 1 МБ: журнал может содержать пользовательский текст
+        let mut o = std::fs::OpenOptions::new();
+        o.create(true).append(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            o.mode(0o600).custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+        }
+        if let Ok(mut f) = o.open(p) {
+            if f.metadata().is_ok_and(|m| m.is_file() && m.len() < (1 << 20)) {
+                let _ = writeln!(f, "{}", s.replace('\\', "\\\\").replace('\n', "\\n"));
+            }
         }
     }
 }

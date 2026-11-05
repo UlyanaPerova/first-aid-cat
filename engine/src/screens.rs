@@ -192,7 +192,7 @@ impl Painter<'_> {
         }
     }
     fn dot(&mut self, x: f32, y: f32, st: &str, t: f64) {
-        if st == "bad" && (t * 3.0) as i64 % 2 == 1 {
+        if st == "bad" && blink3(t) {
             return; // мигает
         }
         self.rect(x - 5., y - 5., 10., 10., st_color(st), 1.0);
@@ -225,6 +225,11 @@ struct Screen {
     w: usize,
     h: usize,
     layer: Pixmap,
+    /// содержимое без помех кинескопа (текст, значки): дорогое, перерисовывается только при смене ключа
+    content: Pixmap,
+    ckey: Option<u64>,
+    /// ключ всего слоя: всё, от чего зависят его пиксели
+    fkey: Option<u64>,
 }
 
 pub struct Screens {
@@ -235,6 +240,9 @@ pub struct Screens {
     scale: usize,
     /// строки клеток, на которых есть экраны (их перерисовываем каждый кадр)
     pub rows: Vec<bool>,
+    /// счётчики для журнала: слоёв перерисовано / проверено
+    pub redrawn: u64,
+    pub checked: u64,
 }
 
 fn hhmm() -> String {
@@ -289,9 +297,12 @@ impl Screens {
                 w,
                 h,
                 layer: Pixmap::new(w as u32, h as u32)?,
+                content: Pixmap::new(w as u32, h as u32)?,
+                ckey: None,
+                fkey: None,
             });
         }
-        Some(Screens { screens, mask, cw, map, scale, rows })
+        Some(Screens { screens, mask, cw, map, scale, rows, redrawn: 0, checked: 0 })
     }
 
     /// Перевод «пиксель исходника → пиксель слоя экрана» для экрана sc.
@@ -301,19 +312,31 @@ impl Screens {
         Transform::from_row(ax * s, 0.0, 0.0, ay * s, bx * s - sc.x0 as f32, by * s - sc.y0 as f32)
     }
 
-    /// Нарисовать все экраны в их слои (время t, состояние st).
-    pub fn draw(&mut self, t: f64, st: &ScreenState) {
-        let face = Face::parse(FONT).expect("шрифт");
+    /// Нарисовать экраны в их слои (время t, состояние st). Слой перерисовывается, только если изменилось
+    /// то, что на нём видно (ключ). Возвращает true, если хоть один слой изменился.
+    pub fn draw(&mut self, t: f64, st: &ScreenState) -> bool {
+        let mut face = None;
+        let mut any = false;
         for i in 0..self.screens.len() {
+            self.checked += 1;
             let tr0 = self.src_to_layer(&self.screens[i]);
             let sc = &mut self.screens[i];
-            sc.layer.fill(Color::TRANSPARENT);
-            if sc.name == "clock" {
-                clock(&mut sc.layer, tr0, &face, t);
+            let key = if sc.name == "clock" { clock_key(t) } else { screen_key(sc, st, t).1 };
+            if sc.fkey == Some(key) {
                 continue;
             }
-            draw_screen(sc, tr0, &face, st, t);
+            sc.fkey = Some(key);
+            self.redrawn += 1;
+            any = true;
+            let face = face.get_or_insert_with(|| Face::parse(FONT).expect("шрифт"));
+            if sc.name == "clock" {
+                sc.layer.fill(Color::TRANSPARENT);
+                clock(&mut sc.layer, tr0, face, t);
+                continue;
+            }
+            draw_screen(sc, tr0, face, st, t);
         }
+        any
     }
 
     /// Наложить экраны на кадр окна (0x00RRGGBB, ширина строки bw): только по клеткам стекла.
@@ -348,6 +371,113 @@ impl Screens {
     }
 }
 
+fn hash_of<T: std::hash::Hash>(v: T) -> u64 {
+    use std::hash::Hasher;
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    v.hash(&mut h);
+    h.finish()
+}
+
+/// Мигание точки «плохо» (3 Гц) и двоеточия часов (2 Гц): фаза как число.
+fn blink3(t: f64) -> bool {
+    (t * 3.0) as i64 % 2 == 1
+}
+fn colon_on(t: f64) -> bool {
+    (t * 2.0) as i64 % 2 == 0
+}
+/// Плавная пульсация «CLAUDE ON» и качание стрелки на пинге: ступени, неразличимые глазом (≤ 1–2 уровня цвета).
+fn pulse(t: f64, rate: f64, steps: f32) -> f32 {
+    let k = 0.5 + 0.5 * (t * rate).sin() as f32;
+    (k * steps).round() / steps
+}
+/// Мерцание сканлайнов: прозрачность с шагом 1/64 (разница в цвете меньше уровня).
+fn flicker(t: f64) -> f32 {
+    (((0.1 + 0.04 * (t * 9.0).sin() + 0.03 * (t * 23.7).sin()) * 64.0).round() / 64.0) as f32
+}
+/// Сдвиг полосы по строкам слоя: целые пиксели.
+fn band_pos(t: f64, period: f64, phase: f64, h: f64) -> f32 {
+    (((t / period + phase) % 1.0) * (h * 1.4) - h * 0.2).round() as f32
+}
+
+fn clock_key(t: f64) -> u64 {
+    hash_of((hhmm(), colon_on(t)))
+}
+
+/// Ключ экрана: (ключ содержимого, ключ всего слоя). Ключ слоя меняется ровно тогда, когда меняются пиксели:
+/// содержимое (текст, значки, стрелка) + помехи кинескопа (мерцание, полоса, «снег», сбой).
+fn screen_key(sc: &Screen, st: &ScreenState, t: f64) -> (u64, u64) {
+    let c = crt(&sc.name);
+    let glitch = c.is_some_and(|c| glitch_at(c, t));
+    let dx = glitch_dx(sc, t, glitch);
+    fn any_bad<'a>(mut rows: impl Iterator<Item = &'a String>) -> bool {
+        rows.any(|s| s == "bad")
+    }
+    let blink = |bad: bool| bad && blink3(t);
+    let ck = match sc.name.as_str() {
+        "main" => {
+            let n = typed(st, t);
+            let bad = any_bad([&st.vpn.0, &st.claude.0].into_iter());
+            hash_of((
+                "main",
+                hhmm(),
+                n,
+                &st.message,
+                &st.mood,
+                &st.vpn,
+                &st.claude,
+                st.speed.map(|(a, b, c)| (a.to_bits(), b.to_bits(), c.to_bits())),
+                blink(bad),
+                dx.to_bits(),
+            ))
+        }
+        "net" => match st.speed_live {
+            Some((ph, val)) => {
+                let k = if ph == 0 { (pulse(t, 6.0, 512.0) * 512.0) as i32 } else { 0 };
+                hash_of(("gauge", &st.net_rows.len(), ph, val.to_bits(), k, dx.to_bits()))
+            }
+            None => {
+                let bad = any_bad(st.net_rows.iter().take(6).map(|r| &r.0));
+                hash_of(("net", &st.net_rows, blink(bad), dx.to_bits()))
+            }
+        },
+        "sys" => {
+            let bad = any_bad(st.sys_rows.iter().take(4).map(|r| &r.0));
+            hash_of(("sys", &st.sys_rows, blink(bad), dx.to_bits()))
+        }
+        _ => {
+            let on = st.claude.0 == "ok";
+            hash_of(("robot", on, if on { (pulse(t, 3.0, 32.0) * 32.0) as i32 } else { 0 }, dx.to_bits()))
+        }
+    };
+    let [tl, trr, bl] = sc.quad;
+    let h = (bl.0 - tl.0).hypot(bl.1 - tl.1) as f64;
+    let _ = trr;
+    let fk = match c {
+        Some((period, phase, _)) => hash_of((ck, flicker(t).to_bits(), band_pos(t, period, phase, h).to_bits(), (t * 24.0) as u64, glitch)),
+        None => hash_of((ck, flicker(t).to_bits())),
+    };
+    (ck, fk)
+}
+
+fn glitch_at(c: (f64, f64, f64), t: f64) -> bool {
+    (t + c.1 * 10.0) % c.2 < 0.18
+}
+fn glitch_rng(sc: &Screen, t: f64) -> Rng {
+    Rng(((t * 24.0) as u64).wrapping_mul(7919) + sc.name.len() as u64 * 131 + 1)
+}
+fn glitch_dx(sc: &Screen, t: f64, glitch: bool) -> f32 {
+    if !glitch {
+        return 0.0;
+    }
+    let mut rnd = glitch_rng(sc, t);
+    (if rnd.f() < 0.5 { -1.0 } else { 1.0 }) * rnd.int(3, 7) as f32
+}
+/// Сколько букв сообщения уже напечатано (не больше длины перевода).
+fn typed(st: &ScreenState, t: f64) -> usize {
+    let n = ((t - st.message_t).max(0.0) * 30.0) as usize;
+    n.min(crate::i18n::t(&st.message).chars().count())
+}
+
 /// Часы шрифтом 3×5 на экране робота-телевизора, наклон 23° вместе с экраном.
 fn clock(pm: &mut Pixmap, tr0: Transform, face: &Face, t: f64) {
     let tr = tr0.pre_translate(91., 1004.).pre_rotate(23.0);
@@ -358,7 +488,7 @@ fn clock(pm: &mut Pixmap, tr0: Transform, face: &Face, t: f64) {
     let mut px = Vec::new();
     for ch in text.chars() {
         if ch == ':' {
-            if (t * 2.0) as i64 % 2 == 0 {
+            if colon_on(t) {
                 px.push((x, y + u, u, u));
                 px.push((x, y + 3. * u, u, u));
             }
@@ -379,6 +509,11 @@ fn clock(pm: &mut Pixmap, tr0: Transform, face: &Face, t: f64) {
     p.rects(&px, (0.86, 0.96, 1.0), 1.0);
 }
 
+/// Содержимое надо перерисовать (ключ содержимого изменился)?
+fn tiny_ckey(sc: &Screen, st: &ScreenState, t: f64) -> bool {
+    sc.ckey != Some(screen_key(sc, st, t).0)
+}
+
 fn draw_screen(sc: &mut Screen, tr0: Transform, face: &Face, st: &ScreenState, t: f64) {
     let [tl, trr, bl] = sc.quad;
     let (ux, uy, vx, vy) = (trr.0 - tl.0, trr.1 - tl.1, bl.0 - tl.0, bl.1 - tl.1);
@@ -386,19 +521,29 @@ fn draw_screen(sc: &mut Screen, tr0: Transform, face: &Face, st: &ScreenState, t
     // локальные координаты экрана (поворот/наклон), как _local в screens.py
     let base = tr0.pre_concat(Transform::from_row(ux / w, uy / w, vx / h, vy / h, tl.0, tl.1));
     let c = crt(&sc.name);
-    let glitch = c.is_some_and(|c| (t + c.1 * 10.0) % c.2 < 0.18);
-    let mut rnd = Rng(((t * 24.0) as u64).wrapping_mul(7919) + sc.name.len() as u64 * 131 + 1);
-    let dx = if glitch { (if rnd.f() < 0.5 { -1.0 } else { 1.0 }) * rnd.int(3, 7) as f32 } else { 0.0 };
-    let mut p = Painter { pm: &mut sc.layer, tr: base.pre_translate(dx, 0.0), face, size: 24. };
-    content(&mut p, &sc.name, st, w, h, t);
-    p.tr = base;
+    let glitch = c.is_some_and(|c| glitch_at(c, t));
+    let mut rnd = glitch_rng(sc, t);
+    let dx = glitch_dx(sc, t, glitch);
+    if glitch {
+        rnd.f(); // как при выборе сдвига: «снег» не должен смениться
+        rnd.int(3, 7);
+    }
+    if tiny_ckey(sc, st, t) {
+        let ck = screen_key(sc, st, t).0;
+        sc.content.fill(Color::TRANSPARENT);
+        let mut p = Painter { pm: &mut sc.content, tr: base.pre_translate(dx, 0.0), face, size: 24. };
+        content(&mut p, &sc.name, st, w, h, t);
+        sc.ckey = Some(ck);
+    }
+    sc.layer.data_mut().copy_from_slice(sc.content.data());
+    let mut p = Painter { pm: &mut sc.layer, tr: base, face, size: 24. };
     // сканлайны и мерцание кинескопа
-    let flick = (0.1 + 0.04 * (t * 9.0).sin() + 0.03 * (t * 23.7).sin()) as f32;
+    let flick = flicker(t);
     let lines: Vec<_> = (0..h as i32).step_by(4).map(|y| (0.0, y as f32, w, 1.0)).collect();
     p.rects(&lines, (0.0, 0.1, 0.2), flick);
     let Some((period, phase, _)) = c else { return };
     // катящаяся светлая полоса
-    let k = (((t / period + phase) % 1.0) * (h as f64 * 1.4) - h as f64 * 0.2) as f32;
+    let k = band_pos(t, period, phase, h as f64);
     let band = h * 0.2;
     let stops = vec![
         GradientStop::new(0.0, Color::from_rgba(1., 1., 1., 0.).unwrap()),
@@ -469,7 +614,7 @@ fn gauge(p: &mut Painter, cx: f32, cy: f32, r: f32, phase: u8, val: f64, t: f64)
         };
         p.rect(cx + r * ang.cos() - 3., cy + r * ang.sin() - 3., 6., 6., st_color(st), 1.0);
     }
-    let k = if phase == 0 { 0.5 + 0.5 * (t * 6.0).sin() as f32 } else { ((val.max(1.0)).log10() / 3.0).min(1.0) as f32 };
+    let k = if phase == 0 { pulse(t, 6.0, 512.0) } else { ((val.max(1.0)).log10() / 3.0).min(1.0) as f32 };
     let ang = PI + PI * k;
     p.line(cx, cy, cx + (r - 10.) * ang.cos(), cy + (r - 10.) * ang.sin(), 4., INK);
     let tr = crate::i18n::t;
@@ -491,7 +636,7 @@ fn content(p: &mut Painter, name: &str, st: &ScreenState, w: f32, h: f32, t: f64
             p.text(m, 30., &tr("+ АПТЕЧКА"), INK);
             p.text(w - m - 70., 30., &hhmm(), INK);
             p.rect(m, 38., w - 2. * m, 2., INK, 1.0);
-            let n = ((t - st.message_t).max(0.0) * 30.0) as usize; // печатается по буквам
+            let n = typed(st, t); // печатается по буквам
             let msg: String = tr(&st.message).chars().take(n).collect();
             let col = if st.mood == "bad" || st.mood == "warn" { st_color(&st.mood) } else { INK };
             for (i, ln) in p.wrap(&msg, w - 2. * m).iter().take(2).enumerate() {
@@ -557,7 +702,7 @@ fn content(p: &mut Painter, name: &str, st: &ScreenState, w: f32, h: f32, t: f64
             let ink = (0.1, 0.25, 0.05);
             p.text(14., 30., "CLAUDE", ink);
             let col = if on {
-                let k = 0.5 + 0.5 * (t * 3.0).sin() as f32;
+                let k = pulse(t, 3.0, 32.0);
                 (0.1, 0.5 + 0.3 * k, 0.15)
             } else {
                 (0.75, 0.12, 0.15)
@@ -596,5 +741,123 @@ mod font_tests {
         let n = pix.iter().zip(&want).filter(|(a, b)| a != b).count();
         eprintln!("экраны: макс. разница {max}, отличных пикселей {n}");
         assert!(max <= 1 && n <= 50, "текст экранов изменился: макс {max}, пикселей {n}");
+    }
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use super::*;
+
+    fn load() -> Screens {
+        let dec = png::Decoder::new(std::io::Cursor::new(crate::art::read("", "экраны.png").unwrap()));
+        let rd = dec.read_info().unwrap();
+        let (cw, ch) = (rd.info().width as usize, rd.info().height as usize);
+        Screens::load("", cw, ch, 2).expect("экраны")
+    }
+
+    fn state() -> ScreenState {
+        let rows = |s: &str| vec![(s.to_string(), "Имя".to_string(), "значение".to_string()), ("ok".into(), "Б".into(), "1".into())];
+        ScreenState {
+            message: "Всё хорошо, мур, проверила".into(),
+            message_t: 1.0,
+            mood: "warn".into(),
+            vpn: ("bad".into(), "выкл".into()),
+            claude: ("ok".into(), "работает".into()),
+            speed: Some((100.0, 20.0, 15.0)),
+            net_rows: rows("bad"),
+            sys_rows: rows("warn"),
+            speed_live: None,
+        }
+    }
+
+    fn layers(s: &Screens) -> Vec<Vec<u8>> {
+        s.screens.iter().map(|x| x.layer.data().to_vec()).collect()
+    }
+
+    fn fresh(s: &Screens) -> Screens {
+        let mut f = Screens { screens: Vec::new(), mask: s.mask.clone(), cw: s.cw, map: s.map, scale: s.scale, rows: vec![], redrawn: 0, checked: 0 };
+        for x in &s.screens {
+            f.screens.push(Screen {
+                name: x.name.clone(),
+                id: x.id,
+                quad: x.quad,
+                x0: x.x0,
+                y0: x.y0,
+                w: x.w,
+                h: x.h,
+                layer: Pixmap::new(x.w as u32, x.h as u32).unwrap(),
+                content: Pixmap::new(x.w as u32, x.h as u32).unwrap(),
+                ckey: None,
+                fkey: None,
+            });
+        }
+        f
+    }
+
+    #[test]
+    fn cache_equals_fresh_render() {
+        std::env::set_var("CLOCK", "12:34");
+        let mut st = state();
+        let mut cached = load();
+        for i in 0..400 {
+            let t = 1.0 + i as f64 / 12.0 + (i % 5) as f64 * 0.013;
+            if i == 150 {
+                st.speed_live = Some((0, 0.0));
+            }
+            if i == 200 {
+                st.speed_live = Some((1, 250.0));
+            }
+            if i == 250 {
+                st.speed_live = None;
+                st.claude.0 = "bad".into();
+            }
+            cached.draw(t, &st);
+            let mut f = fresh(&cached);
+            f.draw(t, &st);
+            assert!(layers(&cached) == layers(&f), "слои разошлись на t={t}");
+        }
+        eprintln!("перерисовано {} из {}", cached.redrawn, cached.checked);
+        assert!(cached.redrawn < cached.checked);
+    }
+
+    #[test]
+    fn keys_change_when_visible() {
+        std::env::set_var("CLOCK", "12:34");
+        let s = load();
+        let st = state();
+        let find = |n: &str| s.screens.iter().find(|x| x.name == n).unwrap();
+        // двоеточие часов: смена каждые 0.5 с
+        assert_eq!(clock_key(0.1), clock_key(0.4));
+        assert_ne!(clock_key(0.4), clock_key(0.6));
+        // печать: новая буква — другой ключ содержимого, без новой буквы — тот же
+        let main = find("main");
+        let ck = |t: f64| screen_key(main, &st, t).0;
+        assert_ne!(ck(1.0 + 0.05), ck(1.0 + 0.1));
+        assert_eq!(ck(1.0 + 0.1 + 0.001), ck(1.0 + 0.1 + 0.02));
+        // после конца печати ключ постоянен внутри одной фазы мигания
+        assert_eq!(ck(10.01), ck(10.0 + 1.0 / 3.0 - 0.01));
+        // мигание: край фазы
+        assert_ne!(ck(10.01), ck(10.0 + 1.0 / 3.0 + 0.01));
+        // без «плохих» точек мигания нет
+        let mut ok = state();
+        ok.vpn.0 = "ok".into();
+        assert_eq!(screen_key(main, &ok, 10.01).0, screen_key(main, &ok, 10.0 + 1.0 / 3.0 + 0.01).0);
+        // стрелка: на скорости стоит, пока значение то же; значение сменилось — другой ключ
+        let net = find("net");
+        let mut live = state();
+        live.speed_live = Some((1, 100.0));
+        assert_eq!(screen_key(net, &live, 3.0).0, screen_key(net, &live, 3.5).0);
+        let a = screen_key(net, &live, 3.0).0;
+        live.speed_live = Some((1, 200.0));
+        assert_ne!(screen_key(net, &live, 3.0).0, a);
+        // на пинге качается
+        live.speed_live = Some((0, 0.0));
+        assert_ne!(screen_key(net, &live, 3.0).0, screen_key(net, &live, 3.2).0);
+        // робот: ON пульсирует, OFF — нет
+        let robot = s.screens.iter().find(|x| !["main", "net", "sys", "clock"].contains(&x.name.as_str())).unwrap();
+        assert_ne!(screen_key(robot, &st, 0.0).0, screen_key(robot, &st, 0.5).0);
+        let mut off = state();
+        off.claude.0 = "bad".into();
+        assert_eq!(screen_key(robot, &off, 0.0).0, screen_key(robot, &off, 0.5).0);
     }
 }

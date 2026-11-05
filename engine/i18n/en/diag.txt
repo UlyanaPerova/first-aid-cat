@@ -883,3 +883,10 @@ en: test server asks to wait
 
 ru: Замеров подряд было много, и сервер замера скорости временно ограничил твой адрес. Попробуй через несколько минут.
 en: There were many speed tests in a row, and the test server has temporarily limited your address. Try again in a few minutes.
+
+# diag.rs: замер скорости, сбои ответа
+ru: пустой ответ сервера замера
+en: empty answer from the test server
+
+ru: сервер замера ответил {}
+en: the test server answered {}

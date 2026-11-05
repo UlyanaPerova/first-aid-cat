@@ -86,6 +86,12 @@ pub fn env_allowed(name: &str) -> bool {
         "XAUTHORITY",
         "DBUS_SESSION_BUS_ADDRESS",
         "DESKTOP_SESSION",
+        // настройки git и gsettings/dconf: без них проверки смотрят в чужие (стандартные) настройки, а не в настоящие
+        "GIT_CONFIG_GLOBAL",
+        "GIT_CONFIG_SYSTEM",
+        "DCONF_PROFILE",
+        "GSETTINGS_BACKEND",
+        "GSETTINGS_SCHEMA_DIR",
         // Windows
         "SYSTEMROOT",
         "WINDIR",
@@ -104,6 +110,9 @@ pub fn env_allowed(name: &str) -> bool {
         "HOMEPATH",
         "NUMBER_OF_PROCESSORS",
         "PROCESSOR_ARCHITECTURE",
+        "PROCESSOR_IDENTIFIER",
+        "PROCESSOR_LEVEL",
+        "PROCESSOR_REVISION",
         "OS",
         "SYSTEMDRIVE",
         "USERNAME",

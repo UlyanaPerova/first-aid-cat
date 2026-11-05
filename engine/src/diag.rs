@@ -2605,9 +2605,23 @@ pub struct SpeedProgress {
     pub fraction: f64,
 }
 
-fn speed_agent(timeout_s: u64) -> ureq::Agent {
+/// Адрес сервера замера; в тестах подменяется локальным.
+fn speed_base() -> String {
+    #[cfg(test)]
+    if let Some(b) = TEST_BASE.lock().unwrap_or_else(|e| e.into_inner()).clone() {
+        return b;
+    }
+    format!("https://{SPEED_HOST}")
+}
+#[cfg(test)]
+static TEST_BASE: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// `timeout_s` — на каждое чтение, `overall_s` — на весь запрос целиком (с заголовками и телом): иначе сервер,
+/// отдающий по байту раз в несколько секунд (slow-loris), держал бы запрос сколько угодно.
+fn speed_agent(timeout_s: u64, overall_s: f64) -> ureq::Agent {
     // прокси из окружения ureq не берёт: как ProxyHandler({}) в Python
     ureq::AgentBuilder::new()
+        .timeout(Duration::from_secs_f64(overall_s))
         .timeout_connect(Duration::from_secs(timeout_s))
         .timeout_read(Duration::from_secs(timeout_s))
         .timeout_write(Duration::from_secs(timeout_s))
@@ -2617,7 +2631,7 @@ fn speed_agent(timeout_s: u64) -> ureq::Agent {
 
 /// Один пустой запрос по общему соединению; код ответа http не важен, как в http.client.
 fn ping_once(agent: &ureq::Agent) -> Result<(), String> {
-    let url = format!("https://{SPEED_HOST}/__down?bytes=0");
+    let url = format!("{}/__down?bytes=0", speed_base());
     let resp = match agent.get(&url).call() {
         Ok(r) => r,
         Err(ureq::Error::Status(_, r)) => r,
@@ -2633,7 +2647,7 @@ fn ping_once(agent: &ureq::Agent) -> Result<(), String> {
 /// соединению. TCP-рукопожатие не годится: роутер с VPN отвечает на него сам за 0 мс.
 /// Возвращает (медиана, джиттер) в мс или None, если удачных замеров меньше трёх.
 fn ping_stats(n: usize) -> Option<(f64, f64)> {
-    let agent = speed_agent(4);
+    let agent = speed_agent(4, 10.0);
     let mut times: Vec<f64> = Vec::new();
     let mut run_all_pings = || -> Result<(), String> {
         // прогрев: рукопожатие и TLS. Первое соединение иногда не успевает открыться, когда все проверки
@@ -2674,7 +2688,15 @@ fn mbps_of(bytes: u64, secs: f64) -> f64 {
 /// Ответ сервера замера «слишком много запросов» (HTTP 429): замеров подряд было много, он временно ограничил адрес.
 const BUSY: &str = "сервер замера просит подождать";
 
-fn transfer(progress: &mut dyn FnMut(SpeedProgress), down: bool, streams: usize, limit_s: f64, cap: u64, chunk: u64) -> Result<Option<f64>, String> {
+fn transfer(
+    progress: &mut dyn FnMut(SpeedProgress),
+    down: bool,
+    streams: usize,
+    limit_s: f64,
+    cap: u64,
+    chunk: u64,
+    early: bool,
+) -> Result<Option<f64>, String> {
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::sync::{Arc, Mutex};
     let total = Arc::new(AtomicU64::new(0));
@@ -2686,7 +2708,7 @@ fn transfer(progress: &mut dyn FnMut(SpeedProgress), down: bool, streams: usize,
     for _ in 0..streams.max(1) {
         let (total, stop, err, block) = (total.clone(), stop.clone(), err.clone(), block.clone());
         workers.push(thread::spawn(move || {
-            let agent = speed_agent(8);
+            let agent = speed_agent(8, limit_s + 3.0);
             // сбой соединения (медленная или неровная сеть, VPN) — ещё попытка, пока есть время: иначе одна
             // неудача в начале выбивала поток до конца замера, а неудачи у всех — «не измерить»
             let mut fails = 0;
@@ -2729,44 +2751,105 @@ fn transfer(progress: &mut dyn FnMut(SpeedProgress), down: bool, streams: usize,
             fraction: (got as f64 / cap as f64).max(el / limit_s).min(1.0),
         });
         let all_done = workers.iter().all(|w| w.is_finished());
-        if el > limit_s || got >= cap || all_done {
+        // скорость уже установилась — дальше качать незачем (обычная сеть; на лимитной и так мало)
+        let settled = early && early_stop_rate(&samples).is_some();
+        if el > limit_s || got >= cap || all_done || settled {
             break;
         }
     }
     stop.store(true, Ordering::Relaxed);
-    for w in workers {
-        let _ = w.join();
+    // ждём потоки недолго: застрявший (сервер тянет заголовки по байту) не должен держать замер. Его запрос
+    // оборвётся сам по общему сроку; потоки владеют своими Arc, так что отпустить их безопасно
+    let grace = Instant::now() + Duration::from_secs(2);
+    while Instant::now() < grace && !workers.iter().all(|w| w.is_finished()) {
+        thread::sleep(Duration::from_millis(20));
     }
-    let (end_t, end_b) = *samples.last().unwrap_or(&(0.0, 0));
+    drop(workers);
+    let end_b = samples.last().map_or(0, |s| s.1);
     if end_b <= 500_000 {
         return match err.lock().unwrap_or_else(|e| e.into_inner()).take() {
             Some(e) => Err(e),
             None => Ok(None),
         };
     }
-    // начало установившегося участка: когда пришли первые 10% данных (до этого — соединения, TLS и разгон
-    // TCP; на Windows открытие шести соединений занимает до 3 с, и с ними скорость выходила заметно ниже)
-    let (w_t, w_b) = samples.iter().copied().find(|(_, b)| *b >= end_b / 10).unwrap_or((0.0, 0));
-    let steady = if end_t - w_t >= 0.5 && end_b > w_b { mbps_of(end_b - w_b, end_t - w_t) } else { mbps_of(end_b, end_t.max(0.01)) };
+    let steady = steady_rate(&samples);
     Ok(Some(steady))
+}
+
+/// Установившаяся скорость, Мбит/с: от точки, где пришли первые 10% данных, до конца ряда `(время, байты)`.
+/// До этой точки — соединения, TLS и разгон TCP (на Windows открытие шести соединений занимает до 3 с).
+fn steady_rate(samples: &[(f64, u64)]) -> f64 {
+    let (end_t, end_b) = *samples.last().unwrap_or(&(0.0, 0));
+    let (w_t, w_b) = samples.iter().copied().find(|(_, b)| *b >= end_b / 10).unwrap_or((0.0, 0));
+    if end_t - w_t >= 0.5 && end_b > w_b {
+        mbps_of(end_b - w_b, end_t - w_t)
+    } else {
+        mbps_of(end_b, end_t.max(0.01))
+    }
+}
+
+/// Раньше срока замер не останавливаем, пока не прошло столько секунд.
+const EARLY_MIN_S: f64 = 3.0;
+/// Ширина окна для сравнения скоростей, секунд, и сколько таких окон подряд должны совпасть.
+const EARLY_WINDOW_S: f64 = 1.0;
+const EARLY_WINDOWS: usize = 3;
+/// Допустимое расхождение окон со средним (±5%).
+const EARLY_TOLERANCE: f64 = 0.05;
+/// Медленную линию (меньше этого, Мбит/с) гоним до конца срока: трафика на ней мало, а замер шумнее.
+const EARLY_MIN_MBPS: f64 = 20.0;
+
+/// Пора ли остановить замер: возвращает установившуюся скорость, если она уже устоялась, иначе None.
+/// Правило: прошло хотя бы 3 с; последние три окна по 1 с целиком лежат после точки разгона (первые 10%
+/// данных); скорость в каждом окне отличается от средней не больше чем на 5%; и скорость не меньше
+/// 20 Мбит/с. Три окна по ±5% отсекают разгон TCP (он меняет скорость на десятки процентов за секунду) и
+/// неровную сеть, но не требуют идеально ровной линии — у шести потоков в сумме разброс обычно 1–3%.
+fn early_stop_rate(samples: &[(f64, u64)]) -> Option<f64> {
+    let &(end_t, end_b) = samples.last()?;
+    if end_t < EARLY_MIN_S || end_b <= 500_000 {
+        return None;
+    }
+    let (w_t, _) = samples.iter().copied().find(|(_, b)| *b >= end_b / 10)?;
+    let first = end_t - EARLY_WINDOW_S * EARLY_WINDOWS as f64;
+    if first < w_t {
+        return None;
+    }
+    // байты к моменту t: последняя точка не позже t
+    let at = |t: f64| samples.iter().rev().find(|(st, _)| *st <= t + 1e-9).map_or(0, |s| s.1);
+    let rates: Vec<f64> = (0..EARLY_WINDOWS)
+        .map(|i| {
+            let (a, b) = (first + i as f64 * EARLY_WINDOW_S, first + (i + 1) as f64 * EARLY_WINDOW_S);
+            mbps_of(at(b).saturating_sub(at(a)), EARLY_WINDOW_S)
+        })
+        .collect();
+    let mean = rates.iter().sum::<f64>() / rates.len() as f64;
+    if mean < EARLY_MIN_MBPS || rates.iter().any(|r| (r - mean).abs() > mean * EARLY_TOLERANCE) {
+        return None;
+    }
+    Some(steady_rate(samples))
 }
 
 /// Один запрос скачивания: читает тело и сразу прибавляет к общему счёту.
 fn pull(agent: &ureq::Agent, chunk: u64, total: &std::sync::atomic::AtomicU64, stop: &std::sync::atomic::AtomicBool) -> Result<(), String> {
     use std::sync::atomic::Ordering;
-    let resp = match agent.get(&format!("https://{SPEED_HOST}/__down?bytes={chunk}")).call() {
+    let resp = match agent.get(&format!("{}/__down?bytes={chunk}", speed_base())).call() {
         Ok(r) => r,
         Err(ureq::Error::Status(429, _)) => return Err(BUSY.into()),
         Err(e) => return Err(e.to_string()),
     };
     let mut r = resp.into_reader().take(chunk);
     let mut buf = vec![0u8; 256 * 1024];
+    let mut got = 0u64;
     while !stop.load(Ordering::Relaxed) {
         let n = r.read(&mut buf).map_err(|e| e.to_string())?;
         if n == 0 {
             break;
         }
+        got += n as u64;
         total.fetch_add(n as u64, Ordering::Relaxed);
+    }
+    // пустой ответ 200 — не «скачала», а сбой: иначе поток крутил бы запросы вхолостую (счётчик сбоев в transfer)
+    if got == 0 && !stop.load(Ordering::Relaxed) {
+        return Err("пустой ответ сервера замера".into());
     }
     Ok(())
 }
@@ -2777,6 +2860,8 @@ struct UpBody<'a> {
     left: u64,
     total: &'a std::sync::atomic::AtomicU64,
     stop: &'a std::sync::atomic::AtomicBool,
+    /// сколько этот запрос уже прибавил к `total` (при отказе сервера вычитается обратно)
+    sent: &'a std::cell::Cell<u64>,
 }
 
 impl Read for UpBody<'_> {
@@ -2792,6 +2877,7 @@ impl Read for UpBody<'_> {
         out[..n].copy_from_slice(&self.block[..n]);
         self.left -= n as u64;
         self.total.fetch_add(n as u64, Ordering::Relaxed);
+        self.sent.set(self.sent.get() + n as u64);
         Ok(n)
     }
 }
@@ -2804,18 +2890,27 @@ fn push(
     total: &std::sync::atomic::AtomicU64,
     stop: &std::sync::atomic::AtomicBool,
 ) -> Result<(), String> {
-    let body = UpBody { block, left: chunk, total, stop };
-    match agent
-        .post(&format!("https://{SPEED_HOST}/__up"))
+    let sent = std::cell::Cell::new(0u64);
+    let body = UpBody { block, left: chunk, total, stop, sent: &sent };
+    let res = match agent
+        .post(&format!("{}/__up", speed_base()))
         .set("Content-Type", "application/octet-stream")
         .set("Content-Length", &chunk.to_string())
         .send(body)
     {
         // 429 — сервер просит остановиться: это не «отдала», иначе потоки тут же слали бы ещё
         Err(ureq::Error::Status(429, _)) => Err(BUSY.into()),
-        Ok(_) | Err(ureq::Error::Status(_, _)) => Ok(()),
+        // успех — только 2xx: заглушка captive portal, 403, 502 — не отдача
+        Ok(r) if (200..300).contains(&r.status()) => Ok(()),
+        Ok(r) => Err(format!("сервер замера ответил {}", r.status())),
+        Err(ureq::Error::Status(code, _)) => Err(format!("сервер замера ответил {code}")),
         Err(e) => Err(e.to_string()),
+    };
+    // отказ или обрыв: эти байты сервер не принял (они лишь ушли в буфер сокета) — в скорость не идут
+    if res.is_err() && !stop.load(std::sync::atomic::Ordering::Relaxed) {
+        total.fetch_sub(sent.get(), std::sync::atomic::Ordering::Relaxed);
     }
+    res
 }
 
 /// Источник случайных байт для отдачи: /dev/urandom, а если его нет, простой xorshift.
@@ -2876,13 +2971,13 @@ pub fn speed_test(mut progress: impl FnMut(SpeedProgress)) -> Vec<Check> {
     }
     for (title, is_down, good) in [(SPEED_TITLES[1], true, 20.0), (SPEED_TITLES[2], false, 5.0)] {
         log(&format!("тест скорости: {}", if is_down { "скачивание" } else { "отдача" }));
-        // обычная сеть — 6 потоков по времени (до 10 с скачивание, 8 с отдача; объём с запасом на гигабитную
+        // обычная сеть — 6 потоков по времени (до 10 с скачивание, 8 с отдача, но раньше, если скорость устоялась; объём с запасом на гигабитную
         // линию); лимитная — один поток и совсем немного
         let res = match (is_down, metered) {
-            (true, false) => transfer(&mut progress, true, 6, 10.0, 600_000_000, 50_000_000),
-            (false, false) => transfer(&mut progress, false, 6, 8.0, 300_000_000, 20_000_000),
-            (true, true) => transfer(&mut progress, true, 1, 10.0, 5_000_000, 5_000_000),
-            (false, true) => transfer(&mut progress, false, 1, 8.0, 2_000_000, 2_000_000),
+            (true, false) => transfer(&mut progress, true, 6, 10.0, 600_000_000, 50_000_000, true),
+            (false, false) => transfer(&mut progress, false, 6, 8.0, 300_000_000, 20_000_000, true),
+            (true, true) => transfer(&mut progress, true, 1, 10.0, 5_000_000, 5_000_000, false),
+            (false, true) => transfer(&mut progress, false, 1, 8.0, 2_000_000, 2_000_000, false),
         };
         let (mbps, err) = match res {
             Ok(m) => (m, String::new()),
@@ -3080,7 +3175,8 @@ pub(crate) fn check_latency() -> Vec<Check> {
                 c.hint("Большая задержка: видео и звонки будут подлагивать. Часто так бывает через дальний VPN-сервер.")
             }]
         }
-        None => vec![Check::new("net", "Задержка сети", INFO, "не измерить").hint("Сервер замера не ответил.")],
+        // не ответил — значит, не проверено (в итоге «не всё проверено», а не зелёное «всё в порядке»)
+        None => vec![Check::new("net", "Задержка сети", INFO, "не измерить").hint("Сервер замера не ответил.").unknown()],
     }
 }
 
@@ -3155,6 +3251,70 @@ pub fn agent_name(id: &str) -> &'static str {
 mod tests {
     use super::*;
 
+    /// Ряд (время, байты) раз в 100 мс для скорости `mbps(t)`, длиной `dur` секунд.
+    fn series(dur: f64, mbps: impl Fn(f64) -> f64) -> Vec<(f64, u64)> {
+        let mut v = vec![(0.0, 0u64)];
+        let (mut t, mut b) = (0.0, 0.0f64);
+        while t < dur - 1e-9 {
+            t += 0.1;
+            b += mbps(t) * 1e6 / 8.0 * 0.1;
+            v.push((t, b as u64));
+        }
+        v
+    }
+
+    /// То, что делает transfer: по ряду шаг за шагом; (когда остановились, скорость, байт к остановке).
+    fn simulate(full: &[(f64, u64)]) -> (f64, f64, u64) {
+        for n in 2..=full.len() {
+            if let Some(r) = early_stop_rate(&full[..n]) {
+                return (full[n - 1].0, r, full[n - 1].1);
+            }
+        }
+        (full.last().unwrap().0, steady_rate(full), full.last().unwrap().1)
+    }
+
+    #[test]
+    fn early_stop_stable_line() {
+        let (t, r, _) = simulate(&series(10.0, |_| 300.0));
+        assert!((3.0..=4.0).contains(&t), "остановились в {t}");
+        assert!((r - 300.0).abs() < 3.0, "скорость {r}");
+    }
+
+    #[test]
+    fn early_stop_after_ramp_plateau() {
+        // 2 с разгона до 300, дальше ровно
+        let (t, r, _) = simulate(&series(10.0, |t| if t < 2.0 { 150.0 * t } else { 300.0 }));
+        assert!(t >= 4.0, "остановились до плато: {t}");
+        assert!(t <= 6.0, "слишком поздно: {t}");
+        assert!(r > 250.0 && r <= 300.0, "скорость {r}");
+    }
+
+    #[test]
+    fn early_stop_noisy_runs_to_limit() {
+        let (t, _, _) = simulate(&series(10.0, |t| 200.0 + 60.0 * (t * 2.1).sin()));
+        assert!(t >= 9.9, "остановились в {t}");
+        // постоянный сползающий ряд тоже не «устоялся»
+        let (t, _, _) = simulate(&series(10.0, |t| 400.0 - 20.0 * t));
+        assert!(t >= 9.9, "остановились в {t}");
+    }
+
+    #[test]
+    fn early_stop_slow_line_keeps_old_behaviour() {
+        let (t, r, _) = simulate(&series(10.0, |_| 8.0));
+        assert!(t >= 9.9, "остановились в {t}");
+        assert!((r - 8.0).abs() < 0.3);
+        assert!(early_stop_rate(&series(2.5, |_| 300.0)).is_none(), "раньше 3 с нельзя");
+        assert!(early_stop_rate(&[(0.0, 0)]).is_none());
+    }
+
+    #[test]
+    fn early_stop_saves_data_at_300_mbit() {
+        let (_, _, b) = simulate(&series(10.0, |_| 300.0));
+        let full = series(10.0, |_| 300.0).last().unwrap().1;
+        eprintln!("стоп: {b} байт из {full}");
+        assert!(b * 100 < full * 45, "сэкономили мало");
+    }
+
     #[test]
     fn title_survives_spacing_and_broken_lines() {
         let title = |body: &str| {
@@ -3217,5 +3377,92 @@ mod tests {
         let a = Check::new("sys", "Диск", INFO, "не проверить").unknown();
         let b = Check::new("sys", "Пояс", INFO, "не проверить"); // та же фраза, но без пометки
         assert_eq!(unchecked_count(&[a, b]), 1);
+    }
+
+    // ── замер скорости против локального сервера (в Cloudflare тесты не ходят) ──
+    static SPEED_TEST: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// Локальный сервер: `handler` получает сокет после чтения заголовков запроса (до пустой строки).
+    fn local_server(handler: fn(std::net::TcpStream)) -> String {
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = l.local_addr().unwrap().port();
+        thread::spawn(move || {
+            for c in l.incoming().flatten() {
+                thread::spawn(move || handler(c));
+            }
+        });
+        format!("http://127.0.0.1:{port}")
+    }
+
+    fn read_head(c: &mut std::net::TcpStream) {
+        let mut acc = Vec::new();
+        let mut b = [0u8; 1];
+        while !acc.ends_with(b"\r\n\r\n") {
+            if c.read(&mut b).unwrap_or(0) == 0 {
+                return;
+            }
+            acc.push(b[0]);
+        }
+    }
+
+    fn run_transfer(base: String, down: bool, limit: f64) -> (Result<Option<f64>, String>, f64) {
+        *TEST_BASE.lock().unwrap() = Some(base);
+        let t = Instant::now();
+        let r = transfer(&mut |_| {}, down, 2, limit, 1 << 30, 1 << 20, false);
+        *TEST_BASE.lock().unwrap() = None;
+        (r, t.elapsed().as_secs_f64())
+    }
+
+    /// Сервер отдаёт заголовок по байту раз в секунду: замер не должен висеть (общий срок запроса + ограниченное ожидание потоков).
+    #[test]
+    fn speed_slowloris_does_not_hang() {
+        use std::io::Write;
+        let _g = SPEED_TEST.lock().unwrap_or_else(|e| e.into_inner());
+        let base = local_server(|mut c| {
+            read_head(&mut c);
+            let _ = c.write_all(b"HTTP/1.1 200 OK\r\nX-A: ");
+            for _ in 0..60 {
+                thread::sleep(Duration::from_millis(1000));
+                if c.write_all(b"a").is_err() {
+                    break;
+                }
+            }
+        });
+        let (r, secs) = run_transfer(base, true, 2.0);
+        assert!(secs < 8.0, "замер завис на {secs} с");
+        assert!(matches!(r, Ok(None) | Err(_)));
+    }
+
+    /// Любой не-2xx ответ на отдачу — сбой, а не «отдала».
+    #[test]
+    fn speed_push_non_2xx_is_failure() {
+        use std::io::Write;
+        let _g = SPEED_TEST.lock().unwrap_or_else(|e| e.into_inner());
+        let base = local_server(|mut c| {
+            read_head(&mut c);
+            let _ = c.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            // дочитываем тело до конца, иначе закрытие сокета с непрочитанным даст RST вместо ответа
+            let _ = c.set_read_timeout(Some(Duration::from_millis(500)));
+            let mut sink = [0u8; 65536];
+            while c.read(&mut sink).unwrap_or(0) > 0 {}
+        });
+        let (r, secs) = run_transfer(base, false, 6.0);
+        assert!(secs < 8.0);
+        let e = r.expect_err("403 не должен считаться успехом");
+        assert!(e.contains("403"), "{e}");
+    }
+
+    /// Пустой ответ 200 — сбой (после нескольких попыток), а не бесконечные пустые запросы.
+    #[test]
+    fn speed_pull_empty_is_failure() {
+        use std::io::Write;
+        let _g = SPEED_TEST.lock().unwrap_or_else(|e| e.into_inner());
+        let base = local_server(|mut c| {
+            read_head(&mut c);
+            let _ = c.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+        });
+        let (r, secs) = run_transfer(base, true, 6.0);
+        assert!(secs < 8.0);
+        assert!(r.is_err(), "{r:?}");
     }
 }

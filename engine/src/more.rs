@@ -588,7 +588,7 @@ pub(crate) fn check_hogs() -> Vec<Check> {
                     .hint("Составляет поиск по файлам. Обычно затихает сам через полчаса."),
             );
         } else {
-            out.push(hog_check(&p.name, *pct, crate::procs::hog_kind(p, &all), fx("proc_term", "Закрыть программу", Some(&pid))));
+            out.push(hog_check(&p.name, *pct, crate::procs::hog_kind(p, &all), Some(fx("proc_term", "Закрыть программу", Some(&pid)))));
         }
     }
     out
@@ -597,7 +597,7 @@ pub(crate) fn check_hogs() -> Vec<Check> {
 /// Строка «кто грузит процессор» — спокойно и по делу: виртуальная машина и работа ИИ-помощника —
 /// не беда и без кнопки «Закрыть» (новичок закрыл бы то, что ему же нужно); сборка и скрипты — пояснение;
 /// прочее — «если нужна, всё нормально; если зависла — можно закрыть».
-pub(crate) fn hog_check(name: &str, pct: f64, kind: crate::procs::Hog, close: crate::diag::Fix) -> Check {
+pub(crate) fn hog_check(name: &str, pct: f64, kind: crate::procs::Hog, close: Option<crate::diag::Fix>) -> Check {
     use crate::procs::Hog;
     let load = format!("{pct:.0}% ядра");
     match kind {
@@ -609,10 +609,10 @@ pub(crate) fn hog_check(name: &str, pct: f64, kind: crate::procs::Hog, close: cr
         )),
         Hog::Build => Check::new("sys", &format!("Занят процессор: {name}"), INFO, &load).hint(
             "Похоже, идёт сборка программы или работает скрипт. Если это запустил ты или твой ИИ-помощник — подожди, это пройдёт. Если не знаешь, что это, и всё тормозит — можно закрыть.",
-        ).fixes(vec![close]),
+        ).fixes(close.into_iter().collect()),
         Hog::Other => Check::new("sys", &format!("Занят процессор: {name}"), WARN, &load).hint(
             "Программа сейчас много считает. Если она тебе нужна (игра, видео, сборка) — всё нормально. Если она зависла или ты её не запускал — можно закрыть.",
-        ).fixes(vec![close]),
+        ).fixes(close.into_iter().collect()),
     }
 }
 

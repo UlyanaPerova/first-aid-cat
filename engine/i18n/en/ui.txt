@@ -463,8 +463,8 @@ ru: Нет данных
 en: No data
 
 # ui.rs:2646
-ru: Проверка завершена: {} из {} · проблем: {} · предупреждений: {}
-en: Check complete: {} of {} · problems: {} · warnings: {}
+ru: Проверка завершена · в порядке: {} из {} · проблем: {} · предупреждений: {}
+en: Check complete · OK: {} of {} · problems: {} · warnings: {}
 
 # ui.rs:2652
 ru: Обновлено в {}:{}:{} · сеть проверяю постоянно, остальное реже
@@ -809,5 +809,5 @@ ru: Аптечка {}
 en: First Aid Cat {}
 
 # ui.rs
-ru: Проверка завершена: {} из {} · проблем: {} · предупреждений: {} · не проверено: {}
-en: Check complete: {} of {} · problems: {} · warnings: {} · not checked: {}
+ru: Проверка завершена · в порядке: {} из {} · проблем: {} · предупреждений: {} · не проверено: {}
+en: Check complete · OK: {} of {} · problems: {} · warnings: {} · not checked: {}

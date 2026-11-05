@@ -3,7 +3,7 @@
 //! сюда же добавлено "off": [коды выключенных показателей].
 
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Папка настроек: Linux — $XDG_CONFIG_HOME или ~/.config; macOS — ~/Library/Application Support;
 /// Windows — %APPDATA%.
@@ -132,7 +132,7 @@ pub fn update(f: impl FnOnce(&mut serde_json::Value)) {
         }
         Err(true) => {
             // испорчен руками или не тот вид — сохранить рядом, а не затереть молча; не вышло копию — не пишем
-            if let Err(e) = std::fs::copy(&p, p.with_extension("json.bad")) {
+            if let Err(e) = save_bad_copy(&p) {
                 fail(format!("Настройки не сохранены: не удалось сделать копию испорченного файла настроек ({e})"));
                 return;
             }
@@ -144,6 +144,61 @@ pub fn update(f: impl FnOnce(&mut serde_json::Value)) {
         fail(format!("Настройки не сохранены: {e}"));
     }
     *CACHE.lock().unwrap_or_else(|e| e.into_inner()) = None;
+}
+
+/// Копия испорченного файла настроек: новое имя с временем (прежние копии не затираются), создаётся заново
+/// (create_new: ссылка на месте имени не пройдёт), права 0600. Хранятся три последние.
+fn save_bad_copy(p: &Path) -> std::io::Result<()> {
+    use std::io::Write;
+    let data = crate::store::read_bytes(p, 32 << 20)?;
+    let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let dir = p.parent().unwrap_or(Path::new("."));
+    let base = p.file_name().and_then(|n| n.to_str()).unwrap_or("ui.json");
+    let prefix = format!("{base}.bad.");
+    // прежние копии — только свои обычные файлы (не ссылки); порядок по ключу (секунды, номер в секунде)
+    let key = |n: &str| {
+        let r = &n[prefix.len()..];
+        let (a, b) = r.split_once('-').unwrap_or((r, "0"));
+        (a.parse::<u64>().unwrap_or(0), b.parse::<u64>().unwrap_or(0))
+    };
+    let list = || -> Vec<(String, PathBuf)> {
+        let mut v: Vec<(String, PathBuf)> = std::fs::read_dir(dir)
+            .map(|rd| {
+                rd.flatten()
+                    .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+                    .filter_map(|e| Some((e.file_name().to_str()?.to_string(), e.path())))
+                    .filter(|(n, _)| n.starts_with(&prefix))
+                    .collect()
+            })
+            .unwrap_or_default();
+        v.sort_by_key(|(n, _)| key(n));
+        v
+    };
+    // новая копия всегда «позже» всех прежних, даже если часы ушли назад или копий в одну секунду несколько
+    let mut k = match list().last().map(|(n, _)| key(n)) {
+        Some((s, n)) if s >= secs => (s, n + 1),
+        _ => (secs, 0),
+    };
+    let mut o = std::fs::OpenOptions::new();
+    o.write(true).create_new(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut o, 0o600);
+    let mut f = loop {
+        let name = if k.1 == 0 { format!("{prefix}{}", k.0) } else { format!("{prefix}{}-{}", k.0, k.1) };
+        match o.open(dir.join(name)) {
+            Ok(f) => break f,
+            // имя занято (в том числе подложенной ссылкой: create_new её не открывает) — следующее
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists && k.1 < 1000 => k.1 += 1,
+            Err(e) => return Err(e),
+        }
+    };
+    f.write_all(&data)?;
+    let old = list();
+    let extra = old.len().saturating_sub(3);
+    for (_, path) in old.into_iter().take(extra) {
+        let _ = std::fs::remove_file(path);
+    }
+    Ok(())
 }
 
 /// Явно выключенные и явно включённые показатели (всё прочее — как задано по умолчанию).
@@ -216,7 +271,7 @@ mod tests {
                 assert_eq!(v["split"], 7);
                 assert_eq!(v["off"][1], "gpu");
                 assert_eq!(v["log"], true);
-                assert!(!dir.join("ui.json.bad").exists());
+                assert!(!dir.read_dir().unwrap().flatten().any(|e| e.file_name().to_string_lossy().contains(".bad")));
             }
         });
     }
@@ -226,7 +281,35 @@ mod tests {
         with_cfg("bad", |dir| {
             std::fs::write(dir.join("ui.json"), "{ не json").unwrap();
             update(|v| v["log"] = serde_json::json!(true));
-            assert_eq!(std::fs::read_to_string(dir.join("ui.json.bad")).unwrap(), "{ не json");
+            let bads = || -> Vec<std::path::PathBuf> {
+                std::fs::read_dir(dir).unwrap().flatten().map(|e| e.path()).filter(|p| p.to_string_lossy().contains("ui.json.bad.")).collect()
+            };
+            assert_eq!(bads().len(), 1);
+            assert_eq!(std::fs::read_to_string(&bads()[0]).unwrap(), "{ не json");
+            // повторная порча не затирает прежнюю копию; хранятся три последние
+            for i in 0..5 {
+                std::fs::write(dir.join("ui.json"), format!("{{ bad json {i}")).unwrap();
+                update(|v| v["log"] = serde_json::json!(true));
+            }
+            assert_eq!(bads().len(), 3);
+            assert!(
+                bads().iter().any(|p| std::fs::read_to_string(p).unwrap() == "{ bad json 4"),
+                "{:?}",
+                bads().iter().map(|p| (p.clone(), std::fs::read_to_string(p).unwrap())).collect::<Vec<_>>()
+            );
+            // ссылка на месте будущей копии не пройдёт: чужой файл не затирается
+            #[cfg(unix)]
+            {
+                let victim = dir.join("victim.txt");
+                std::fs::write(&victim, "INTACT").unwrap();
+                let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+                for k in 0..3 {
+                    let _ = std::os::unix::fs::symlink(&victim, dir.join(format!("ui.json.bad.{}", secs + k)));
+                }
+                std::fs::write(dir.join("ui.json"), "{ again").unwrap();
+                update(|v| v["log"] = serde_json::json!(true));
+                assert_eq!(std::fs::read_to_string(&victim).unwrap(), "INTACT");
+            }
             // каталог на месте файла: не читается — ничего не пишем, ошибка доходит до пользователя
             std::fs::remove_file(dir.join("ui.json")).unwrap();
             std::fs::create_dir(dir.join("ui.json")).unwrap();

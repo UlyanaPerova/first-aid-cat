@@ -87,7 +87,13 @@ pub(crate) fn check_vpn() -> Vec<Check> {
             && !out.iter().any(|c| c.title.contains(title) && c.status == OK)
         {
             apps.push(title.to_string());
-            out.push(Check::new("net", &format!("VPN {title}"), INFO, "программа запущена"));
+            // у программы есть и системная служба (выключена), и свой работающий туннель — одна строка, а не две
+            // противоречивые («выключен» и «запущена»)
+            let t = format!("VPN {title}");
+            match out.iter_mut().find(|c| c.title == t) {
+                Some(c) => c.value = "служба выключена, программа запущена (свой туннель)".into(),
+                None => out.push(Check::new("net", &t, INFO, "программа запущена")),
+            }
         }
     }
     // итог — общий для всех систем (страна выхода против своей страны, «интернет падает из-за VPN»)
@@ -166,7 +172,9 @@ pub(crate) fn check_hogs() -> Vec<Check> {
             let all = crate::procs::list();
             let pid: i64 = f[1].parse().unwrap_or(0);
             let kind = all.iter().find(|p| p.pid == pid).map_or(crate::procs::Hog::Other, |p| crate::procs::hog_kind(p, &all));
-            out.push(crate::more::hog_check(&name, pct, kind, fx("mac_force_quit", "Закрыть программу", Some(f[1]))));
+            // кнопка — с временем запуска (fixes::mac_quit_arg): процесс уже закрылся — кнопки нет
+            let fix = f[1].parse::<u32>().ok().and_then(crate::fixes::mac_quit_arg).map(|a| fx("mac_force_quit", "Закрыть программу", Some(&a)));
+            out.push(crate::more::hog_check(&name, pct, kind, fix));
         }
     }
     out
@@ -344,7 +352,10 @@ pub(crate) fn check_apps() -> Vec<Check> {
         let fix = if name == "Finder" {
             fx("mac_finder_restart", "Перезапустить Finder", None)
         } else {
-            fx("mac_force_quit", "Закрыть принудительно", Some(&pid.to_string()))
+            match crate::fixes::mac_quit_arg(pid) {
+                Some(a) => fx("mac_force_quit", "Закрыть принудительно", Some(&a)),
+                None => continue, // уже закрылась
+            }
         };
         let mut c = Check::new("sys", &format!("Открыта: {name}"), INFO, "работает")
             .hint("Если программа зависла и не закрывается — нажми «Закрыть принудительно» (несохранённое пропадёт).")

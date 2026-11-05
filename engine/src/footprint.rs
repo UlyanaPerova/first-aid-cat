@@ -758,12 +758,7 @@ pub fn fix_lock() -> (bool, String) {
         for p in list {
             // открываем без перехода по ссылке и меняем права у открытого объекта (fchmod): подменить файл между
             // проверкой и сменой прав нельзя
-            #[cfg(target_os = "linux")]
-            let flags = 0o4000 | if cfg!(any(target_arch = "aarch64", target_arch = "arm")) { 0o100000 } else { 0o400000 };
-            #[cfg(target_os = "macos")]
-            let flags = 0x0004 | 0x0100;
-            #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-            let flags = 0;
+            let flags = libc::O_NONBLOCK | libc::O_NOFOLLOW;
             let Ok(f) = std::fs::OpenOptions::new().read(true).custom_flags(flags).open(&p) else {
                 skipped.push(p.display().to_string());
                 continue;
@@ -930,6 +925,13 @@ fn history_target(link: &Path, home: &Path) -> Result<Option<PathBuf>, String> {
         None if !link.exists() => return Ok(None), // висячая ссылка: читать нечего
         None => return Err("ссылка ведёт за пределы домашней папки".into()),
     };
+    // ссылка должна вести в файл истории (в имени «hist»), а не в произвольный файл дома и не в каталоги
+    // с ключами и настройками: иначе подложенная ссылка заставила бы вырезать «ключи» из чужого файла
+    let in_secret_dir = [".ssh", ".gnupg", ".config", ".aws", ".kube"].iter().any(|d| real.starts_with(home.join(d)));
+    let name_ok = real.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.to_ascii_lowercase().contains("hist"));
+    if in_secret_dir || !name_ok {
+        return Err("ссылка ведёт не в файл истории".into());
+    }
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
@@ -1075,6 +1077,27 @@ mod tests {
             let after = std::fs::read(h.join("dot/hist")).unwrap();
             assert_eq!(after, b"ls \xef\xf0\xe8\xe2\xe5\xf2\npwd\n");
             assert!(std::fs::symlink_metadata(h.join(".bash_history")).unwrap().file_type().is_symlink());
+        });
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn fix_history_refuses_symlink_to_non_history_file() {
+        with_home("hist_key", |h| {
+            std::fs::create_dir_all(h.join(".ssh")).unwrap();
+            let key = format!("-----BEGIN OPENSSH PRIVATE KEY-----\nexport K={}\n", fake_key());
+            std::fs::write(h.join(".ssh/id_ed25519"), &key).unwrap();
+            std::os::unix::fs::symlink(h.join(".ssh/id_ed25519"), h.join(".bash_history")).unwrap();
+            let (ok, _) = fix_history();
+            assert!(!ok);
+            assert_eq!(std::fs::read_to_string(h.join(".ssh/id_ed25519")).unwrap(), key);
+            // файл в доме без «hist» в имени — тоже нет
+            std::fs::write(h.join("notes.txt"), &key).unwrap();
+            std::fs::remove_file(h.join(".bash_history")).unwrap();
+            std::os::unix::fs::symlink(h.join("notes.txt"), h.join(".bash_history")).unwrap();
+            let (ok, _) = fix_history();
+            assert!(!ok);
+            assert_eq!(std::fs::read_to_string(h.join("notes.txt")).unwrap(), key);
         });
     }
 

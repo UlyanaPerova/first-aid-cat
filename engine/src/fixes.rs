@@ -652,6 +652,20 @@ const NO_ARG: [&str; 44] = [
 /// Проверка действия и аргумента — одна для всех путей (кнопка в окне и виджете, общий файл checks.json,
 /// командная строка --fix, «ручная» команда). Неизвестное действие или аргумент не своей формы — отказ:
 /// кнопку из подменённого файла с чужим аргументом не выполнить.
+/// Время запуска процесса macOS (`ps -o lstart=`, «Thu Nov  5 21:59:32 2026») — короткой меткой без пробелов
+/// и двоеточий для аргумента кнопки: «Thu-Nov-5-21-59-32-2026».
+pub(crate) fn mac_start_key(lstart: &str) -> String {
+    lstart.split(|c: char| c.is_whitespace() || c == ':').filter(|x| !x.is_empty()).collect::<Vec<_>>().join("-")
+}
+
+/// Аргумент кнопки «закрыть» на macOS: «номер@время запуска»; None — процесса уже нет.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub(crate) fn mac_quit_arg(pid: u32) -> Option<String> {
+    let ps = pid.to_string();
+    let l = crate::cmd::exec(&["ps", "-p", &ps, "-o", "lstart="], std::time::Duration::from_secs(5), crate::cmd::CHECK).text().trim().to_string();
+    (!l.is_empty()).then(|| format!("{pid}@{}", mac_start_key(&l)))
+}
+
 pub fn validate(id: &str, arg: Option<&str>) -> Result<(), String> {
     let a = arg.unwrap_or("");
     let chars = |s: &str, extra: &str, max: usize| {
@@ -683,7 +697,14 @@ pub fn validate(id: &str, arg: Option<&str>) -> Result<(), String> {
         }
         "win_svc_restart" => !a.is_empty() && a.len() <= 80 && a.chars().all(|c| c.is_ascii_alphanumeric() || " -_.".contains(c)),
         // номер 0 и 1 — «вся группа» и система: ни кнопкой, ни ручной командой
-        "mac_force_quit" => digits(a) && a.parse::<u32>().is_ok_and(|p| p > 1),
+        // «номер@время запуска» (как proc_term на Linux): время снято, когда строку показали, и сверяется перед
+        // каждым сигналом — номер, доставшийся с тех пор другой программе, не тронем
+        "mac_force_quit" => a.split_once('@').is_some_and(|(p, k)| {
+            digits(p)
+                && p.parse::<u32>().is_ok_and(|p| p > 1)
+                && (8..=40).contains(&k.len())
+                && k.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+        }),
         _ => return Err(format!("Неизвестное действие: {id}")),
     };
     if ok {
@@ -984,8 +1005,8 @@ fn mac_apply(id: &str, arg: Option<&str>) -> (bool, String) {
         "mac_audio_restart" => done(mac_admin("killall coreaudiod", 60), "Звук перезапущен."),
         "mac_time_sync" => clock_after(mac_admin("/usr/bin/sntp -sS time.apple.com", 90)),
         "mac_thin_snapshots" => done(mac_admin("tmutil thinlocalsnapshots / 999999999999 4", 300), "Локальные снимки убраны."),
-        "mac_force_quit" => match arg.and_then(|p| p.parse::<u32>().ok()) {
-            Some(pid) if pid > 1 && pid != std::process::id() => {
+        "mac_force_quit" => match arg.and_then(|a| a.split_once('@')).and_then(|(p, k)| Some((p.parse::<u32>().ok()?, k))) {
+            Some((pid, key)) if pid > 1 && pid != std::process::id() => {
                 let ps = pid.to_string();
                 // жив ли — по ps, а не kill -0: тот «не получается» и когда процесс чужой (нет прав), а не только когда его нет
                 let alive =
@@ -1015,6 +1036,9 @@ fn mac_apply(id: &str, arg: Option<&str>) -> (bool, String) {
                 let born = started();
                 if born.is_empty() {
                     return (true, "Программа уже закрыта.".into());
+                }
+                if mac_start_key(&born) != key {
+                    return (false, "Под этим номером теперь другая программа — её не трогаю. Проверь ещё раз.".into());
                 }
                 extern "C" {
                     fn kill(pid: i32, sig: i32) -> i32;
@@ -1216,7 +1240,7 @@ pub fn manual(id: &str, arg: Option<&str>) -> Option<String> {
             "mac_time_sync" => "sudo sntp -sS time.apple.com".into(),
             "mac_thin_snapshots" => "tmutil thinlocalsnapshots / 999999999999 4".into(),
             "mac_force_quit" => {
-                let p = a.trim().parse::<u32>().ok()?;
+                let p = a.split('@').next().unwrap_or("").trim().parse::<u32>().ok()?;
                 confirm_kill(p, "   # still running? run this line again; if it stays, use Activity Monitor > Force Quit")
             }
             _ => return None,
@@ -1701,4 +1725,22 @@ fn manual_kill_rechecks_name() {
     assert!(m.starts_with("ps -o pid=,comm= -p 4242 &&") && m.contains("kill 4242"), "{m}");
     let m = manual("happ_restart", None).unwrap();
     assert!(m.contains("pgrep -x Happ") && m.contains("gtk-launch Happ"), "{m}");
+}
+
+#[cfg(test)]
+mod mac_quit_tests {
+    use super::*;
+
+    #[test]
+    fn mac_force_quit_needs_start_time() {
+        assert_eq!(mac_start_key("Thu Nov  5 21:59:32 2026"), "Thu-Nov-5-21-59-32-2026");
+        assert!(validate("mac_force_quit", Some("4242@Thu-Nov-5-21-59-32-2026")).is_ok());
+        // без времени запуска, системные номера, лишние знаки — отказ
+        for bad in ["4242", "1@Thu-Nov-5-21-59-32-2026", "0@Thu-Nov-5-21-59-32-2026", "4242@x", "4242@Thu Nov 5", "4242@a;b-cdefgh"] {
+            assert!(validate("mac_force_quit", Some(bad)).is_err(), "{bad}");
+        }
+        // ручная команда для macOS собирается только на macOS
+        #[cfg(target_os = "macos")]
+        assert!(manual("mac_force_quit", Some("4242@Thu-Nov-5-21-59-32-2026")).is_some_and(|m| m.contains("4242")));
+    }
 }

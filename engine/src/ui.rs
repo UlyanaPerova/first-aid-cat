@@ -2573,7 +2573,7 @@ impl P<'_, '_> {
                 && (matches!(row.status.as_str(), "bad" | "warn")
                     || row.title.starts_with("Канал")
                     || row.key == "settings"
-                    || row.fixes.iter().any(|f| ON_DEMAND.contains(&f.id.as_str())));
+                    || row.fixes.first().is_some_and(|f| ON_DEMAND.contains(&f.id.as_str())));
             let btn = Rect::new(view.x + cols[2].0 + 4 * k, rr.y + 2 * k, cols[2].1 - 8 * k, rh - 4 * k);
             if show_fix {
                 self.hit(btn.intersect(view), Hit::Fix(i as u16));
@@ -2671,9 +2671,9 @@ impl P<'_, '_> {
         let s1 = if self.s.checking {
             "Проверяю…".to_string()
         } else if unk > 0 {
-            format!("Проверка завершена: {ok} из {} · проблем: {bad} · предупреждений: {warn} · не проверено: {unk}", real.len())
+            format!("Проверка завершена · в порядке: {ok} из {} · проблем: {bad} · предупреждений: {warn} · не проверено: {unk}", real.len())
         } else {
-            format!("Проверка завершена: {ok} из {} · проблем: {bad} · предупреждений: {warn}", real.len())
+            format!("Проверка завершена · в порядке: {ok} из {} · проблем: {bad} · предупреждений: {warn}", real.len())
         };
         // проверки идут по расписанию (sched.rs): сеть часто, остальное реже — «следующая через» больше не одна
         let s2 = match self.s.last_check {

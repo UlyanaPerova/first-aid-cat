@@ -39,13 +39,95 @@ fn is_net(u: &Unit) -> bool {
     u.cat == crate::catalog::Cat::Net
 }
 
-/// Множитель частоты из настроек: rare ×3, often ×0,5.
-fn freq_factor() -> f64 {
-    match crate::prefs::load().get("check_freq").and_then(|v| v.as_str()) {
+/// Почему включён режим экономии.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Eco {
+    Battery,
+    Metered,
+}
+
+/// Нужна ли экономия: на батарее или в лимитной сети — как «редко», если человек сам не выбрал «часто».
+/// Выбрал «редко» — и так редко, экономить дальше нечем (None, чтобы не писать лишнего в журнал).
+fn economy(on_battery: bool, metered: bool, choice: Option<&str>) -> Option<Eco> {
+    if matches!(choice, Some("often") | Some("rare")) {
+        return None;
+    }
+    if on_battery {
+        Some(Eco::Battery)
+    } else if metered {
+        Some(Eco::Metered)
+    } else {
+        None
+    }
+}
+
+/// Множитель частоты: выбор в настройках; на батарее и в лимитной сети (если не выбрано «часто») — как «редко».
+fn factor_for(choice: Option<&str>, eco: Option<Eco>) -> f64 {
+    match choice {
         Some("rare") => 3.0,
         Some("often") => 0.5,
+        _ if eco.is_some() => 3.0,
         _ => 1.0,
     }
+}
+
+/// Батарея и лимитная сеть, кэш на минуту: опрос недорогой, но не каждый проход цикла.
+fn power_state() -> (bool, bool) {
+    static CACHE: std::sync::Mutex<Option<(Instant, bool, bool)>> = std::sync::Mutex::new(None);
+    let mut c = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((t, b, m)) = *c {
+        if t.elapsed() < Duration::from_secs(60) {
+            return (b, m);
+        }
+    }
+    let (b, m) = (crate::netproxy::on_battery(), crate::diag::is_metered());
+    *c = Some((Instant::now(), b, m));
+    (b, m)
+}
+
+/// Ждущая запись в журнал окна о смене режима: 0 нет, 1 батарея, 2 лимитная сеть, 3 обычный режим.
+static ECO_NOTE: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+/// Прежний режим: 0 обычный, 1 батарея, 2 лимитная сеть.
+static ECO_NOW: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+/// Запись в журнал окна о смене режима экономии (забирает окно; None — нечего сказать).
+pub fn take_eco_note() -> Option<&'static str> {
+    use std::sync::atomic::Ordering;
+    match ECO_NOTE.swap(0, Ordering::SeqCst) {
+        1 => Some("На батарее — проверяю реже."),
+        2 => Some("Сеть лимитная — проверяю реже."),
+        3 => Some("Питание и сеть обычные — проверяю как обычно."),
+        _ => None,
+    }
+}
+
+/// Множитель частоты из настроек: rare ×3, often ×0,5; плюс автоматическая экономия.
+fn freq_factor() -> f64 {
+    use std::sync::atomic::Ordering;
+    let prefs = crate::prefs::load();
+    let choice = prefs.get("check_freq").and_then(|v| v.as_str());
+    // опрашиваем батарею и сеть, только если выбор не «часто»/«редко»: иначе это не повлияет
+    let eco = if matches!(choice, Some("often") | Some("rare")) {
+        None
+    } else {
+        let (b, m) = power_state();
+        economy(b, m, choice)
+    };
+    let code = match eco {
+        None => 0,
+        Some(Eco::Battery) => 1,
+        Some(Eco::Metered) => 2,
+    };
+    let prev = ECO_NOW.swap(code, Ordering::SeqCst);
+    if prev != code {
+        ECO_NOTE.store(if code == 0 { 3 } else { code }, Ordering::SeqCst);
+        match code {
+            1 => crate::diag::log("проверки: на батарее — проверяю реже"),
+            2 => crate::diag::log("проверки: сеть лимитная — проверяю реже"),
+            _ => crate::diag::log("проверки: обычный режим"),
+        }
+    }
+    factor_for(choice, eco)
 }
 
 /// Попросить проверить всё сейчас (кнопка «Проверить всё»): у себя или у проверяющего процесса.
@@ -532,5 +614,46 @@ mod unchecked_tests {
         let (_, old) = read_checks(&p).unwrap();
         assert!(!old[0].unchecked);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod economy_tests {
+    use super::*;
+
+    #[test]
+    fn economy_decision() {
+        for choice in [None, Some("normal"), Some("rare"), Some("often")] {
+            for battery in [false, true] {
+                for metered in [false, true] {
+                    let e = economy(battery, metered, choice);
+                    let want = match (choice, battery, metered) {
+                        (Some("often") | Some("rare"), _, _) => None,
+                        (_, true, _) => Some(Eco::Battery),
+                        (_, false, true) => Some(Eco::Metered),
+                        _ => None,
+                    };
+                    assert_eq!(e, want, "{choice:?} батарея {battery} лимитная {metered}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn factor_follows_choice_and_economy() {
+        assert_eq!(factor_for(None, None), 1.0);
+        assert_eq!(factor_for(Some("normal"), Some(Eco::Battery)), 3.0);
+        assert_eq!(factor_for(None, Some(Eco::Metered)), 3.0);
+        assert_eq!(factor_for(Some("often"), None), 0.5);
+        assert_eq!(factor_for(Some("rare"), None), 3.0);
+    }
+
+    #[test]
+    fn pmset_battery_text() {
+        let bat = "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1)\t87%; discharging; 4:10 remaining";
+        let ac = "Now drawing from 'AC Power'\n -InternalBattery-0 (id=1)\t87%; charging; 0:40 remaining";
+        assert!(crate::netproxy::pmset_on_battery(bat));
+        assert!(!crate::netproxy::pmset_on_battery(ac));
+        assert!(!crate::netproxy::pmset_on_battery("Now drawing from 'Battery Power'"));
     }
 }
