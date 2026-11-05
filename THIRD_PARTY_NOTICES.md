@@ -4,6 +4,7 @@
 
 - **Background art:** by **@kael333_**. The original appears to have been deleted from all platforms or could not be found; only reposts on Pinterest exist. If you are the author and want a link, a different credit or removal, please open an issue.
 - **Character:** integrated into the background art with the help of image generation in **ChatGPT**.
+- **Icons** (`assets/xp/`, the program icon): generated with an image-generation model for this project.
 
 Using the images from this program outside it is not permitted. See [LICENSE-ART.md](LICENSE-ART.md).
 
