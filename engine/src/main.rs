@@ -1259,11 +1259,22 @@ impl ApplicationHandler<AppEvent> for App {
             return;
         }
         let mon = el.primary_monitor();
-        let k = env::<i32>("UI_K").unwrap_or_else(|| mon.as_ref().map(|m| m.scale_factor().round() as i32).unwrap_or(1)).clamp(1, 4);
-        if self.scale == 0 {
-            self.scale = pick_scale(k, self.sc.h, mon.as_ref().map(|m| m.size().height));
+        let forced_k = env::<i32>("UI_K");
+        let mut k = forced_k.unwrap_or_else(|| mon.as_ref().map(|m| m.scale_factor().round() as i32).unwrap_or(1)).clamp(1, 4);
+        let mon_h = mon.as_ref().map(|m| m.size().height);
+        let preset_scale = self.scale != 0;
+        if !preset_scale {
+            self.scale = pick_scale(k, self.sc.h, mon_h);
         }
-        let (w, h) = self.build_ui(k);
+        let (mut w, mut h) = self.build_ui(k);
+        // дробный масштаб экрана (×1,5 округляется до ×2) на невысоком экране: окно выше экрана. Тогда
+        // интерфейс на ступень мельче, пока не влезет (если масштаб не задан вручную через UI_K)
+        while forced_k.is_none() && !preset_scale && k > 1 && mon_h.is_some_and(|mh| h as u32 > mh * 95 / 100) {
+            k -= 1;
+            self.scale = pick_scale(k, self.sc.h, mon_h);
+            (w, h) = self.build_ui(k);
+            wlog(&format!("окно не влезало по высоте — интерфейс ×{k}"));
+        }
         let attrs = Window::default_attributes().with_title(i18n::t("Аптечка"));
         // WM_CLASS — чтобы док GNOME связал окно с ярлыком
         #[cfg(target_os = "linux")]
