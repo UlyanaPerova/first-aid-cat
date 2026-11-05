@@ -6,7 +6,7 @@
   <key>CFBundleDisplayName</key><string>Аптечка</string>
   <key>CFBundleExecutable</key><string>AptechkaWidget</string>
   <key>CFBundlePackageType</key><string>XPC!</string>
-  <key>CFBundleShortVersionString</key><string>0.9.0</string>
+  <key>CFBundleShortVersionString</key><string>0.9.1</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSExtension</key><dict>

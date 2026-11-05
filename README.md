@@ -96,8 +96,8 @@ Download the archive for your system from [Releases](../../releases).
 **Linux** (x86-64; glibc 2.35 or newer: Ubuntu 22.04+, Debian 12+, Fedora 36+; X11 or XWayland):
 
 ```sh
-tar xf first-aid-cat-0.9.0-linux-x86_64.tar.gz
-cd first-aid-cat-0.9.0-linux-x86_64
+tar xf first-aid-cat-0.9.1-linux-x86_64.tar.gz
+cd first-aid-cat-0.9.1-linux-x86_64
 ./install.sh              # installs to ~/.local/bin, adds a menu entry and starts the widget at login
 ./install.sh --no-widget  # same, without the widget at login
 ./install.sh --uninstall
@@ -151,7 +151,7 @@ python3 tools/i18n.py check        # every user-visible string has a translation
 packaging/dist.sh linux|windows|macos   # release archive from a built binary
 ```
 
-Every push is checked by [CI](.github/workflows/ci.yml) on Linux, Windows and macOS. A tag like `v0.9.1` builds and publishes a release for all three systems ([release.yml](.github/workflows/release.yml)).
+Every push is checked by [CI](.github/workflows/ci.yml) on Linux, Windows and macOS. A version tag (`vX.Y.Z`) builds and publishes a release for all three systems ([release.yml](.github/workflows/release.yml)).
 
 ## Documentation
 
