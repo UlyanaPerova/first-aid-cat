@@ -2636,7 +2636,12 @@ fn ping_stats(n: usize) -> Option<(f64, f64)> {
     let agent = speed_agent(4);
     let mut times: Vec<f64> = Vec::new();
     let mut run_all_pings = || -> Result<(), String> {
-        ping_once(&agent)?; // прогрев: рукопожатие и TLS
+        // прогрев: рукопожатие и TLS. Первое соединение иногда не успевает открыться, когда все проверки
+        // стартуют разом (свежая система, медленная сеть) — одна повторная попытка, прежде чем «не измерить»
+        if ping_once(&agent).is_err() {
+            thread::sleep(Duration::from_millis(500));
+            ping_once(&agent)?;
+        }
         for _ in 0..n {
             let t = Instant::now();
             ping_once(&agent)?;
@@ -2666,6 +2671,9 @@ fn mbps_of(bytes: u64, secs: f64) -> f64 {
 /// или общий объём `cap`. Скорость — по установившемуся участку: первые ~1,5 с (рукопожатие, TLS, разгон
 /// TCP) не считаются, иначе на коротком замере выходит вдвое меньше настоящей.
 #[allow(clippy::too_many_arguments)]
+/// Ответ сервера замера «слишком много запросов» (HTTP 429): замеров подряд было много, он временно ограничил адрес.
+const BUSY: &str = "сервер замера просит подождать";
+
 fn transfer(progress: &mut dyn FnMut(SpeedProgress), down: bool, streams: usize, limit_s: f64, cap: u64, chunk: u64) -> Result<Option<f64>, String> {
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::sync::{Arc, Mutex};
@@ -2679,13 +2687,27 @@ fn transfer(progress: &mut dyn FnMut(SpeedProgress), down: bool, streams: usize,
         let (total, stop, err, block) = (total.clone(), stop.clone(), err.clone(), block.clone());
         workers.push(thread::spawn(move || {
             let agent = speed_agent(8);
+            // сбой соединения (медленная или неровная сеть, VPN) — ещё попытка, пока есть время: иначе одна
+            // неудача в начале выбивала поток до конца замера, а неудачи у всех — «не измерить»
+            let mut fails = 0;
             while !stop.load(Ordering::Relaxed) && total.load(Ordering::Relaxed) < cap {
                 let r = if down { pull(&agent, chunk, &total, &stop) } else { push(&agent, chunk, &block, &total, &stop) };
                 if let Err(e) = r {
-                    if !stop.load(Ordering::Relaxed) {
-                        err.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert(e);
+                    if stop.load(Ordering::Relaxed) {
+                        break;
                     }
-                    break;
+                    // сервер просит подождать — останавливаем все потоки сразу, не долбим его дальше
+                    if e == BUSY {
+                        err.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert(e);
+                        stop.store(true, Ordering::Relaxed);
+                        break;
+                    }
+                    fails += 1;
+                    if fails >= 3 || t0.elapsed().as_secs_f64() > limit_s - 1.0 {
+                        err.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert(e);
+                        break;
+                    }
+                    thread::sleep(Duration::from_millis(300));
                 }
             }
         }));
@@ -2722,9 +2744,9 @@ fn transfer(progress: &mut dyn FnMut(SpeedProgress), down: bool, streams: usize,
             None => Ok(None),
         };
     }
-    // начало установившегося участка: 1,5 с, но не больше трети замера (на короткой лимитной — с начала)
-    let warm = (end_t / 3.0).min(1.5);
-    let (w_t, w_b) = samples.iter().copied().find(|(t, _)| *t >= warm).unwrap_or((0.0, 0));
+    // начало установившегося участка: когда пришли первые 10% данных (до этого — соединения, TLS и разгон
+    // TCP; на Windows открытие шести соединений занимает до 3 с, и с ними скорость выходила заметно ниже)
+    let (w_t, w_b) = samples.iter().copied().find(|(_, b)| *b >= end_b / 10).unwrap_or((0.0, 0));
     let steady = if end_t - w_t >= 0.5 && end_b > w_b { mbps_of(end_b - w_b, end_t - w_t) } else { mbps_of(end_b, end_t.max(0.01)) };
     Ok(Some(steady))
 }
@@ -2732,7 +2754,11 @@ fn transfer(progress: &mut dyn FnMut(SpeedProgress), down: bool, streams: usize,
 /// Один запрос скачивания: читает тело и сразу прибавляет к общему счёту.
 fn pull(agent: &ureq::Agent, chunk: u64, total: &std::sync::atomic::AtomicU64, stop: &std::sync::atomic::AtomicBool) -> Result<(), String> {
     use std::sync::atomic::Ordering;
-    let resp = agent.get(&format!("https://{SPEED_HOST}/__down?bytes={chunk}")).call().map_err(|e| e.to_string())?;
+    let resp = match agent.get(&format!("https://{SPEED_HOST}/__down?bytes={chunk}")).call() {
+        Ok(r) => r,
+        Err(ureq::Error::Status(429, _)) => return Err(BUSY.into()),
+        Err(e) => return Err(e.to_string()),
+    };
     let mut r = resp.into_reader().take(chunk);
     let mut buf = vec![0u8; 256 * 1024];
     while !stop.load(Ordering::Relaxed) {
@@ -2785,6 +2811,8 @@ fn push(
         .set("Content-Length", &chunk.to_string())
         .send(body)
     {
+        // 429 — сервер просит остановиться: это не «отдала», иначе потоки тут же слали бы ещё
+        Err(ureq::Error::Status(429, _)) => Err(BUSY.into()),
         Ok(_) | Err(ureq::Error::Status(_, _)) => Ok(()),
         Err(e) => Err(e.to_string()),
     }
@@ -2861,6 +2889,12 @@ pub fn speed_test(mut progress: impl FnMut(SpeedProgress)) -> Vec<Check> {
             Err(e) => (None, trunc(&e, 60)),
         };
         match mbps {
+            // ограничение сервера — не поломка сети: «не проверено», с понятной подсказкой
+            None if err == BUSY => out.push(
+                Check::new("net", title, INFO, BUSY)
+                    .hint("Замеров подряд было много, и сервер замера скорости временно ограничил твой адрес. Попробуй через несколько минут.")
+                    .unknown(),
+            ),
             None => {
                 let hint = if err.is_empty() { "Сервер замера недоступен." } else { err.as_str() };
                 out.push(Check::new("net", title, BAD, "не измерить").hint(hint));

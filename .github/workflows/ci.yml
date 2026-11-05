@@ -18,6 +18,7 @@ jobs:
   linux:
     name: Linux (fmt, clippy, tests, translation, Windows cross-check)
     runs-on: ubuntu-22.04
+    timeout-minutes: 40
     defaults:
       run:
         working-directory: engine
@@ -29,8 +30,8 @@ jobs:
           rustup default stable
           rustup component add rustfmt clippy
           rustup target add x86_64-pc-windows-gnu
-          sudo apt-get update -q
-          sudo apt-get install -y -q gcc-mingw-w64-x86-64
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update -q
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y -q --no-install-recommends gcc-mingw-w64-x86-64
       - name: Format
         run: cargo fmt --check
       - name: Clippy (Linux)
@@ -45,6 +46,7 @@ jobs:
   windows:
     name: Windows tests
     runs-on: windows-latest
+    timeout-minutes: 40
     defaults:
       run:
         working-directory: engine
@@ -56,7 +58,8 @@ jobs:
 
   macos:
     name: macOS tests and app build
-    runs-on: macos-14
+    runs-on: macos-15   # Xcode 16 / macOS 15 SDK: the widget uses macOS 15 APIs behind availability checks
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - run: rustup update stable --no-self-update && rustup default stable
@@ -69,6 +72,7 @@ jobs:
   audit:
     name: Dependency advisories
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - name: cargo audit

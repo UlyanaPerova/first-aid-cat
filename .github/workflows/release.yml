@@ -16,6 +16,7 @@ jobs:
     name: Linux and Windows builds
     # the oldest supported Ubuntu: the binary then needs only glibc 2.35
     runs-on: ubuntu-22.04
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - name: Toolchain
@@ -23,8 +24,8 @@ jobs:
           rustup update stable --no-self-update
           rustup default stable
           rustup target add x86_64-pc-windows-gnu
-          sudo apt-get update -q
-          sudo apt-get install -y -q gcc-mingw-w64-x86-64
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update -q
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y -q --no-install-recommends gcc-mingw-w64-x86-64
       - name: Version matches the tag
         run: |
           v=$(sed -n 's/^version = "\(.*\)"/\1/p' engine/Cargo.toml | head -1)
@@ -50,7 +51,8 @@ jobs:
 
   macos:
     name: macOS build (Apple silicon)
-    runs-on: macos-14
+    runs-on: macos-15   # Xcode 16 / macOS 15 SDK: the widget uses macOS 15 APIs behind availability checks
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - run: rustup update stable --no-self-update && rustup default stable
@@ -70,6 +72,7 @@ jobs:
     name: Publish release
     needs: [linux-windows, macos]
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     permissions:
       contents: write
     steps:
