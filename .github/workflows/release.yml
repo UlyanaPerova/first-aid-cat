@@ -28,7 +28,7 @@ jobs:
           rustup default stable
           retry rustup target add x86_64-pc-windows-gnu
           retry sudo apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update -q
-          retry sudo apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y -q --no-install-recommends gcc-mingw-w64-x86-64 rpm squashfs-tools
+          retry sudo apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y -q --no-install-recommends gcc-mingw-w64-x86-64 rpm squashfs-tools desktop-file-utils
       - name: Version matches the tag
         if: startsWith(github.ref, 'refs/tags/')
         run: |
