@@ -68,13 +68,19 @@ Every fix also shows the equivalent manual command. You can try any fix without 
 
 ## Widgets
 
-<p align="center">
-  <img src="docs/screenshots/widget_window.png" alt="Window widget" height="180">
-  <img src="docs/screenshots/widget_monitor.png" alt="Monitor widget" height="180">
-  <img src="docs/screenshots/widget_glass.png" alt="Glass widget" height="180">
-</p>
+A small desktop widget shows the essentials: network, VPN, AI, CPU and disk. Click it to open the main window. Pick its look and size in the **Widget** menu.
 
-A small desktop widget shows the essentials: network, VPN, AI, CPU and disk. It comes in three looks (Window, Monitor, Glass) and two sizes. Click it to open the main window. On macOS the widget is a native WidgetKit widget: add it through *Edit Widgets* on the desktop.
+| Look | Medium | Small |
+|---|---|---|
+| **Window** | <img src="docs/screenshots/widget_window.png" alt="Window widget, medium" height="170"> | <img src="docs/screenshots/widget_window_small.png" alt="Window widget, small" height="170"> |
+| **Monitor** | <img src="docs/screenshots/widget_monitor.png" alt="Monitor widget, medium" height="190"> | <img src="docs/screenshots/widget_monitor_small.png" alt="Monitor widget, small" height="190"> |
+| **Glass** | <img src="docs/screenshots/widget_glass.png" alt="Glass widget, medium" height="170"> | <img src="docs/screenshots/widget_glass_small.png" alt="Glass widget, small" height="190"> |
+
+On **macOS** the widget is a native WidgetKit widget (small and medium). Add it through *Edit Widgets* on the desktop.
+
+<p align="center">
+  <img src="docs/screenshots/widget_macos.png" alt="macOS WidgetKit widget" width="420">
+</p>
 
 <p align="center">
   <img src="docs/screenshots/medical_note.png" alt="Medical note from Dr. Meow" width="620">
