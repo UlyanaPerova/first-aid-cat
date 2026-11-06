@@ -59,7 +59,9 @@ pub struct Scene {
 
 pub(crate) fn load_png(dir: &str, rel: &str) -> (usize, usize, Vec<u32>) {
     let bytes = crate::art::read(dir, rel).unwrap_or_else(|| panic!("нет картинки {rel}"));
-    let dec = png::Decoder::new(std::io::Cursor::new(bytes));
+    let mut dec = png::Decoder::new(std::io::Cursor::new(bytes));
+    // палитра и 16 бит → 8-битные каналы (oxipng может сохранить картинку с палитрой)
+    dec.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
     let mut rd = dec.read_info().expect("png");
     let mut buf = vec![0; rd.output_buffer_size()];
     let info = rd.next_frame(&mut buf).expect("кадр png");
@@ -67,9 +69,11 @@ pub(crate) fn load_png(dir: &str, rel: &str) -> (usize, usize, Vec<u32>) {
     let ch = info.color_type.samples();
     let mut px = Vec::with_capacity(w * h);
     for p in buf[..w * h * ch].chunks(ch) {
-        let a = if ch == 4 { p[3] } else { 255 };
+        // 1–2 канала — оттенки серого (с прозрачностью), 3–4 — цвет
+        let (r, g, b) = if ch >= 3 { (p[0], p[1], p[2]) } else { (p[0], p[0], p[0]) };
+        let a = if ch == 4 || ch == 2 { p[ch - 1] } else { 255 };
         let a = if a > 127 { 255u32 } else { 0 };
-        px.push(a << 24 | (p[0] as u32) << 16 | (p[1] as u32) << 8 | p[2] as u32);
+        px.push(a << 24 | (r as u32) << 16 | (g as u32) << 8 | b as u32);
     }
     (w, h, px)
 }
@@ -182,5 +186,29 @@ pub fn compose(sc: &Scene, draws: &[Draw], seam: &[i32], out: &mut [u32], owner:
                 owner[ty as usize * sc.w + tx as usize] = i as u16;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod png_tests {
+    /// Картинка с палитрой (так её может сохранить oxipng) читается как RGBA: цвета из палитры, прозрачность из tRNS.
+    #[test]
+    fn palette_png_loads() {
+        let dir = std::env::temp_dir().join(format!("aptechka_png_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut bytes = Vec::new();
+        {
+            let mut enc = png::Encoder::new(&mut bytes, 2, 1);
+            enc.set_color(png::ColorType::Indexed);
+            enc.set_depth(png::BitDepth::Eight);
+            enc.set_palette(vec![10, 20, 30, 200, 100, 50]);
+            enc.set_trns(vec![0, 255]);
+            enc.write_header().unwrap().write_image_data(&[0, 1]).unwrap();
+        }
+        std::fs::write(dir.join("p.png"), &bytes).unwrap();
+        let (w, h, px) = super::load_png(dir.to_str().unwrap(), "p.png");
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!((w, h), (2, 1));
+        assert_eq!(px, vec![0x000A_141E, 0xFFC8_6432]);
     }
 }

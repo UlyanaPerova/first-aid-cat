@@ -17,6 +17,10 @@ cp "$ROOT/assets/aptechka.icns" "$APP/Contents/Resources/aptechka.icns"   # зн
 mkdir -p "$APP/Contents/Resources/en.lproj" "$APP/Contents/Resources/ru.lproj"
 printf '"CFBundleDisplayName" = "First Aid Cat";\n"CFBundleName" = "First Aid Cat";\n' > "$APP/Contents/Resources/en.lproj/InfoPlist.strings"
 printf '"CFBundleDisplayName" = "Аптечка";\n"CFBundleName" = "Аптечка";\n' > "$APP/Contents/Resources/ru.lproj/InfoPlist.strings"
+# лицензии и уведомления — внутри приложения (Contents/Resources); в публичной копии они в корне, в рабочей — в release/
+for f in LICENSE NOTICE LICENSE-ART.md THIRD_PARTY_NOTICES.md; do
+    if [ -f "$ROOT/$f" ]; then cp "$ROOT/$f" "$APP/Contents/Resources/$f"; elif [ -f "$ROOT/release/$f" ]; then cp "$ROOT/release/$f" "$APP/Contents/Resources/$f"; fi
+done
 
 log "виджет (Swift)…"
 SDK="$(xcrun --sdk macosx --show-sdk-path)"

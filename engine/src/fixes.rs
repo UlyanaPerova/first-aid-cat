@@ -563,7 +563,9 @@ fn resource(id: &str) -> &str {
         "net_reconnect" | "dns_flush" | "proxy_off" | "happ_restart" | "outline_restart" | "proton_restart" | "wifi_on" | "win_proxy_off"
         | "win_dns_flush" | "win_winhttp_reset" | "mac_proxy_off" | "mac_dns_flush" => "network",
         "env_proxy_off" | "footprint_history" | "footprint_lock" => "userfiles",
-        "theme_restore" | "snapshot" | "ext_restart" | "ext_enable" | "dock_repair" | "kb_switch" => "desktop",
+        "theme_restore" | "win_theme_restore" | "mac_theme_restore" | "snapshot" | "ext_restart" | "ext_enable" | "dock_repair" | "kb_switch" => {
+            "desktop"
+        }
         other => other,
     }
 }
@@ -680,6 +682,7 @@ pub fn validate(id: &str, arg: Option<&str>) -> Result<(), String> {
         "ext_restart" | "ext_enable" => chars(a, "._@-", 128) && a.contains('@'),
         "dock_repair" => a.is_empty() || chars(a, "._@-", 128) && a.contains('@'),
         "theme_restore" => crate::diag::theme_key_known(a),
+        "win_theme_restore" | "mac_theme_restore" => look_known(a),
         "printer_enable" => chars(a, "_.@-", 127),
         "env_proxy_off" => crate::netproxy::env_spec_ok(a),
         "git_proxy_off" => matches!(a, "http.proxy" | "https.proxy"),
@@ -900,6 +903,7 @@ fn win_apply(id: &str, arg: Option<&str>) -> (bool, String) {
     let a = arg.unwrap_or("");
     let ok_svc = |n: &str| !n.is_empty() && n.chars().all(|c| c.is_ascii_alphanumeric() || " -_".contains(c));
     match id {
+        "win_theme_restore" => crate::looksnap::restore(a),
         "win_proxy_off" => done(psh(WIN_PROXY_OFF, 30), "Системный прокси выключен. Браузер может понадобиться перезапустить."),
         "win_dns_flush" => done(sh(&["ipconfig", "/flushdns"], 20), "Кэш DNS очищен."),
         "win_winhttp_reset" => done(psh_admin("netsh winhttp reset proxy", 60), "Прокси WinHTTP сброшен."),
@@ -983,6 +987,7 @@ fn mac_admin(cmd: &str, timeout: u64) -> (bool, String) {
 #[cfg(target_os = "macos")]
 fn mac_apply(id: &str, arg: Option<&str>) -> (bool, String) {
     match id {
+        "mac_theme_restore" => crate::looksnap::restore(arg.unwrap_or("")),
         "mac_proxy_off" => {
             let script = crate::mac::proxy_off_script();
             let (ok, m) = sh(&["sh", "-c", &script], 60);
@@ -1206,6 +1211,7 @@ pub fn manual(id: &str, arg: Option<&str>) -> Option<String> {
     {
         Some(match id {
             "win_proxy_off" => "Set-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings' ProxyEnable 0".into(),
+            "win_theme_restore" => crate::looksnap::restore_cmd(a, crate::diag::load_snapshot().key(a)?)?,
             "win_winhttp_reset" => "netsh winhttp reset proxy   # PowerShell от администратора".into(),
             "win_svc_restart" => format!("Restart-Service -Force {}   # от администратора", crate::agents::ps_quote(a)),
             "win_update_reset" => "Stop-Service wuauserv,bits -Force; Rename-Item $env:SystemRoot\\SoftwareDistribution SoftwareDistribution.old; Start-Service bits,wuauserv".into(),
@@ -1232,6 +1238,7 @@ pub fn manual(id: &str, arg: Option<&str>) -> Option<String> {
     {
         Some(match id {
             "mac_proxy_off" => crate::mac::proxy_off_script(),
+            "mac_theme_restore" => crate::looksnap::restore_cmd(a, crate::diag::load_snapshot().key(a)?)?,
             "mac_dns_flush" => "sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder".into(),
             "mac_finder_restart" => "killall Finder".into(),
             "mac_dock_restart" => "killall Dock".into(),
@@ -1276,7 +1283,7 @@ pub fn what_happens(id: &str) -> &'static str {
         "proxy_off" => "Интернет пойдёт напрямую, без прокси. VPN-клиент сможет включить его снова.",
         "ext_enable" => "Включу расширение обратно.",
         "ext_restart" => "Выключу и сразу включу расширение.",
-        "theme_restore" => "Верну эту настройку как в эталоне.",
+        "theme_restore" | "win_theme_restore" | "mac_theme_restore" => "Верну эту настройку как в эталоне.",
         "win_proxy_off" => "Выключу системный прокси Windows — интернет пойдёт напрямую.",
         "mac_proxy_off" => "Выключу прокси на всех сетевых службах — интернет пойдёт напрямую. Если macOS попросит — введи пароль.",
         "win_cleanmgr" => "Открою встроенную «Очистку диска».",
@@ -1646,6 +1653,19 @@ fn clock_after(r: (bool, String)) -> (bool, String) {
     }
 }
 
+/// Ключ темы Windows/macOS из нашего списка (looksnap.rs); на других системах таких нет.
+fn look_known(a: &str) -> bool {
+    #[cfg(any(windows, target_os = "macos"))]
+    {
+        crate::looksnap::known(a)
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
+    {
+        let _ = a;
+        false
+    }
+}
+
 /// Строка в журнал пробного режима (для модулей, которые сами выполняют действия).
 pub fn log_dry(what: &str) {
     log(&format!("DRY_RUN: выполнила бы: {what}"));
@@ -1654,7 +1674,9 @@ pub fn log_dry(what: &str) {
 /// Подходит ли действие этой системе: win_* — Windows, mac_* — macOS, общие — везде, остальные — Linux.
 /// (Иначе на Mac с Homebrew-gsettings запускалось бы лечение GNOME.)
 pub fn for_this_os(id: &str) -> bool {
-    const COMMON: [&str; 7] = ["dupes_scan", "dupes_trash", "git_proxy_off", "npm_proxy_off", "open_url", "footprint_lock", "footprint_history"];
+    // «snapshot» — эталон тем: на Linux (GNOME), Windows и macOS свой набор ключей (diag::capture_snapshot)
+    const COMMON: [&str; 8] =
+        ["dupes_scan", "dupes_trash", "git_proxy_off", "npm_proxy_off", "open_url", "footprint_lock", "footprint_history", "snapshot"];
     if COMMON.contains(&id) {
         true
     } else {

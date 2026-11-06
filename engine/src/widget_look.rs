@@ -59,10 +59,19 @@ impl Size {
 /// Вид и размер из настроек (ui.json: widget_style, widget_size).
 pub fn chosen() -> (Style, Size) {
     let v = crate::prefs::load();
-    (
-        Style::from_id(v.get("widget_style").and_then(|x| x.as_str()).unwrap_or("window")),
-        Size::from_id(v.get("widget_size").and_then(|x| x.as_str()).unwrap_or("medium")),
-    )
+    let style = Style::from_id(v.get("widget_style").and_then(|x| x.as_str()).unwrap_or("window"));
+    let size = Size::from_id(v.get("widget_size").and_then(|x| x.as_str()).unwrap_or("medium"));
+    (style, fit_size(style, size))
+}
+
+/// Есть ли у вида этот размер на этой системе: среднее «Стекло» — только на macOS (показ для WidgetKit),
+/// в Linux и Windows «Стекло» всегда маленькое.
+pub fn fit_size(style: Style, size: Size) -> Size {
+    if style == Style::Glass && !cfg!(target_os = "macos") {
+        Size::Small
+    } else {
+        size
+    }
 }
 
 /// Оживление виджета включено (ui.json widget_anim, по умолчанию да; WIDGET_ANIM=0 — выключить).

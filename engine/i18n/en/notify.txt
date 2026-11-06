@@ -1,0 +1,3 @@
+# notify.rs:43
+ru: Аптечка: новая беда в «{}»
+en: First Aid Cat: new problem in “{}”

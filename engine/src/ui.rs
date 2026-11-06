@@ -116,6 +116,10 @@ pub enum Hit {
     SessionOpen(u8),
     BalloonClose,
     Fix(u16),
+    /// «Игнорировать» / «Не игнорировать» у строки
+    Ignore(u16),
+    /// «Игнорировать всё» (все красные и жёлтые) / «Вернуть всё»
+    IgnoreAll,
     Row(u16),
     Art,
     /// граница между таблицей и журналом (тянется мышью)
@@ -181,6 +185,8 @@ enum MenuAct {
     ToggleLog,
     Fix(u8),
     Spravka,
+    /// лицензии и уведомления (licenses.rs): положить в папку сеанса и открыть
+    Licenses,
     About,
     WidgetShow,
     WidgetStyle(u8),
@@ -241,7 +247,10 @@ fn menus() -> Vec<(&'static str, Vec<(String, MenuAct)>)> {
         ("Вид", view),
         ("Виджет", widget_menu()),
         ("Лечение", fixes_menu),
-        ("Справка", vec![("Справка от Мяудоктора".into(), MenuAct::Spravka), ("О программе".into(), MenuAct::About)]),
+        (
+            "Справка",
+            vec![("Справка от Мяудоктора".into(), MenuAct::Spravka), ("Лицензии".into(), MenuAct::Licenses), ("О программе".into(), MenuAct::About)],
+        ),
     ];
     // НЕ ВОЗВРАЩАТЬ меню «Виджет» на macOS (даже ради одинаковых меню на всех системах): там виджет —
     // системный (WidgetKit), его добавляют сами через «Изменить виджеты», вид у него один — «Окно»
@@ -296,6 +305,8 @@ pub enum Cmd {
     WidgetChanged,
     /// Сменили язык: заголовок окна, виджет macOS.
     LangChanged,
+    /// Строку велели игнорировать (или перестать): пересчитать итог, кота, экраны.
+    IgnoreChanged,
 }
 
 /// Открытая «Справка от Мяудоктора»: текст и готовая раскладка листа.
@@ -344,6 +355,8 @@ struct St {
     checks: Vec<Check>,
     speed_checks: Vec<Check>,
     rows: Vec<Check>,
+    /// названия игнорируемых проверок (prefs::ignored), обновляются вместе со строками
+    ignored: std::collections::HashSet<String>,
     tab: u8,
     sessions: Vec<Session>,
     checking: bool,
@@ -406,6 +419,30 @@ struct SpGeo {
 }
 
 impl St {
+    /// Названия нынешних красных и жёлтых строк (игнорируемые уже «для сведения» — их тут нет).
+    fn problem_titles(&self) -> Vec<String> {
+        let mut v: Vec<String> = self
+            .checks
+            .iter()
+            .chain(self.speed_checks.iter())
+            .filter(|c| matches!(c.status.as_str(), "bad" | "warn") && unit_on(c.unit))
+            .map(|c| c.title.clone())
+            .collect();
+        v.dedup();
+        v
+    }
+
+    /// Надпись кнопки «Игнорировать всё»: есть беды — игнорировать их, нет, но что-то игнорируется — вернуть.
+    fn ignore_all_label(&self) -> Option<&'static str> {
+        if !self.problem_titles().is_empty() {
+            Some("Игнорировать всё")
+        } else if !self.ignored.is_empty() {
+            Some("Вернуть всё")
+        } else {
+            None
+        }
+    }
+
     fn sp_geo(&self) -> SpGeo {
         let k = self.k;
         let sb = 17 * k;
@@ -617,6 +654,7 @@ impl Ui {
             art_h,
             checks: Vec::new(),
             speed_checks: Vec::new(),
+            ignored: Default::default(),
             rows: Vec::new(),
             tab: 0,
             sessions: Vec::new(),
@@ -800,9 +838,10 @@ impl Ui {
     fn rebuild_rows(&mut self) {
         // строки перестраиваются (пришли новые проверки) — начатое нажатие на кнопку строки отменяется:
         // кнопка по номеру строки указала бы уже на другую починку
-        if matches!(self.st.pressed, Some(Hit::Fix(_)) | Some(Hit::Row(_))) {
+        if matches!(self.st.pressed, Some(Hit::Fix(_)) | Some(Hit::Ignore(_)) | Some(Hit::Row(_))) {
             self.st.pressed = None;
         }
+        self.st.ignored = crate::prefs::ignored();
         if self.st.tab == SETTINGS_TAB {
             self.st.rows = settings_rows();
             let m = self.st.scroll_max(0);
@@ -1412,6 +1451,30 @@ impl Ui {
                     }
                 }
             }
+            Hit::IgnoreAll => {
+                let probs = self.st.problem_titles();
+                if !probs.is_empty() {
+                    crate::prefs::set_ignored(&probs, true);
+                    self.say(&format!("Не считаю бедой: {}. Кот не грустит. Перезапуск приложения или «Вернуть всё» — снова слежу.", probs.len()));
+                } else {
+                    let all: Vec<String> = self.st.ignored.iter().cloned().collect();
+                    crate::prefs::set_ignored(&all, false);
+                    self.say("Снова слежу за всем.");
+                }
+                cmds.push(Cmd::IgnoreChanged);
+            }
+            Hit::Ignore(i) => {
+                if let Some(title) = self.st.rows.get(i as usize).map(|r| r.title.clone()) {
+                    let on = !self.st.ignored.contains(&title);
+                    crate::prefs::set_ignored(std::slice::from_ref(&title), on);
+                    self.say(&if on {
+                        format!("{title} — больше не считаю бедой, кот не грустит. Вернуть — «Не игнорировать».")
+                    } else {
+                        format!("{title} — снова слежу.")
+                    });
+                    cmds.push(Cmd::IgnoreChanged);
+                }
+            }
             Hit::Row(i) => {
                 if let Some(r) = self.st.rows.get(i as usize) {
                     let msg = format!("{}: {}.{}", r.title, r.value, if r.detail.is_empty() { String::new() } else { format!(" {}", r.detail) });
@@ -1494,6 +1557,10 @@ impl Ui {
             }
             MenuAct::WidgetSize(i) => {
                 crate::prefs::update(|v| v["widget_size"] = serde_json::json!(if i == 0 { "small" } else { "medium" }));
+                let (style, _) = crate::widget_look::chosen();
+                if i == 1 && crate::widget_look::fit_size(style, crate::widget_look::Size::Medium) == crate::widget_look::Size::Small {
+                    self.say("«Стекло» бывает только маленьким. Средний размер — у «Окна» и «Монитора».");
+                }
                 vec![Cmd::WidgetChanged]
             }
             MenuAct::Lang(i) => {
@@ -1515,6 +1582,14 @@ impl Ui {
                     2 => "Проверяю чаще.",
                     _ => "Проверяю как обычно.",
                 });
+                Vec::new()
+            }
+            MenuAct::Licenses => {
+                match crate::licenses::open() {
+                    Ok((dir, true)) => self.say(&format!("Открыла папку с лицензиями: {}", dir.display())),
+                    Ok((dir, false)) => self.say(&format!("Лицензии лежат здесь: {}", dir.display())),
+                    Err(e) => self.say(&format!("Не смогла положить лицензии: {e}")),
+                }
                 Vec::new()
             }
             MenuAct::About => {
@@ -1737,6 +1812,12 @@ impl Ui {
                 let r = row(i)?;
                 (A11yRole::Button, format!("{} — {}", tr(&r.fixes.first()?.label), tr(&r.title)))
             }
+            Hit::IgnoreAll => (A11yRole::Button, self.st.ignore_all_label()?.to_string()),
+            Hit::Ignore(i) => {
+                let r = row(i)?;
+                let l = if self.st.ignored.contains(&r.title) { "Не игнорировать" } else { "Игнорировать" };
+                (A11yRole::Button, format!("{} — {}", tr(l), tr(&r.title)))
+            }
             Hit::Row(i) => {
                 let r = row(i)?;
                 let mut t = format!("{}: {}, {}", tr(&r.title), tr(status_word(&r.status)), tr(&r.value));
@@ -1793,6 +1874,18 @@ impl Ui {
             Hit::CopyResume => Some("Скопировать команду, чтобы продолжить эту сессию".into()),
             Hit::BalloonClose => Some("Скрыть подсказку".into()),
             Hit::Fix(i) => row(i).and_then(|r| r.fixes.first()).map(|f| f.label.clone()),
+            Hit::IgnoreAll => Some(if self.st.problem_titles().is_empty() {
+                "Снова считать бедой всё, что игнорируется".into()
+            } else {
+                "Не считать бедой ни одну из нынешних проблем (до перезапуска приложения)".into()
+            }),
+            Hit::Ignore(i) => row(i).map(|r| {
+                if self.st.ignored.contains(&r.title) {
+                    "Снова считать это бедой".into()
+                } else {
+                    "Игнорировать: не считать это бедой (кот не будет грустить)".into()
+                }
+            }),
             Hit::Row(i) => row(i).filter(|r| !r.detail.is_empty()).map(|r| r.detail.clone()),
             _ => None,
         }
@@ -1853,9 +1946,12 @@ impl Ui {
     pub fn script(&mut self, what: &str) -> Vec<Cmd> {
         self.ensure_hits();
         let mut cmds = Vec::new();
-        if let Some(n) = what.strip_prefix("fix") {
-            let i: u16 = n.parse().unwrap_or(0);
-            let h = Hit::Fix(i);
+        // fix<N> — кнопка починки строки N, ign<N> — её «Игнорировать»
+        if let Some(h) = what
+            .strip_prefix("fix")
+            .map(|n| Hit::Fix(n.parse().unwrap_or(0)))
+            .or_else(|| what.strip_prefix("ign").map(|n| Hit::Ignore(n.parse().unwrap_or(0))))
+        {
             if self.hits.iter().any(|(_, x)| *x == h) {
                 cmds.extend(self.activate(h));
             }
@@ -1874,6 +1970,7 @@ impl Ui {
                     .and_then(|v| v.parse().ok())
                     .map(Hit::Tool)
                     .or_else(|| n.strip_prefix("fix").and_then(|v| v.parse().ok()).map(Hit::Fix))
+                    .or_else(|| n.strip_prefix("ign").and_then(|v| v.parse().ok()).map(Hit::Ignore))
                     .or_else(|| n.strip_prefix("row").and_then(|v| v.parse().ok()).map(Hit::Row)),
             };
             if let Some(h) = hit {
@@ -2539,10 +2636,24 @@ impl P<'_, '_> {
         } else {
             ["Проверка", "Статус", "Действие"]
         };
+        // «Игнорировать всё» — в заголовке колонки «Действие» (действие сразу над всеми строками), когда есть
+        // что игнорировать или что вернуть; иначе там просто «Действие»
+        let ign_label = if self.s.tab == SETTINGS_TAB { None } else { self.s.ignore_all_label() };
+        let ign = Rect::new(inner.x + cols[2].0, head.y, cols[2].1, head.h);
+        if ign_label.is_some() {
+            self.hit(ign, Hit::IgnoreAll);
+        }
         if self.painting(head) {
             let px = self.fs(13);
             for (i, t) in titles.iter().enumerate() {
                 let cr = Rect::new(inner.x + cols[i].0, head.y, cols[i].1, head.h);
+                if i == 2 {
+                    if let Some(l) = ign_label {
+                        let l = self.g.fonts.fit(l, cr.w - 10 * k, px, false);
+                        self.button(cr, &l, Hit::IgnoreAll, true, false);
+                        continue;
+                    }
+                }
                 self.c.raised(cr, FACE);
                 self.text_l(cr, 8 * k, t, BLACK, px, false);
             }
@@ -2574,14 +2685,29 @@ impl P<'_, '_> {
                     || row.title.starts_with("Канал")
                     || row.key == "settings"
                     || row.fixes.first().is_some_and(|f| ON_DEMAND.contains(&f.id.as_str())));
-            let btn = Rect::new(view.x + cols[2].0 + 4 * k, rr.y + 2 * k, cols[2].1 - 8 * k, rh - 4 * k);
+            let mut btn = Rect::new(view.x + cols[2].0 + 4 * k, rr.y + 2 * k, cols[2].1 - 8 * k, rh - 4 * k);
+            // «Игнорировать» — у красных и жёлтых строк; у игнорируемой — «Не игнорировать» (вместо починки)
+            let ignored = self.s.tab != SETTINGS_TAB && self.s.ignored.contains(&row.title);
+            let show_fix = show_fix && !ignored;
+            let can_ignore = self.s.tab != SETTINGS_TAB && (ignored || matches!(row.status.as_str(), "bad" | "warn"));
+            // рядом с починкой — маленькая квадратная «×», без починки — кнопка во всю ширину
+            let ign = if can_ignore && show_fix {
+                let side = btn.h;
+                btn.w -= side + 4 * k;
+                Rect::new(btn.right() + 4 * k, btn.y, side, side)
+            } else {
+                btn
+            };
             if show_fix {
                 self.hit(btn.intersect(view), Hit::Fix(i as u16));
+            }
+            if can_ignore {
+                self.hit(ign.intersect(view), Hit::Ignore(i as u16));
             }
             if !self.painting(vis) {
                 continue;
             }
-            let hov = self.hover(Hit::Row(i as u16)) || self.hover(Hit::Fix(i as u16));
+            let hov = self.hover(Hit::Row(i as u16)) || self.hover(Hit::Fix(i as u16)) || self.hover(Hit::Ignore(i as u16));
             if hov {
                 self.c.fill(rr, 0xEEF3FB);
             }
@@ -2595,7 +2721,19 @@ impl P<'_, '_> {
                 let label = row.fixes.first().map(|f| f.label.clone()).unwrap_or_default();
                 let label = self.g.fonts.fit(&label, btn.w - 12 * k, px, false);
                 self.button(btn, &label, Hit::Fix(i as u16), true, false);
-            } else {
+            }
+            if can_ignore {
+                let label = if ignored {
+                    "Не игнорировать"
+                } else if show_fix {
+                    "×"
+                } else {
+                    "Игнорировать"
+                };
+                let label = self.g.fonts.fit(label, ign.w - 6 * k, px, false);
+                self.button(ign, &label, Hit::Ignore(i as u16), true, false);
+            }
+            if !show_fix && !can_ignore {
                 self.text_l(Rect::new(rr.x + cols[2].0, rr.y, cols[2].1, rh), 8 * k, "—", BLACK, px, false);
             }
         }
@@ -3176,6 +3314,23 @@ mod tests {
         u.set_checks(vec![chk("net", "B", "bad", "", &[("b", "B", None)])], false);
         let c = u.mouse_up(x, y);
         assert!(!c.iter().any(|c| matches!(c, Cmd::RunFix { id, .. } if id == "b")));
+    }
+
+    /// «Игнорировать»: у беды без починки — кнопка во всю ширину, у беды с починкой — рядом с ней (не внахлёст),
+    /// у игнорируемой строки — только «Не игнорировать».
+    #[test]
+    fn ignore_buttons() {
+        let mut u = Ui::new(1, 300, 500);
+        u.set_checks(vec![chk("net", "A", "bad", "", &[]), chk("net", "B", "warn", "", &[("b", "B", None)]), chk("net", "C", "ok", "", &[])], false);
+        u.ensure_hits();
+        let has = |u: &Ui, h: Hit| u.hits.iter().any(|(_, x)| *x == h);
+        let (a, b) = (u.hit_rect(Hit::Ignore(0)), u.hit_rect(Hit::Ignore(1)));
+        assert!(has(&u, Hit::Ignore(0)) && has(&u, Hit::Ignore(1)) && !has(&u, Hit::Ignore(2)));
+        assert!(b.w < a.w && u.hit_rect(Hit::Fix(1)).intersect(b).is_empty());
+        u.st.ignored.insert("B".into());
+        u.hits_ok = false;
+        u.ensure_hits();
+        assert!(has(&u, Hit::Ignore(1)) && !has(&u, Hit::Fix(1)));
     }
 
     /// Новое название сессии (тот же номер) доходит до окна.

@@ -25,7 +25,7 @@ The program works in Russian internally, and logic compares Russian strings. Eng
 - Add its English to `engine/i18n/en/<module>.txt` (`ru:` / `en:` pairs; `{}` for substituted values; `one|few|many` → `singular|plural` for numbers). Follow `engine/i18n/GLOSSARY.md`.
 - Strings that are never shown (logic, layer names, debug logs) go to `engine/i18n/ignore/<module>.txt`.
 - Translate parts **before** they are joined or cut. A joined or truncated phrase can't be found in the table.
-- `python3 tools/i18n.py check` must print `0`.
+- `python3 tools/i18n.py check` (from the repository root) must print `0`.
 
 ## Before you finish
 

@@ -365,3 +365,9 @@ en: Open and frozen apps
 # catalog.rs:675
 ru: Закрыть зависшую программу, которая не закрывается; зависания и падения за неделю
 en: Close a frozen app that won't close; freezes and crashes over the past week
+
+ru: Не сбились ли тема, цвет акцента, обои и панель задач
+en: Whether the theme, accent color, wallpaper or taskbar changed
+
+ru: Не сбились ли оформление, цвета и Dock
+en: Whether the appearance, colors or Dock changed

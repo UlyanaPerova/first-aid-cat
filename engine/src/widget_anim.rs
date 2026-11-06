@@ -1,5 +1,5 @@
 //! Оживление виджетов «Окно» и «Монитор»: облачко с сердцем покачивается, искорки мерцают, кот на мониторе
-//! дышит, моргает и даёт потянуть себя за ушко. Кадры считаются по времени чистыми функциями (их проверяют
+//! дышит, моргает и даёт потянуть себя за ушко (на маленьком «Окне» — тоже за ушко). Кадры считаются по времени чистыми функциями (их проверяют
 //! тесты), а на картинку ложатся готовой «накладкой» поверх неподвижного холста: целые пиксели, без сглаживания,
 //! только в нескольких прямоугольниках. Места (в клетках сетки, как поля) — в "anim" разметки вида
 //! (art/layers/виджет/целиком/<вид>_<размер>.json):
@@ -7,9 +7,11 @@
 //!   "sparks": [{"rect"}]       — искорки: прямоугольники с чистым левым столбцом (фон берётся оттуда);
 //!   "breath": {"rect", "hold", "fx"} — тело кота: вся область поднимается на 1 точку, ниже «hold» — плавно к нулю
 //!                                (шов дыхания), по бокам — на «fx» клеток к нулю;
-//!   "blink":  [{"rect"}]       — глаза: радужка закрашивается кожей снизу (веко остаётся линией);
+//!   "blink":  {"half", "closed"} — моргание нарисованными кадрами (как у кота в окне): глаза полуприкрыты и
+//!                                закрыты, каждый кадр — {"rect", "file"}, как «shy»;
 //!   "ears":   [{"tip", "r", "dir", "hit"}] — ухо: от кончика «tip» в радиусе «r» картинка тянется на «dir»
-//!                                клеток (плавно к нулю), «hit» — куда нажимать.
+//!                                клеток (плавно к нулю), «hit» — куда нажимать; «clip» (необязательно) — тянется
+//!                                только внутри этого прямоугольника (у «Окна» уши у рамки — рамка остаётся на месте).
 
 use crate::gfx::Rect;
 use crate::widget_px::Px;
@@ -28,11 +30,19 @@ const EAR_IN: f64 = 0.18;
 const EAR_OUT: f64 = 0.30;
 /// Дольше этого ухо не держим, даже если кнопку не отпустили.
 pub const EAR_HOLD_MAX: f64 = 2.5;
+/// Сколько кот ещё смущён (мордочка «shy») после того, как ухо отпустили: ухо уже вернулось, а он жмурится
+/// (в приложении румянец держится ~3 с; в виджете чуть короче — он маленький)
+pub const SHY_AFTER: f64 = 1.5;
 const BUBBLE_PERIOD: f64 = 3.0;
 const SPARK_PERIOD: [f64; MAX_SPARK] = [2.6, 1.9, 3.1, 2.3];
 const SPARK_DELAY: [f64; MAX_SPARK] = [0.8, 1.6, 2.4, 0.4];
-const BLINK_SLOT: f64 = 4.1;
-const BLINK_LEN: f64 = 0.2;
+/// Моргание: одно на каждые BLINK_SLOT секунд (в случайном месте), кадры полуприкрыты / закрыты / полуприкрыты.
+/// Кадры короче шага перерисовки (1/FPS): виджет просыпается точно к смене кадра (blink_next_edge).
+const BLINK_SLOT: f64 = 5.0;
+const BLINK_HALF: f64 = 0.06;
+const BLINK_CLOSED: f64 = 0.08;
+/// второе моргание двойного — через столько секунд после начала первого
+const BLINK_AGAIN: f64 = 0.4;
 
 /// Кадр оживления: всё в целых шагах, чтобы одинаковые кадры не перерисовывать.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -42,7 +52,8 @@ pub struct Anim {
     pub spark: [u8; MAX_SPARK],
     /// на сколько точек поднято тело (дыхание)
     pub breath: i32,
-    pub blink: bool,
+    /// моргание: 0 — глаза открыты, 1 — полуприкрыты, 2 — закрыты
+    pub blink: u8,
     /// оттяжка левого и правого уха, 0..=EAR_STEPS
     pub ear: [u8; 2],
     /// смущение (тянут за ухо): мордочка из нарисованного кадра «shy» — зажмурился, румянец
@@ -52,7 +63,7 @@ pub struct Anim {
 impl Default for Anim {
     /// Покой: всё как нарисовано (картинка без оживления).
     fn default() -> Anim {
-        Anim { bubble: 0, spark: [SPARK_FULL; MAX_SPARK], breath: 0, blink: false, ear: [0; 2], shy: false }
+        Anim { bubble: 0, spark: [SPARK_FULL; MAX_SPARK], breath: 0, blink: 0, ear: [0; 2], shy: false }
     }
 }
 
@@ -74,7 +85,7 @@ impl Caps {
             bubble: an["bubble"].is_object(),
             sparks: n("sparks").min(MAX_SPARK),
             breath: an["breath"].is_object(),
-            blink: n("blink") > 0,
+            blink: an["blink"].is_object(),
             ears: n("ears").min(2),
         }
     }
@@ -118,18 +129,47 @@ fn mix64(mut z: u64) -> u64 {
     z ^ (z >> 31)
 }
 
-/// Моргание: раз в несколько секунд (в «окне» по 4,1 с, внутри окна — случайно, но всегда одинаково),
-/// изредка двойное. Глаза закрыты BLINK_LEN секунд.
-pub fn blinking(t: f64) -> bool {
+/// Кадр моргания в момент t (как у кота в окне, life.rs): 0 — открыты, 1 — полуприкрыты, 2 — закрыты.
+/// Раз в 2–6 с (случайно, но для одного t всегда одинаково), изредка двойное.
+/// Начало моргания в слоте n и двойное ли оно.
+fn blink_start(n: u64) -> (f64, bool) {
+    let h = mix64(n);
+    (n as f64 * BLINK_SLOT + 1.0 + (h % 1000) as f64 / 1000.0 * 3.0, (h >> 20).is_multiple_of(12))
+}
+
+/// Через сколько секунд после t сменится кадр моргания (None — не скоро: дальше ближайшего слота).
+pub fn blink_next_edge(t: f64) -> Option<f64> {
+    let t = t.max(0.0);
+    let n = (t / BLINK_SLOT).floor() as u64;
+    let edges = [0.0, BLINK_HALF, BLINK_HALF + BLINK_CLOSED, 2.0 * BLINK_HALF + BLINK_CLOSED];
+    (n..n + 2)
+        .flat_map(|k| {
+            let (s, double) = blink_start(k);
+            let again = if double { Some(s + BLINK_AGAIN) } else { None };
+            [Some(s), again].into_iter().flatten().flat_map(move |b| edges.map(|e| b + e))
+        })
+        .filter(|e| *e > t)
+        .map(|e| e - t)
+        .reduce(f64::min)
+}
+
+pub fn blink_frame(t: f64) -> u8 {
     if t < 0.0 {
-        return false;
+        return 0;
     }
     let n = (t / BLINK_SLOT).floor() as u64;
-    let h = mix64(n);
-    let start = n as f64 * BLINK_SLOT + 0.8 + (h % 1000) as f64 / 1000.0 * 2.6;
+    let (start, double) = blink_start(n);
+    let one = |d: f64| {
+        if (BLINK_HALF..BLINK_HALF + BLINK_CLOSED).contains(&d) {
+            2
+        } else if (0.0..2.0 * BLINK_HALF + BLINK_CLOSED).contains(&d) {
+            1
+        } else {
+            0
+        }
+    };
     let d = t - start;
-    let double = (h >> 20).is_multiple_of(7);
-    (0.0..BLINK_LEN).contains(&d) || (double && (0.45..0.45 + BLINK_LEN).contains(&d))
+    one(d).max(if double { one(d - BLINK_AGAIN) } else { 0 })
 }
 
 /// Оттяжка уха от 0 до 1: нажато `held` секунд (тянется за EAR_IN), после отпускания — вернулось за EAR_OUT.
@@ -160,7 +200,7 @@ impl Anim {
             a.breath = breath_px(t);
         }
         if caps.blink {
-            a.blink = blinking(t);
+            a.blink = blink_frame(t);
         }
         a
     }
@@ -329,23 +369,6 @@ fn spark(p: &mut Px, g: &Geo, spec: &Value, lvl: u8) {
     }
 }
 
-/// Глаз закрыт: всё в прямоугольнике (радужка, блик) — цвета кожи точкой ниже, над ним остаётся линия века.
-fn blink(p: &mut Px, g: &Geo, spec: &Value) {
-    let rect = inside(p, g.rect(&spec["rect"]));
-    if rect.is_empty() || rect.bottom() >= p.h {
-        return;
-    }
-    let below = Snap::take(p, Rect::new(rect.x, rect.bottom(), rect.w, 1));
-    for y in rect.y..rect.bottom() {
-        for x in rect.x..rect.right() {
-            let v = below.at(x, rect.bottom());
-            if p.on[(y * p.w + x) as usize] {
-                p.rgb[(y * p.w + x) as usize] = v.0;
-            }
-        }
-    }
-}
-
 fn smooth(t: f64) -> f64 {
     let t = t.clamp(0.0, 1.0);
     t * t * (3.0 - 2.0 * t)
@@ -361,7 +384,10 @@ fn ear(p: &mut Px, g: &Geo, spec: &Value, lvl: u8) {
     let ty = g.rowy(g.num(&spec["tip"][1]) as i32) as f64 + cs / 2.0;
     let r = g.num(&spec["r"]) * cs;
     let (ux, uy) = (g.num(&spec["dir"][0]) * cs * k, g.num(&spec["dir"][1]) * cs * k);
-    let rect = Rect::new((tx - r).floor() as i32, (ty - r).floor() as i32, (2.0 * r).ceil() as i32 + 1, (2.0 * r).ceil() as i32 + 1);
+    let mut rect = Rect::new((tx - r).floor() as i32, (ty - r).floor() as i32, (2.0 * r).ceil() as i32 + 1, (2.0 * r).ceil() as i32 + 1);
+    if spec.get("clip").is_some_and(|c| c.is_array()) {
+        rect = rect.intersect(g.rect(&spec["clip"]));
+    }
     let margin = ux.abs().max(uy.abs()).ceil() as i32 + 2;
     warp(p, rect, margin, |x, y| {
         let d = ((x as f64 - tx).powi(2) + (y as f64 - ty).powi(2)).sqrt();
@@ -408,10 +434,10 @@ pub fn apply(p: &mut Px, spec: &Value, cs: i32, a: &Anim) {
     }
     // смущение: нарисованная мордочка (ChatGPT по образцу «румянца» приложения, подогнана под клетки вида);
     // она закрывает глаза сама — моргание поверх не нужно
-    let shy = a.shy && an.get("shy").is_some_and(|s| shy_face(p, &g, s));
-    if a.blink && !shy {
-        for e in an["blink"].as_array().into_iter().flatten() {
-            blink(p, &g, e);
+    let shy = a.shy && an.get("shy").is_some_and(|s| patch(p, &g, s));
+    if a.blink > 0 && !shy {
+        if let Some(f) = an["blink"].get(if a.blink >= 2 { "closed" } else { "half" }) {
+            patch(p, &g, f);
         }
     }
     if let Some(b) = an.get("breath").filter(|b| b.is_object()) {
@@ -419,9 +445,9 @@ pub fn apply(p: &mut Px, spec: &Value, cs: i32, a: &Anim) {
     }
 }
 
-/// Кадр «shy»: картинка размером с rect (в клетках), прозрачное — не трогать. Клетка — сплошной прямоугольник
-/// cs × (высота строки), как клетки самого вида. false — нет картинки (тогда обычное моргание).
-fn shy_face(p: &mut Px, g: &Geo, spec: &Value) -> bool {
+/// Нарисованный кадр («shy», кадры моргания): картинка размером с rect (в клетках), прозрачное — не трогать.
+/// Клетка — сплошной прямоугольник cs × (высота строки), как клетки самого вида. false — нет картинки.
+fn patch(p: &mut Px, g: &Geo, spec: &Value) -> bool {
     use std::collections::HashMap;
     use std::sync::{Mutex, OnceLock};
     static CACHE: OnceLock<Mutex<HashMap<String, Option<std::sync::Arc<crate::widget_px::Sprite>>>>> = OnceLock::new();
@@ -497,27 +523,36 @@ mod tests {
     }
 
     #[test]
-    fn blink_is_rare_and_short() {
-        assert!(!blinking(0.0));
-        let n = (0..6000).filter(|k| blinking(*k as f64 / 100.0)).count() as f64 / 100.0;
-        // за минуту — 15 раз по 0,2 с (с двойными чуть больше): 3–6 с закрытых глаз
-        assert!((2.0..8.0).contains(&n), "{n}");
-        // между морганиями проходит не меньше секунды
-        let mut last_open = 0.0;
-        let mut gaps = vec![];
-        let mut was = false;
-        for k in 0..6000 {
-            let t = k as f64 / 100.0;
-            let b = blinking(t);
-            if b && !was {
-                gaps.push(t - last_open);
+    fn blink_is_rare_short_and_smooth() {
+        assert_eq!(blink_frame(0.0), 0);
+        let fr: Vec<u8> = (0..60000).map(|k| blink_frame(k as f64 / 1000.0)).collect();
+        // за минуту — 12 морганий (двойные — чуть больше), каждое 0,2 с
+        let starts = fr.windows(2).filter(|w| w[0] == 0 && w[1] > 0).count();
+        assert!((10..=20).contains(&starts), "{starts}");
+        // всегда через полуприкрытые: открыто → закрыто и закрыто → открыто не бывает
+        assert!(fr.windows(2).all(|w| !matches!((w[0], w[1]), (0, 2) | (2, 0))));
+    }
+
+    /// Виджет просыпается раз в 1/FPS, а у моргания — точно к смене кадра: ни один кадр не пропадает.
+    #[test]
+    fn blink_frames_are_never_skipped() {
+        let (mut t, mut seen, mut last) = (0.0f64, Vec::new(), 0u8);
+        while t < 60.0 {
+            let f = blink_frame(t);
+            if f != last {
+                seen.push(f);
+                last = f;
             }
-            if !b {
-                last_open = t;
-            }
-            was = b;
+            let step = blink_next_edge(t).map_or(1.0 / FPS, |e| e.min(1.0 / FPS));
+            t += step + 1e-6;
         }
-        assert!(gaps.len() >= 8);
+        // каждое моргание целиком: 1, 2, 1, 0
+        for w in seen.chunks(4) {
+            if w.len() == 4 {
+                assert_eq!(w, [1, 2, 1, 0]);
+            }
+        }
+        assert!(seen.len() >= 40);
     }
 
     #[test]
@@ -562,7 +597,7 @@ mod tests {
                 "bubble": {"rect": [2, 2, 10, 12], "bg": 1},
                 "sparks": [{"rect": [14, 2, 3, 3]}],
                 "breath": {"rect": [2, 0, 14, 12], "hold": 6, "fx": 2},
-                "blink": [{"rect": [5, 5, 3, 2]}],
+                "blink": {"half": {"rect": [5, 5, 3, 2], "file": "нет.png"}, "closed": {"rect": [5, 5, 3, 2], "file": "нет.png"}},
                 "ears": [{"tip": [8, 3], "r": 4, "dir": [-1.0, -2.0], "hit": [6, 1, 4, 5]}]
             }
         })
@@ -577,7 +612,7 @@ mod tests {
         // нет разметки "anim" — любой кадр ничего не меняет
         let mut q = p0.clone();
         let bare = serde_json::json!({"step": [10.0, 10.0]});
-        apply(&mut q, &bare, 3, &Anim { bubble: 4, spark: [0; MAX_SPARK], breath: 1, blink: true, ear: [4, 4], shy: false });
+        apply(&mut q, &bare, 3, &Anim { bubble: 4, spark: [0; MAX_SPARK], breath: 1, blink: 2, ear: [4, 4], shy: false });
         assert!(q.same(&p0));
     }
 
@@ -604,8 +639,9 @@ mod tests {
         assert!(n > 0 && g.rect(&spec()["anim"]["bubble"]["rect"]).intersect(r) == r);
         let (n, r) = moved(Anim { spark: [0, SPARK_FULL, SPARK_FULL, SPARK_FULL], ..Anim::default() });
         assert!(n > 0 && g.rect(&spec()["anim"]["sparks"][0]["rect"]).intersect(r) == r);
-        let (n, r) = moved(Anim { blink: true, ..Anim::default() });
-        assert!(n > 0 && g.rect(&spec()["anim"]["blink"][0]["rect"]).intersect(r) == r);
+        // кадр моргания без картинки — ничего не меняет
+        let (n, _) = moved(Anim { blink: 2, ..Anim::default() });
+        assert_eq!(n, 0);
         let (n, _) = moved(Anim { breath: 1, ..Anim::default() });
         assert!(n > 0);
         let (n, r) = moved(Anim { ear: [EAR_STEPS, 0], ..Anim::default() });
@@ -640,16 +676,33 @@ mod tests {
 
 #[cfg(test)]
 mod shy_tests {
-    /// Мордочка «смущение» вшита для обоих мониторов и по размеру совпадает со своим местом в разметке.
+    /// Мордочка «смущение» вшита для обоих мониторов и маленького «Окна» и по размеру совпадает со своим местом в разметке.
     #[test]
     fn shy_faces_are_embedded_and_fit() {
-        for name in ["monitor_small", "monitor_medium"] {
+        for name in ["monitor_small", "monitor_medium", "window_small", "window_medium"] {
             let raw = crate::art::read("", &format!("виджет/целиком/{name}.json")).expect("разметка");
             let spec: serde_json::Value = serde_json::from_slice(&raw).expect("json");
             let s = &spec["anim"]["shy"];
             let sp = crate::widget_px::Sprite::load(s["file"].as_str().unwrap()).expect("картинка мордочки");
             assert_eq!((sp.w as i64, sp.h as i64), (s["rect"][2].as_i64().unwrap(), s["rect"][3].as_i64().unwrap()), "{name}");
             assert!(sp.px.iter().any(|v| v >> 24 != 0), "{name}: пустая");
+        }
+    }
+
+    /// Кадры моргания (полуприкрыты, закрыты) вшиты для «Окна» и «Монитора» обоих размеров и совпадают по
+    /// размеру со своим местом в разметке.
+    #[test]
+    fn blink_frames_are_embedded_and_fit() {
+        for name in ["window_small", "window_medium", "monitor_small", "monitor_medium"] {
+            let raw = crate::art::read("", &format!("виджет/целиком/{name}.json")).expect("разметка");
+            let spec: serde_json::Value = serde_json::from_slice(&raw).expect("json");
+            for f in ["half", "closed"] {
+                let s = &spec["anim"]["blink"][f];
+                let sp = crate::widget_px::Sprite::load(s["file"].as_str().unwrap()).expect("кадр моргания");
+                assert_eq!((sp.w as i64, sp.h as i64), (s["rect"][2].as_i64().unwrap(), s["rect"][3].as_i64().unwrap()), "{name} {f}");
+                assert!(sp.px.iter().any(|v| v >> 24 != 0), "{name} {f}: пустой");
+            }
+            assert!(super::Caps::of(&spec).blink, "{name}");
         }
     }
 }

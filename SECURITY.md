@@ -28,7 +28,7 @@ First Aid Cat reads a lot of sensitive local state, and some of its fixes need a
 ### Files
 
 - State files are written atomically (a temporary file with an unpredictable name, `fsync`, then rename), with mode `0600` in a folder created `0700`. The app refuses a state folder owned by someone else.
-- Measurement results (check results, speed test, duplicate search) are not kept in the state folder. They live in memory and in a per-session runtime folder (`$XDG_RUNTIME_DIR/aptechka`, `$TMPDIR/aptechka`, `%TEMP%\\aptechka`) that is `0700`, owned by the user, not a symlink, and cleared by the system at logout. The state folder keeps only settings, the saved theme baseline and edit backups.
+- Measurement results (check results, speed test, duplicate search) are not kept in the state folder. They live in memory and in a per-session runtime folder (`$XDG_RUNTIME_DIR/aptechka`, `$TMPDIR/aptechka`, `%TEMP%\\aptechka`) that is `0700`, owned by the user and not a symlink. It is in memory on usual Linux desktops (cleared at logout) but on disk in the Linux `/tmp` fallback, on Windows and on macOS; the app empties it when the last copy exits, and the next start removes leftovers older than 12 hours (see PRIVACY.md). The state folder keeps only settings, the saved theme baseline and edit backups.
 - Files from the user's home are opened with `O_NOFOLLOW | O_NONBLOCK`, must be regular files and are size-capped. A planted symlink, FIFO or huge file can't redirect a read, hang it or exhaust memory.
 - Cross-process locks keep two copies of the app from running the same fix, or two scans, at once.
 

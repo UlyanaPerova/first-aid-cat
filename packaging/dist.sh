@@ -281,6 +281,9 @@ dmg)
     S="dist/dmg-root"; rm -rf "$S"; mkdir -p "$S"
     ditto "macos/build/First Aid Cat.app" "$S/First Aid Cat.app"
     ln -s /Applications "$S/Applications"
+    # лицензии — и в самом образе, рядом с приложением
+    mkdir -p "$S/Licenses"
+    for f in "${DOCS[@]}"; do p=$(doc_path "$f"); if [ -n "$p" ]; then cp "$p" "$S/Licenses/"; fi; done
     rm -f "dist/$N.dmg"
     hdiutil create -volname "First Aid Cat" -srcfolder "$S" -fs HFS+ -format UDZO -ov "dist/$N.dmg" >/dev/null
     rm -rf "$S"

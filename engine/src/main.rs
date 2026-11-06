@@ -31,6 +31,7 @@
 
 mod clip;
 mod cmd;
+mod cover;
 mod sched;
 /// Тесты, которые читают или меняют переменные окружения (HOME): переменные общие на весь процесс, а тесты
 /// идут параллельно — без общего замка один тест подменял HOME посреди другого (cursor_layout падал через раз).
@@ -48,11 +49,14 @@ mod fixes;
 mod footprint;
 mod gfx;
 mod i18n;
+mod licenses;
 mod life;
+mod looksnap;
 #[cfg(target_os = "macos")]
 mod mac;
 mod more;
 mod netproxy;
+mod notify;
 mod prefs;
 mod procs;
 mod proxyaddr;
@@ -232,7 +236,8 @@ struct App {
     ui: Option<Ui>,
     bg_tx: Sender<Bg>,
     bg_rx: Receiver<Bg>,
-    checks: Vec<diag::Check>,       // последний прогон проверок
+    checks: Vec<diag::Check>,       // последний прогон проверок (игнорируемые — уже «для сведения»)
+    raw_checks: Vec<diag::Check>,   // он же как есть (чтобы «Не игнорировать» вернуло строке её статус)
     speed_checks: Vec<diag::Check>, // замер скорости (отдельно от прогона)
     sessions: Vec<diag::Session>,
     first_checks: bool,
@@ -501,6 +506,8 @@ impl App {
     }
 
     fn apply_checks(&mut self, checks: Vec<diag::Check>, full_log: bool, t: f64) {
+        self.raw_checks = checks.clone();
+        let checks = diag::apply_ignored(&checks);
         self.checks = checks.clone();
         // замер скорости — общий с виджетом (speed.json, не старше 6 часов): после перезапуска окно его
         // помнит, а устаревший уходит из итога в обоих местах одинаково
@@ -674,6 +681,10 @@ impl App {
                     }
                 }
                 Cmd::RunChecks => self.start_checks(),
+                Cmd::IgnoreChanged => {
+                    let t = self.t0.elapsed().as_secs_f64();
+                    self.apply_checks(self.raw_checks.clone(), false, t);
+                }
                 Cmd::RunSpeed => self.start_speed(),
                 Cmd::RunFix { id, label, arg } => self.start_fix(id, label, arg),
                 Cmd::CopyText(t) => clip::copy(t),
@@ -1563,19 +1574,6 @@ fn frame_step(hidden: bool, focused: bool, fps: f64) -> f64 {
     }
 }
 
-#[cfg(test)]
-mod frame_step_tests {
-    use super::frame_step;
-
-    #[test]
-    fn throttled_when_nobody_looks() {
-        assert_eq!(frame_step(false, true, 20.0), 0.05);
-        assert!((frame_step(false, false, 20.0) - 0.15).abs() < 1e-9);
-        assert_eq!(frame_step(true, true, 20.0), 1.0);
-        assert_eq!(frame_step(true, false, 20.0), 1.0);
-    }
-}
-
 /// Скромнее к другим программам: допуск таймера 2 мс, nice 5; CORES=8-15,24-31 — привязать к ядрам
 /// (на 9950X3D кэш-блок 0–7 оставляем играм). SCHED=0 — выключить. Только Linux.
 #[cfg(target_os = "linux")]
@@ -1828,7 +1826,11 @@ fn main() {
         None
     } else {
         match single::claim() {
-            Ok(Some(l)) => Some(l),
+            Ok(Some(l)) => {
+                // приложение (пере)запустилось — «Игнорировать» снимается: за это время могла появиться новая беда
+                crate::prefs::clear_ignored();
+                Some(l)
+            }
             Ok(None) => {
                 log("Аптечка уже открыта — показываю её окно");
                 return;
@@ -1907,6 +1909,7 @@ fn main() {
         bg_tx,
         bg_rx,
         checks: Vec::new(),
+        raw_checks: Vec::new(),
         speed_checks: Vec::new(),
         sessions: Vec::new(),
         first_checks: true,
@@ -1992,4 +1995,17 @@ fn main() {
     }
     // окно закрыто: данные измерений в папке сеанса больше не нужны
     sched::cleanup_on_exit();
+}
+
+#[cfg(test)]
+mod frame_step_tests {
+    use super::frame_step;
+
+    #[test]
+    fn throttled_when_nobody_looks() {
+        assert_eq!(frame_step(false, true, 20.0), 0.05);
+        assert!((frame_step(false, false, 20.0) - 0.15).abs() < 1e-9);
+        assert_eq!(frame_step(true, true, 20.0), 1.0);
+        assert_eq!(frame_step(true, false, 20.0), 1.0);
+    }
 }

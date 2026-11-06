@@ -354,6 +354,14 @@ pub fn units() -> &'static [Unit] {
     static U: &[Unit] = &[
         Unit { id: "win_os", cat: Cat::Sys, title: "Windows", about: "Версия Windows", run: check_os, default_on: true },
         Unit {
+            id: "themes",
+            cat: Cat::Look,
+            title: "Темы",
+            about: "Не сбились ли тема, цвет акцента, обои и панель задач",
+            run: crate::looksnap::check,
+            default_on: true,
+        },
+        Unit {
             id: "network", cat: Cat::Net, title: "Интернет и DNS", about: "Есть ли интернет, отвечает ли DNS", run: check_net, default_on: true
         },
         Unit {
@@ -518,6 +526,14 @@ pub fn units() -> &'static [Unit] {
     use crate::mac::*;
     static U: &[Unit] = &[
         Unit { id: "mac_os", cat: Cat::Sys, title: "macOS", about: "Версия macOS", run: check_os, default_on: true },
+        Unit {
+            id: "themes",
+            cat: Cat::Look,
+            title: "Темы",
+            about: "Не сбились ли оформление, цвета и Dock",
+            run: crate::looksnap::check,
+            default_on: true,
+        },
         Unit {
             id: "network", cat: Cat::Net, title: "Интернет и DNS", about: "Есть ли интернет, отвечает ли DNS", run: check_net, default_on: true
         },

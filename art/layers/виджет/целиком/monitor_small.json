@@ -81,24 +81,6 @@
    "hold": 36,
    "fx": 6
   },
-  "blink": [
-   {
-    "rect": [
-     35,
-     35,
-     6,
-     3
-    ]
-   },
-   {
-    "rect": [
-     51,
-     35,
-     10,
-     4
-    ]
-   }
-  ],
   "ears": [
    {
     "tip": [
@@ -143,6 +125,26 @@
     18
    ],
    "file": "виджет/целиком/monitor_small_shy.png"
+  },
+  "blink": {
+   "half": {
+    "rect": [
+     30,
+     29,
+     36,
+     18
+    ],
+    "file": "виджет/целиком/monitor_small_blink_half.png"
+   },
+   "closed": {
+    "rect": [
+     30,
+     29,
+     36,
+     18
+    ],
+    "file": "виджет/целиком/monitor_small_blink_closed.png"
+   }
   }
  }
 }

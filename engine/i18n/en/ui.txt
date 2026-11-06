@@ -811,3 +811,71 @@ en: First Aid Cat {}
 # ui.rs
 ru: Проверка завершена · в порядке: {} из {} · проблем: {} · предупреждений: {} · не проверено: {}
 en: Check complete · OK: {} of {} · problems: {} · warnings: {} · not checked: {}
+
+# ui.rs:1428
+ru: {} — больше не считаю бедой, кот не грустит. Вернуть — «Не игнорировать».
+en: {} — no longer counted as a problem, the cat won't be sad. To undo, press “Stop ignoring”.
+
+# ui.rs:1430
+ru: {} — снова слежу.
+en: {} — watching it again.
+
+# ui.rs:1762
+ru: Не игнорировать
+en: Stop ignoring
+
+# ui.rs:1762
+ru: Игнорировать
+en: Ignore
+
+# ui.rs:1823
+ru: Снова считать это бедой
+en: Count this as a problem again
+
+# ui.rs:1825
+ru: Игнорировать: не считать это бедой (кот не будет грустить)
+en: Ignore: don't count this as a problem (the cat won't be sad)
+
+# ui.rs:433
+ru: Игнорировать всё
+en: Ignore all
+
+# ui.rs:435
+ru: Вернуть всё
+en: Restore all
+
+# ui.rs:1453
+ru: Не считаю бедой: {}. Кот не грустит. Перезапуск приложения или «Вернуть всё» — снова слежу.
+en: Not counting as problems: {}. The cat isn't sad. Restarting the app or “Restore all” brings them back.
+
+# ui.rs:1457
+ru: Снова слежу за всем.
+en: Watching everything again.
+
+# ui.rs:1861
+ru: Снова считать бедой всё, что игнорируется
+en: Count everything ignored as problems again
+
+# ui.rs:1863
+ru: Не считать бедой ни одну из нынешних проблем (до перезапуска приложения)
+en: Don't count any of the current problems (until the app restarts)
+
+# ui.rs:252
+ru: Лицензии
+en: Licenses
+
+# ui.rs:1585
+ru: Открыла папку с лицензиями: {}
+en: Opened the folder with the licenses: {}
+
+# ui.rs:1586
+ru: Лицензии лежат здесь: {}
+en: The licenses are here: {}
+
+# ui.rs:1587
+ru: Не смогла положить лицензии: {}
+en: Couldn't write the licenses: {}
+
+# ui.rs:1562
+ru: «Стекло» бывает только маленьким. Средний размер — у «Окна» и «Монитора».
+en: “Glass” comes only in small. “Window” and “Monitor” have a medium size.

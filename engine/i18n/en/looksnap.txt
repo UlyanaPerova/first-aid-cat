@@ -1,0 +1,125 @@
+ru: Тема Windows
+en: Windows theme
+
+ru: Тема приложений
+en: App theme
+
+ru: Прозрачность
+en: Transparency
+
+ru: Цвет акцента
+en: Accent color
+
+ru: Акцент на заголовках окон
+en: Accent on title bars
+
+ru: Обои
+en: Wallpaper
+
+ru: Панель задач: значки
+en: Taskbar: icons
+
+ru: Оформление
+en: Appearance
+
+ru: Цвет выделения
+en: Highlight color
+
+ru: Полосы прокрутки
+en: Scroll bars
+
+ru: Dock: автоскрытие
+en: Dock: auto-hide
+
+ru: Dock: положение
+en: Dock: position
+
+ru: Dock: размер значков
+en: Dock: icon size
+
+ru: Dock: увеличение
+en: Dock: magnification
+
+ru: тёмная
+en: dark
+
+ru: светлая
+en: light
+
+ru: как в системе
+en: system default
+
+ru: нет (сплошной цвет)
+en: none (solid color)
+
+ru: слева
+en: left
+
+ru: по центру
+en: centered
+
+ru: тёмное
+en: dark
+
+ru: светлое
+en: light
+
+ru: графит
+en: graphite
+
+ru: красный
+en: red
+
+ru: оранжевый
+en: orange
+
+ru: жёлтый
+en: yellow
+
+ru: зелёный
+en: green
+
+ru: фиолетовый
+en: purple
+
+ru: розовый
+en: pink
+
+ru: синий
+en: blue
+
+ru: как акцент
+en: same as accent
+
+ru: всегда
+en: always
+
+ru: при прокрутке
+en: when scrolling
+
+ru: автоматически
+en: automatic
+
+ru: справа
+en: right
+
+ru: снизу
+en: bottom
+
+ru: Система не ответила — не знаю, как сейчас выглядят темы.
+en: The system didn't answer, so I don't know how the themes look now.
+
+ru: Настройка не прочиталась.
+en: Couldn't read this setting.
+
+ru: Файла обоев больше нет — Windows показывает сплошной цвет. Выбери обои заново.
+en: The wallpaper file is gone, so Windows shows a solid color. Pick the wallpaper again.
+
+ru: Странное значение в эталоне — не трогаю.
+en: The baseline has a strange value, so I won't touch it.
+
+ru: Вернула как в эталоне: {} — {}.
+en: Restored from the baseline: {} — {}.
+
+ru: Вернула как в эталоне: {} — {}. Открытые программы подхватят это после перезапуска.
+en: Restored from the baseline: {} — {}. Open apps pick it up after a restart.

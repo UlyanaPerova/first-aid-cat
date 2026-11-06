@@ -8,6 +8,10 @@
   <a href="../../actions/workflows/ci.yml"><img alt="CI" src="https://github.com/UlyanaPerova/first-aid-cat/actions/workflows/ci.yml/badge.svg"></a>
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/meet_the_cat.gif" alt="The cat reacts: pull an ear and he blushes, poke the tail and he gets nervous, poke his head and he is indignant" width="660">
+</p>
+
 These days everyone checks their computer by asking a terminal AI agent, and so did I. Then one day the internet stopped working, and nothing I tried would bring it back. Once I'd fixed it, I wrote a small script that would rescue me next time and get me back to the quiet harbour of the all-knowing AI. The project grew into something much bigger, and now it runs on all the major platforms.
 
 **First Aid Cat** (in Russian, *Аптечка*) is a desktop health checker with a doctor cat. It watches the things that usually break at the worst moment: the network, the VPN and its leftovers, proxies, the connection to AI assistants, disks, memory, updates, themes and drivers. It explains what is wrong in plain words, and it offers a fix only where a fix is safe.
@@ -80,15 +84,19 @@ Examples of fixes:
 
 Every fix also shows the equivalent manual command. You can try any fix without changing anything by setting `DRY_RUN=1`.
 
+A problem that doesn't matter to you can be ignored: **Ignore** next to the row, or **Ignore all** in the header of the Action column. Ignored problems stop counting, so the total turns calm and the cat stops worrying. Ignoring lasts until the app restarts, and if a new problem appears in the same category, you get a desktop notification.
+
 ## Widgets
 
 A small desktop widget shows the essentials: network, VPN, AI, CPU and disk. Click it to open the main window. Pick its look and size in the **Widget** menu.
+
+The cat in the **Window** and **Monitor** widgets is alive too: he blinks, the heart bubble bobs, sparks twinkle, and you can pull his ear to make him blush. On Linux the animation sleeps while other windows cover the widget.
 
 | Look | Medium | Small |
 |---|---|---|
 | **Window** | <img src="docs/screenshots/widget_window.png" alt="Window widget, medium" height="170"> | <img src="docs/screenshots/widget_window_small.png" alt="Window widget, small" height="170"> |
 | **Monitor** | <img src="docs/screenshots/widget_monitor.png" alt="Monitor widget, medium" height="190"> | <img src="docs/screenshots/widget_monitor_small.png" alt="Monitor widget, small" height="190"> |
-| **Glass** | <img src="docs/screenshots/widget_glass.png" alt="Glass widget, medium" height="170"> | <img src="docs/screenshots/widget_glass_small.png" alt="Glass widget, small" height="190"> |
+| **Glass** | <img src="docs/screenshots/widget_glass.png" alt="Glass widget, medium" height="170"><br>macOS only | <img src="docs/screenshots/widget_glass_small.png" alt="Glass widget, small" height="190"> |
 
 On **macOS** the widget is a native WidgetKit widget (small and medium). Add it through *Edit Widgets* on the desktop.
 
@@ -151,7 +159,7 @@ The interface follows the system language: Russian on a Russian-language system,
 
 ## Privacy
 
-First Aid Cat has no accounts, no telemetry and no analytics. Everything it finds stays on your computer, and it keeps no cache or history of measurements: results live only in memory and in a temporary session folder that is emptied when the app exits and cleared by the system at logout. Only your settings are saved. To check the network it contacts a few well-known public endpoints (connectivity checks, DNS, the status pages of AI services, and IP lookup). [PRIVACY.md](PRIVACY.md) lists every address and every file the app writes.
+First Aid Cat has no accounts, no telemetry and no analytics. Everything it finds stays on your computer, and it keeps no long-term history of measurements. While it runs, the latest results sit in a private temporary session folder (in memory on most Linux desktops, on disk on Windows and macOS); the app removes them when it exits normally, and a later start removes anything a crash left behind. To check the network it contacts a few well-known public endpoints (connectivity checks, DNS, the status pages of AI services, and IP lookup). [PRIVACY.md](PRIVACY.md) lists every address and every file the app writes.
 
 ## Architecture
 
@@ -166,17 +174,48 @@ The program is a single Rust binary:
 
 ## Building from source
 
-You need Rust 1.85 or newer.
+You need Rust 1.85 or newer. All commands below start from the repository root (the folder that contains `engine/`, `packaging/` and `macos/`).
+
+**Build and test** (any system):
 
 ```sh
 cd engine
-cargo build --release              # Linux or native
-cargo build --release --target x86_64-pc-windows-gnu   # Windows from Linux (needs mingw-w64)
-macos/build_app.sh                 # macOS app + WidgetKit widget (needs Xcode)
+cargo build --release
 cargo test --release
-python3 tools/i18n.py check        # every user-visible string has a translation
-packaging/dist.sh linux|windows|macos|deb|rpm|appimage|dmg   # archive or installer from a built binary
+python3 ../tools/i18n.py check
+cd ..
 ```
+
+The last check confirms that every user-visible string has a translation. The program is `engine/target/release/aptechka` (`aptechka.exe` on Windows).
+
+**Linux packages.** First build the program as above, then run one of these from the repository root:
+
+```sh
+packaging/dist.sh linux
+```
+
+That makes a portable `.tar.gz`. For other formats run instead `packaging/dist.sh deb`, `packaging/dist.sh rpm` (needs `rpmbuild`) or `packaging/dist.sh appimage` (downloads a pinned `appimagetool`). Results go to `dist/`.
+
+**Windows, cross-built on Linux** (needs `mingw-w64` and the Rust target `x86_64-pc-windows-gnu`):
+
+```sh
+rustup target add x86_64-pc-windows-gnu
+cd engine
+cargo build --release --target x86_64-pc-windows-gnu
+cd ..
+packaging/dist.sh windows
+```
+
+That makes a portable `.zip`. The setup `.exe` is built on Windows with Inno Setup from `packaging/windows/first-aid-cat.iss` (see [release.yml](.github/workflows/release.yml)).
+
+**macOS** (needs Xcode: `xcode-select -s /Applications/Xcode.app`):
+
+```sh
+macos/build_app.sh
+packaging/dist.sh dmg
+```
+
+The first command builds the program itself and makes `macos/build/First Aid Cat.app` with the WidgetKit widget inside. The second packs it into a `.dmg` in `dist/`. Use `packaging/dist.sh macos` instead for a `.zip`.
 
 Every push is checked by [CI](.github/workflows/ci.yml) on Linux, Windows and macOS. A version tag (`vX.Y.Z`) builds and publishes a release for all three systems ([release.yml](.github/workflows/release.yml)).
 

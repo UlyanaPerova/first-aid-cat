@@ -136,7 +136,7 @@ pub fn private_dir() -> PathBuf {
 }
 
 /// Имена файлов с данными измерений в папке сеанса (их же убирают при выходе и при старте, если старше 12 часов).
-pub const RUNTIME_DATA: [&str; 6] = ["checks.json", "checks.alive", "check_now", "speed.json", "speed.net", "dupes.json"];
+pub const RUNTIME_DATA: [&str; 7] = ["checks.json", "checks.alive", "check_now", "speed.json", "speed.net", "dupes.json", "ignored.json"];
 
 /// Папка сеанса для данных измерений (результаты проверок, замер скорости, поиск дублей, замок проверяющего):
 /// то, что не должно пережить выход из системы. Одна функция и для окна, и для виджета.
@@ -347,13 +347,21 @@ pub fn housekeeping() {
             remove_file_nofollow(&p);
         }
     }
-    // забытые временные файлы записи (процесс упал между созданием и переименованием)
-    if let Ok(rd) = std::fs::read_dir(&d) {
-        for e in rd.flatten() {
-            let p = e.path();
-            let tmp = p.extension().and_then(|x| x.to_str()).is_some_and(|x| x.starts_with("tmp") && x.contains('.'));
-            if tmp && e.file_type().is_ok_and(|t| t.is_file()) && age(&p).is_some_and(|a| a > day) {
-                let _ = std::fs::remove_file(&p);
+    // лицензии, выложенные «Справкой → Лицензии», — старше 12 часов (их тексты есть в самой программе)
+    let lic = rd_dir.join("licenses");
+    if std::fs::symlink_metadata(&lic).is_ok_and(|m| m.is_dir()) && age(&lic).is_some_and(|a| a > day / 2) {
+        remove_tree_nofollow(&lic);
+    }
+    // забытые временные файлы записи (процесс упал между созданием и переименованием) — и в папке настроек,
+    // и в папке сеанса
+    for dir in [&d, &rd_dir] {
+        if let Ok(rd) = std::fs::read_dir(dir) {
+            for e in rd.flatten() {
+                let p = e.path();
+                let tmp = p.file_name().and_then(|n| n.to_str()).is_some_and(is_write_tmp);
+                if tmp && e.file_type().is_ok_and(|t| t.is_file()) && age(&p).is_some_and(|a| a > day / 2) {
+                    let _ = std::fs::remove_file(&p);
+                }
             }
         }
     }
@@ -368,6 +376,19 @@ pub fn housekeeping() {
             }
         }
     }
+}
+
+/// Недописанная копия атомарной записи: «имя.tmp<номер процесса>.<n>.<8 hex>» (см. write_full).
+fn is_write_tmp(name: &str) -> bool {
+    let Some((_, rest)) = name.split_once(".tmp") else { return false };
+    let parts: Vec<&str> = rest.split('.').collect();
+    parts.len() == 3
+        && !parts[0].is_empty()
+        && parts[0].bytes().all(|b| b.is_ascii_digit())
+        && !parts[1].is_empty()
+        && parts[1].bytes().all(|b| b.is_ascii_digit())
+        && parts[2].len() == 8
+        && parts[2].bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 /// Старые постоянные файлы данных измерений в папке настроек (их больше не пишем).
@@ -775,4 +796,17 @@ fn housekeeping_removes_exactly_old_measurement_files() {
         }
     }
     let _ = std::fs::remove_dir_all(&root);
+}
+
+#[cfg(test)]
+mod tmp_name_tests {
+    /// Недописанные копии записи узнаются по имени (раньше смотрели на последнее «расширение» — и не узнавали).
+    #[test]
+    fn write_tmp_names() {
+        assert!(super::is_write_tmp("checks.tmp1234.0.ab12cd34"));
+        assert!(super::is_write_tmp("ui.tmp77.12.0000ffff"));
+        assert!(!super::is_write_tmp("checks.json"));
+        assert!(!super::is_write_tmp("notes.tmp.txt"));
+        assert!(!super::is_write_tmp("a.tmp12.3.xyz"));
+    }
 }

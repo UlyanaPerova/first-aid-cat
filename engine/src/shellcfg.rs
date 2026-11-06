@@ -309,7 +309,7 @@ pub fn line_tag(line: &str) -> String {
 
 /// Закомментировать строку `n` (с 1), если это по-прежнему строка с прокси верхнего уровня.
 /// Пишет в настоящий файл (по ссылке), с копией `<файл>.aptechka.bak`. Ok — путь копии.
-#[cfg(test)]
+#[cfg(all(test, unix))]
 pub fn comment_out(path: &Path, n: usize, dry: bool) -> Result<PathBuf, String> {
     comment_out_tagged(path, n, None, dry)
 }

@@ -462,6 +462,8 @@ fn produce(tx: &Sender<Vec<Check>>, mut lock: Option<crate::store::lock::Held>) 
             if !first_pass || slots.values().all(|s| !s.running) || begun.elapsed() > Duration::from_secs(3) {
                 dirty = false;
                 write_results(&all);
+                // новая беда там, где что-то игнорируют, — уведомление (только отсюда: проверяет один процесс)
+                crate::notify::watch(&all);
                 if tx.send(all).is_err() {
                     return Produce::Closed;
                 }

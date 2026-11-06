@@ -57,6 +57,25 @@ pub struct Check {
     pub unchecked: bool,
 }
 
+/// «Игнорировать»: красные и жёлтые строки, которые велели не считать бедой (prefs::ignored), становятся
+/// «для сведения» — итог, виджет и кот в картинке их не замечают. Сама проверка идёт как шла.
+pub fn apply_ignored(checks: &[Check]) -> Vec<Check> {
+    ignore_in(checks, &crate::prefs::ignored())
+}
+
+fn ignore_in(checks: &[Check], ig: &std::collections::HashSet<String>) -> Vec<Check> {
+    checks
+        .iter()
+        .cloned()
+        .map(|mut c| {
+            if ig.contains(&c.title) && matches!(c.status.as_str(), "warn" | "bad") {
+                c.status = "info".into();
+            }
+            c
+        })
+        .collect()
+}
+
 impl Check {
     pub(crate) fn new(key: &'static str, title: &str, status: &str, value: &str) -> Check {
         Check {
@@ -1328,6 +1347,13 @@ impl Snapshot {
 
 /// Снять текущее состояние тем (только чтение системы, ничего не пишет).
 fn capture_snapshot() -> Snapshot {
+    // Windows и macOS: свои ключи (реестр, defaults) — looksnap.rs; расширений GNOME и gtk.css там нет
+    #[cfg(any(windows, target_os = "macos"))]
+    {
+        let (keys, time) = crate::looksnap::capture();
+        return Snapshot { keys, extensions: Vec::new(), time, gtk4css: false };
+    }
+    #[allow(unreachable_code)]
     let (_, time) = run(&["date", "+%a %b %e %H:%M:%S %Y"], 6); // как time.ctime() в Python
     Snapshot {
         // непрочитанные ключи в эталон не попадают (их не с чем будет сравнивать)
@@ -3480,4 +3506,21 @@ fn speed_history_is_memory_only() {
         None => std::env::remove_var("XDG_CONFIG_HOME"),
     }
     let _ = std::fs::remove_dir_all(&root);
+}
+
+#[cfg(test)]
+mod ignore_tests {
+    use super::*;
+
+    /// Игнорируемая беда становится «для сведения», прочие строки и игнорируемая «в порядке» — как были.
+    #[test]
+    fn ignored_problems_become_info() {
+        let ig: std::collections::HashSet<String> = ["Диск".to_string(), "Память".to_string()].into();
+        let rows =
+            [Check::new("sys", "Диск", "bad", "мало места"), Check::new("sys", "Память", "ok", "15%"), Check::new("net", "DNS", "warn", "медленно")];
+        let out = ignore_in(&rows, &ig);
+        let st: Vec<&str> = out.iter().map(|c| c.status.as_str()).collect();
+        assert_eq!(st, ["info", "ok", "warn"]);
+        assert_eq!(out[0].value, "мало места");
+    }
 }

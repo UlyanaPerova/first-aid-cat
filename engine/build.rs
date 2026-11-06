@@ -4,6 +4,7 @@ use std::path::Path;
 
 fn main() {
     i18n_tables();
+    notices();
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../art/layers");
     let dir = dir.canonicalize().expect("нет art/layers");
     let read_json = |rel: &str| -> serde_json::Value {
@@ -53,6 +54,10 @@ fn main() {
     println!("cargo:rerun-if-changed={}", dir.join("виджет").display());
     println!("cargo:rerun-if-changed={}", dir.join("виджет/шаблоны").display());
     walk(&dir.join("виджет"), &dir, &mut files);
+    // среднее «Стекло» — только для macOS (там его рисует виджет WidgetKit); в Linux и Windows его нет
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos") {
+        files.retain(|f| !f.contains("glass_medium"));
+    }
     files.sort();
     files.dedup();
     let mut out =
@@ -115,4 +120,23 @@ fn i18n_tables() {
     }
     let out = Path::new(&std::env::var("OUT_DIR").unwrap()).join("i18n_en.txt");
     std::fs::write(out, all).expect("i18n_en.txt");
+}
+
+/// Лицензии и уведомления — в программу (меню «Справка → Лицензии» на любой системе, в любой сборке).
+/// В рабочей копии они в release/, в публичной — в корне.
+fn notices() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let out = Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("notices");
+    std::fs::create_dir_all(&out).expect("notices");
+    for f in ["LICENSE", "NOTICE", "LICENSE-ART.md", "THIRD_PARTY_NOTICES.md"] {
+        let src = [root.join(f), root.join("release").join(f)].into_iter().find(|p| p.is_file());
+        let text = match &src {
+            Some(p) => {
+                println!("cargo:rerun-if-changed={}", p.display());
+                std::fs::read_to_string(p).expect("notice")
+            }
+            None => panic!("нет файла {f} (ни в корне, ни в release/)"),
+        };
+        std::fs::write(out.join(f), text).expect("notice");
+    }
 }

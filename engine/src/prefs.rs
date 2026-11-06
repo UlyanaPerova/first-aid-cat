@@ -221,6 +221,54 @@ pub fn unit_enabled(id: &str, default_on: bool) -> bool {
     }
 }
 
+/// Проверки, которые велели не считать бедой (кнопка «Игнорировать»): их названия. Только до перезапуска
+/// приложения — лежат в папке сеанса (ignored.json), окно при запуске их сбрасывает (за это время могла
+/// появиться новая беда); виджет читает тот же файл.
+pub fn ignored() -> HashSet<String> {
+    let p = crate::store::runtime_dir().join("ignored.json");
+    crate::store::read_capped(&p, 1 << 20)
+        .ok()
+        .and_then(|t| serde_json::from_str::<Vec<String>>(&t).ok())
+        .map(|v| v.into_iter().collect())
+        .unwrap_or_default()
+}
+
+fn save_ignored(set: &HashSet<String>) {
+    let p = crate::store::runtime_dir().join("ignored.json");
+    if set.is_empty() {
+        crate::store::remove_file_nofollow(&p);
+        return;
+    }
+    let mut v: Vec<&String> = set.iter().collect();
+    v.sort();
+    let _ = crate::store::write_private(&p, serde_json::to_string(&v).unwrap_or_default().as_bytes());
+}
+
+/// Добавить проверки в «игнорируемые» (on) или убрать их оттуда.
+pub fn set_ignored(titles: &[String], on: bool) {
+    let mut set = ignored();
+    for t in titles {
+        if on {
+            set.insert(t.clone());
+        } else {
+            set.remove(t);
+        }
+    }
+    save_ignored(&set);
+}
+
+/// Окно запустилось: игнор снимается (ключ "ignored" в ui.json — от версии, где он жил в настройках).
+pub fn clear_ignored() {
+    save_ignored(&HashSet::new());
+    if load().get("ignored").is_some() {
+        update(|v| {
+            if let Some(o) = v.as_object_mut() {
+                o.remove("ignored");
+            }
+        });
+    }
+}
+
 pub fn set_unit(id: &str, enabled: bool) {
     update(|v| {
         for (k, add) in [("off", !enabled), ("on", enabled)] {

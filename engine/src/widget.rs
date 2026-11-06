@@ -206,6 +206,9 @@ pub struct Widget {
     rows: Vec<Row>,
     /// последние проверки целиком (для полей шаблона: диск, процессор, кто из ИИ думает)
     checks: Vec<Check>,
+    /// они же как пришли (до «Игнорировать») и какие строки игнорировались при подсчёте
+    raw: Vec<Check>,
+    ignored: std::collections::HashSet<String>,
     /// коты и сцены для видов (art/layers/виджет/спрайты/<вид>_<размер>_<ok|warn|bad>.png)
     sprites: std::collections::HashMap<String, Sprite>,
     /// виджеты целиком из концептов на сетке (art/layers/виджет/целиком) и их разметка
@@ -244,6 +247,12 @@ pub struct Widget {
     next: Instant,
     /// Окно закрыто другими окнами (Occluded) или свёрнуто: картинку не перерисовываем, данные берём.
     hidden: bool,
+    /// Linux: закрыт ли виджет окнами — спрашиваем сами (cover.rs), раз в секунду; Occluded там не приходит
+    #[cfg(all(unix, not(target_os = "macos")))]
+    cover: Option<Option<crate::cover::Cover>>,
+    covered: bool,
+    #[cfg(all(unix, not(target_os = "macos")))]
+    cover_t: Instant,
     cursor: PhysicalPosition<f64>,
     /// нажата кнопка «закрыть» (отпускание над ней — закрыть виджет)
     close_down: bool,
@@ -325,6 +334,13 @@ impl Widget {
             pos_dirty: None,
             rows: summarize(&[]),
             checks: Vec::new(),
+            raw: Vec::new(),
+            ignored: Default::default(),
+            #[cfg(all(unix, not(target_os = "macos")))]
+            cover: None,
+            covered: false,
+            #[cfg(all(unix, not(target_os = "macos")))]
+            cover_t: Instant::now(),
             sprites,
             wholes,
             whole_specs,
@@ -467,11 +483,16 @@ impl Widget {
             }
             _ => None,
         };
+        // смущение держится и после того, как ухо вернулось (SHY_AFTER)
+        let shy_tail = self.ear_fixed.is_none()
+            && self.ear.is_some_and(|e| e.side < caps.ears && e.rel.is_some_and(|r| r.elapsed().as_secs_f64() < anim::SHY_AFTER));
+        if shy_tail {
+            a.shy = true;
+        }
         if let Some((side, lvl)) = pull.filter(|(s, l)| *l > 0 && *s < caps.ears) {
             a.ear[side] = lvl;
-            // жмурится, как в приложении: нарисованная мордочка «shy», а где её нет — простое моргание
+            // жмурится, как в приложении: нарисованная мордочка «shy»
             a.shy = true;
-            a.blink |= caps.blink;
         }
         a
     }
@@ -646,8 +667,47 @@ impl Widget {
     }
 
     /// Вид или размер сменили в настройках — перестроить окно.
+    /// Закрыт ли виджет другими окнами целиком (Linux: спрашиваем оконный менеджер раз в секунду). Пока закрыт —
+    /// оживление спит: его всё равно никто не видит.
+    fn check_covered(&mut self) {
+        #[cfg(all(unix, not(target_os = "macos")))]
+        {
+            if self.cover_t.elapsed() < Duration::from_secs(1) {
+                return;
+            }
+            self.cover_t = Instant::now();
+            let Some(w) = self.window.as_ref() else { return };
+            let (Ok(p), s) = (w.outer_position(), w.outer_size()) else { return };
+            let cover = self.cover.get_or_insert_with(crate::cover::Cover::new);
+            let now = cover.as_ref().and_then(|c| c.covered((p.x, p.y, s.width as i32, s.height as i32))).unwrap_or(false);
+            if now != self.covered {
+                self.covered = now;
+                self.dirty = true;
+                if self.log {
+                    eprintln!("[виджет] {}", if now { "закрыт окнами — оживление спит" } else { "снова виден" });
+                }
+            }
+        }
+    }
+
+    /// Строки и итог из последних проверок: игнорируемые — «для сведения»; плюс последний замер скорости
+    /// (его делает окно) — итог как в окне.
+    fn recount(&mut self) {
+        self.checks = crate::diag::apply_ignored(&self.raw);
+        let mut all = self.raw.clone();
+        all.extend(crate::sched::load_speed());
+        self.rows = summarize(&crate::diag::apply_ignored(&all));
+    }
+
     fn reload_prefs(&mut self) {
         self.check_show_request();
+        // в окне нажали «Игнорировать» — итог виджета пересчитать сразу, не дожидаясь новых проверок
+        let ig = crate::prefs::ignored();
+        if ig != self.ignored && !self.raw.is_empty() {
+            self.ignored = ig;
+            self.recount();
+            self.dirty = true;
+        }
         let (style, size) = look::chosen();
         if (style, size) == (self.style, self.size) {
             return;
@@ -679,11 +739,9 @@ impl Widget {
                 last = Some(c);
             }
             if let Some(c) = last {
-                // плюс последний замер скорости (его делает окно) — итог как в окне
-                let mut all = c.clone();
-                all.extend(crate::sched::load_speed());
-                self.rows = summarize(&all);
-                self.checks = c;
+                self.raw = c;
+                self.ignored = crate::prefs::ignored();
+                self.recount();
             }
         }
     }
@@ -725,14 +783,25 @@ impl Widget {
     fn poke(&mut self, px: f64, py: f64) {
         // кот в виджете — пиксельный спрайт: тычок — реплика
         let _ = (px, py);
+        if self.no_quips() {
+            return;
+        }
         if let Some(q) = self.quips.pick("волосы", "возмущение") {
             self.quip = Some((q.to_string(), Instant::now() + Duration::from_secs(4)));
             self.dirty = true;
         }
     }
 
+    /// Маленькие «Окно» и «Монитор» — без реплик: облачко закрыло бы смущённую мордочку (кот там крошечный).
+    fn no_quips(&self) -> bool {
+        self.size == Size::Small && matches!(self.style, Style::Window | Style::Monitor)
+    }
+
     /// Реплика на ухо — из группы «ухо» (те же фразы, что у кота в окне).
     fn poke_ear(&mut self) {
+        if self.no_quips() {
+            return;
+        }
         if let Some(q) = self.quips.pick("ухо_левое", "смущение") {
             self.quip = Some((q.to_string(), Instant::now() + Duration::from_secs(4)));
             self.dirty = true;
@@ -984,13 +1053,14 @@ impl ApplicationHandler for Widget {
             if let Some(e) = self.ear {
                 if e.rel.is_none() && e.t0.elapsed().as_secs_f64() >= anim::EAR_HOLD_MAX {
                     self.release_ear();
-                } else if e.rel.is_some_and(|r| r.elapsed().as_secs_f64() > 0.5) {
+                } else if e.rel.is_some_and(|r| r.elapsed().as_secs_f64() > anim::SHY_AFTER.max(0.5)) {
                     self.ear = None;
                 }
             }
             // Windows не присылает Occluded для свёрнутого окна — спрашиваем (на X11 это запрос к серверу, там нет)
             let minimized = cfg!(windows) && self.window.as_ref().and_then(|w| w.is_minimized()) == Some(true);
-            let idle = self.hidden || minimized;
+            self.check_covered();
+            let idle = self.hidden || minimized || self.covered;
             if idle {
                 self.dirty = true;
             } else if let Some(w) = self.window.as_ref() {
@@ -1010,7 +1080,13 @@ impl ApplicationHandler for Widget {
                 }
             }
             // прячется — раз в секунду; иначе ритм оживления, если оно есть, а нет — раз в секунду
-            let tick = if idle || !(self.caps.any() || self.crt_on) { 1.0 } else { 1.0 / anim::FPS };
+            let mut tick = if idle || !(self.caps.any() || self.crt_on) { 1.0 } else { 1.0 / anim::FPS };
+            // моргание быстрее шага: проснуться точно к смене его кадра
+            if !idle && self.caps.blink && self.t_fixed.is_none() {
+                if let Some(e) = anim::blink_next_edge(self.anim_time()) {
+                    tick = tick.min(e + 0.001);
+                }
+            }
             self.next = now + Duration::from_secs_f64(tick);
         }
         el.set_control_flow(ControlFlow::WaitUntil(self.next));
@@ -1050,6 +1126,9 @@ pub fn run() {
     };
     // масштаб интерфейса: на экранах ×2 — вдвое крупнее
     let k = std::env::var("UI_K").ok().and_then(|v| v.parse().ok()).unwrap_or(1).clamp(1, 4);
+    // сырые события мыши и клавиатуры со всего экрана виджету не нужны (свои нажатия приходят как обычно):
+    // иначе каждое движение мыши где угодно будит его — сотню раз в секунду, даже когда он спит
+    el.listen_device_events(winit::event_loop::DeviceEvents::Never);
     let mut w = Widget::new(k);
     let _ = el.run_app(&mut w);
 }
@@ -1085,7 +1164,7 @@ pub fn shot(path: &str) {
         w.style = Style::from_id(&s);
     }
     if let Ok(s) = std::env::var("WIDGET_SIZE") {
-        w.size = Size::from_id(&s);
+        w.size = look::fit_size(w.style, Size::from_id(&s));
     }
     // WIDGET_CONCEPT=1 — данные ровно как на концептах ChatGPT (чтобы сравнить снимок с концептом точка в точку)
     // (WIDGET_CONCEPT=warn или bad — те же строки, но ИИ «внимание», VPN «беда»: проверить перекраску значков)

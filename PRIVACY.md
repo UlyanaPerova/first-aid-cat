@@ -31,35 +31,54 @@ Checks for AI tools you don't have installed are skipped. Every check can be swi
 
 ## What it stores
 
-The app keeps no cache of measurements and no history. Measurement results can't end up on your disk, and nothing accumulates.
+The app keeps no long-term history of measurements: no speed log, no scan cache in your settings. While it runs, though, the latest results are written to a temporary folder (below). On some systems that folder is on disk, so results can stay there for a while, for example after a crash. This section says exactly where and for how long.
 
 **In the settings folder** (permanent, owner-only: `0600` files in a `0700` folder, written atomically):
 
 | File | What | Kept |
 |---|---|---|
 | `ui.json` | window layout, language, which checks are on, widget look | until you delete it |
-| `snapshot.json` | your themes and extensions as you saved them (to notice when something breaks); written only when you ask | until you save again |
+| `snapshot.json` | your themes and extensions as you saved them (to notice when something breaks); written only when you press "Save current as baseline" | until you save again |
 | `backups/` | a copy of a config file before the app edits it (for example before removing a proxy line), for undo. Lines that look like secrets are masked | 7 days, at most 10 copies |
 | `widget.json` (macOS) | the few short rows the WidgetKit widget shows | overwritten each run |
 
-**Measurement results live only in memory and in a temporary per-session folder** that the system clears (a `0700` folder owned by you, not shared with other users):
+**In the temporary session folder** (a `0700` folder owned by you, not a symlink, not shared with other users). The window and the widget are separate processes, and this folder is how they share results:
 
-| What | Where | Gone |
-|---|---|---|
-| the latest check results, the "checker is alive" mark, the "check now" request (`checks.json`, `checks.alive`, `check_now`), shared between the window and the widget process | session folder | at logout or reboot; also when the app closes and no other copy is running |
-| the latest speed test (`speed.json`, `speed.net`) | session folder | same; ignored after 6 hours |
-| the last duplicate-file search (`dupes.json`: paths and sizes) | session folder | same |
-| speed results for the "slower than usual for this network" hint (last 20, this session only) | memory | when the app closes |
-| which files the secret scan already looked at (path, size, time, *kinds* found; no secret values) | memory | when the app closes |
+| What | Removed |
+|---|---|
+| the latest check results, the "checker is alive" mark, the "check now" request (`checks.json`, `checks.alive`, `check_now`) | when the last running copy of the app (window or widget) exits normally |
+| the latest speed test (`speed.json`, `speed.net`); ignored after 6 hours | same |
+| the last duplicate-file search (`dupes.json`: paths and sizes) | same |
+| which problems you chose to ignore (`ignored.json`: check names) | same; also each time the window starts |
+| the license texts, when you open Help → Licenses (`licenses/`) | at a later start, once older than 12 hours |
 
-There is no speed history and no scan cache on disk. Files in the session folder older than 12 hours are removed at start (Windows and macOS do not clear their temporary folders at logout). Older versions kept these files in the settings folder; the new version deletes them at start (`checks.json`, `checks.alive`, `check_now`, `speed.json`, `speed.net`, `speed_history.jsonl`, `footprint*.json`, `dupes.json`, and the old `~/.cache/aptechka/dupes.json`).
+If the app is killed or crashes, these files stay behind. The next start removes any of them older than 12 hours, together with half-written temporary copies (`*.tmp…`) left by an interrupted write. Newer ones are reused or overwritten.
 
-Locations:
-- Linux: settings in `~/.config/aptechka/` (or `$XDG_CONFIG_HOME/aptechka/`); session folder `$XDG_RUNTIME_DIR/aptechka/` (memory-backed, cleared at logout), or `/tmp/aptechka-<uid>/` when that is not available.
-- Windows: settings in `%APPDATA%\aptechka\`; session folder `%TEMP%\aptechka\`.
-- macOS: settings in `~/Library/Application Support/aptechka/`, the widget container `~/Library/Containers/io.github.aptechka.widget/`; session folder `$TMPDIR/aptechka/`.
+Where the session folder is, and whether the system clears it:
 
-To remove all of it, delete the settings folder. The Linux installer's `--uninstall` removes the program, the menu entry and autostart.
+| System | Session folder | On disk? | Cleared by the system |
+|---|---|---|---|
+| Linux, usual desktop | `$XDG_RUNTIME_DIR/aptechka/` (for example `/run/user/1000/aptechka/`) | no, in memory (tmpfs) | at logout |
+| Linux without `$XDG_RUNTIME_DIR` (some minimal or container setups) | `/tmp/aptechka-<uid>/` | depends: on disk unless `/tmp` is tmpfs | at reboot if `/tmp` is tmpfs; otherwise only by `systemd-tmpfiles` or similar, usually after days |
+| macOS | `$TMPDIR/aptechka/` (a private per-user folder under `/var/folders/…`) | yes | files unused for a few days, and at reboot |
+| Windows | `%TEMP%\aptechka\` | yes | not automatically (only Storage Sense or Disk Cleanup, if you use them) |
+
+**Only in memory**, gone when the app closes:
+- speed results for the "slower than usual for this network" hint (the last 20 of this session);
+- which files the secret scan already looked at (path, size, time, *kinds* found; never the secret values).
+
+Older versions kept measurement files in the settings folder; the new version deletes them at start (`checks.json`, `checks.alive`, `check_now`, `speed.json`, `speed.net`, `speed_history.jsonl`, `footprint*.json`, `dupes.json`, and the old `~/.cache/aptechka/dupes.json`).
+
+Settings folder:
+- Linux: `~/.config/aptechka/` (or `$XDG_CONFIG_HOME/aptechka/`).
+- Windows: `%APPDATA%\aptechka\`.
+- macOS: `~/Library/Application Support/aptechka/`, plus the widget container `~/Library/Containers/io.github.aptechka.widget/`.
+
+To remove everything, delete the settings folder and the session folder. The Linux installer's `--uninstall` removes the program, the menu entry and autostart.
+
+## Notifications
+
+When you ignore a problem and a new one appears in the same category, the app shows a desktop notification (Linux `notify-send`, macOS Notification Center, Windows toast). It is shown locally; nothing is sent anywhere.
 
 ## What it changes
 
