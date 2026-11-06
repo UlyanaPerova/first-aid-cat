@@ -125,3 +125,11 @@ en: First Aid Cat — a computer health check with a doctor cat.\n\naptechka    
 # main.rs
 ru: Проблем не вижу, но не всё получилось проверить: {}
 en: I see no problems, but not everything could be checked: {}
+
+# main.rs:689
+ru: анимация картинки включена
+en: picture animation on
+
+# main.rs:691
+ru: анимация картинки выключена
+en: picture animation off

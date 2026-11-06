@@ -701,6 +701,12 @@ impl Widget {
 
     fn reload_prefs(&mut self) {
         self.check_show_request();
+        // в окне переключили «Анимация виджета»
+        let on = look::anim_enabled();
+        if on != self.anim_on {
+            self.anim_on = on;
+            self.dirty = true;
+        }
         // в окне нажали «Игнорировать» — итог виджета пересчитать сразу, не дожидаясь новых проверок
         let ig = crate::prefs::ignored();
         if ig != self.ignored && !self.raw.is_empty() {

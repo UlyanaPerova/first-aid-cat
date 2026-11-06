@@ -9,6 +9,9 @@
 //!                                (шов дыхания), по бокам — на «fx» клеток к нулю;
 //!   "blink":  {"half", "closed"} — моргание нарисованными кадрами (как у кота в окне): глаза полуприкрыты и
 //!                                закрыты, каждый кадр — {"rect", "file"}, как «shy»;
+//!   "loops":  [{"rect", "file", "period", "on", "phase"?, "random"?}] — нарисованный кадр, который сам по себе
+//!                                появляется на «on» секунд каждые «period» (хвост в такт дыханию, пар над
+//!                                чашкой); "random": true — в случайный миг каждого периода (уши дёрнулись);
 //!   "ears":   [{"tip", "r", "dir", "hit"}] — ухо: от кончика «tip» в радиусе «r» картинка тянется на «dir»
 //!                                клеток (плавно к нулю), «hit» — куда нажимать; «clip» (необязательно) — тянется
 //!                                только внутри этого прямоугольника (у «Окна» уши у рамки — рамка остаётся на месте).
@@ -58,12 +61,14 @@ pub struct Anim {
     pub ear: [u8; 2],
     /// смущение (тянут за ухо): мордочка из нарисованного кадра «shy» — зажмурился, румянец
     pub shy: bool,
+    /// какие кадры «loops» сейчас видны (бит i — loops[i])
+    pub loops: u8,
 }
 
 impl Default for Anim {
     /// Покой: всё как нарисовано (картинка без оживления).
     fn default() -> Anim {
-        Anim { bubble: 0, spark: [SPARK_FULL; MAX_SPARK], breath: 0, blink: 0, ear: [0; 2], shy: false }
+        Anim { bubble: 0, spark: [SPARK_FULL; MAX_SPARK], breath: 0, blink: 0, ear: [0; 2], shy: false, loops: 0 }
     }
 }
 
@@ -75,6 +80,38 @@ pub struct Caps {
     pub breath: bool,
     pub blink: bool,
     pub ears: usize,
+    /// кадры «loops»: сколько и их ритм
+    pub loops: usize,
+    pub loop_t: [Loop; MAX_LOOPS],
+}
+
+/// Сколько кадров «loops» бывает у вида.
+pub const MAX_LOOPS: usize = 4;
+
+/// Ритм кадра «loops» в миллисекундах (целые — чтобы Caps сравнивались точно).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct Loop {
+    pub period: u32,
+    pub on: u32,
+    pub phase: u32,
+    pub random: bool,
+}
+
+/// Виден ли кадр «loops» в момент t.
+pub fn loop_on(t: f64, l: Loop) -> bool {
+    if l.period == 0 || l.on == 0 || t < 0.0 {
+        return false;
+    }
+    let (period, on) = (l.period as f64 / 1000.0, l.on as f64 / 1000.0);
+    let t = t + l.phase as f64 / 1000.0;
+    if l.random {
+        // в каждом периоде — один раз, в случайном (но для этого t всегда одинаковом) месте
+        let n = (t / period).floor() as u64;
+        let start = n as f64 * period + (mix64(n ^ 0x10_0B5) % 1000) as f64 / 1000.0 * (period - on).max(0.0);
+        (start..start + on).contains(&t)
+    } else {
+        t.rem_euclid(period) < on
+    }
 }
 
 impl Caps {
@@ -87,10 +124,19 @@ impl Caps {
             breath: an["breath"].is_object(),
             blink: an["blink"].is_object(),
             ears: n("ears").min(2),
+            loops: n("loops").min(MAX_LOOPS),
+            loop_t: {
+                let mut a = [Loop::default(); MAX_LOOPS];
+                for (i, l) in an["loops"].as_array().into_iter().flatten().take(MAX_LOOPS).enumerate() {
+                    let ms = |k: &str| (l[k].as_f64().unwrap_or(0.0).max(0.0) * 1000.0).round() as u32;
+                    a[i] = Loop { period: ms("period"), on: ms("on"), phase: ms("phase"), random: l["random"].as_bool().unwrap_or(false) };
+                }
+                a
+            },
         }
     }
     pub fn any(&self) -> bool {
-        self.bubble || self.sparks > 0 || self.breath || self.blink || self.ears > 0
+        self.bubble || self.sparks > 0 || self.breath || self.blink || self.ears > 0 || self.loops > 0
     }
 }
 
@@ -201,6 +247,11 @@ impl Anim {
         }
         if caps.blink {
             a.blink = blink_frame(t);
+        }
+        for i in 0..caps.loops {
+            if loop_on(t, caps.loop_t[i]) {
+                a.loops |= 1 << i;
+            }
         }
         a
     }
@@ -434,6 +485,11 @@ pub fn apply(p: &mut Px, spec: &Value, cs: i32, a: &Anim) {
     }
     // смущение: нарисованная мордочка (ChatGPT по образцу «румянца» приложения, подогнана под клетки вида);
     // она закрывает глаза сама — моргание поверх не нужно
+    for (i, l) in an["loops"].as_array().into_iter().flatten().take(MAX_LOOPS).enumerate() {
+        if a.loops & (1 << i) != 0 {
+            patch(p, &g, l);
+        }
+    }
     let shy = a.shy && an.get("shy").is_some_and(|s| patch(p, &g, s));
     if a.blink > 0 && !shy {
         if let Some(f) = an["blink"].get(if a.blink >= 2 { "closed" } else { "half" }) {
@@ -556,6 +612,17 @@ mod tests {
     }
 
     #[test]
+    fn loops_rhythm() {
+        let l = Loop { period: 3400, on: 1500, phase: 0, random: false };
+        assert!(loop_on(0.1, l) && loop_on(1.4, l) && !loop_on(1.6, l) && !loop_on(3.3, l) && loop_on(3.5, l));
+        // случайный: ровно один показ длиной «on» на период
+        let r = Loop { period: 7000, on: 250, phase: 0, random: true };
+        let n = (0..70000).filter(|k| loop_on(*k as f64 / 1000.0, r)).count();
+        assert!((2400..=2600).contains(&n), "{n}");
+        assert!(!loop_on(1.0, Loop::default()));
+    }
+
+    #[test]
     fn ear_comes_and_goes() {
         assert_eq!(ear_step(ear_env(0.0, None)), 0);
         assert_eq!(ear_step(ear_env(EAR_IN, None)), EAR_STEPS);
@@ -568,7 +635,7 @@ mod tests {
 
     #[test]
     fn idle_at_zero_is_rest_and_caps_mask() {
-        let caps = Caps { bubble: true, sparks: 2, breath: true, blink: true, ears: 2 };
+        let caps = Caps { bubble: true, sparks: 2, breath: true, blink: true, ears: 2, ..Caps::default() };
         assert_eq!(Anim::idle(0.0, 3, caps), Anim::default());
         // чего вид не умеет — в кадре не меняется
         let none = Caps::default();
@@ -612,7 +679,7 @@ mod tests {
         // нет разметки "anim" — любой кадр ничего не меняет
         let mut q = p0.clone();
         let bare = serde_json::json!({"step": [10.0, 10.0]});
-        apply(&mut q, &bare, 3, &Anim { bubble: 4, spark: [0; MAX_SPARK], breath: 1, blink: 2, ear: [4, 4], shy: false });
+        apply(&mut q, &bare, 3, &Anim { bubble: 4, spark: [0; MAX_SPARK], breath: 1, blink: 2, ear: [4, 4], shy: false, loops: 0xF });
         assert!(q.same(&p0));
     }
 
@@ -693,9 +760,15 @@ mod shy_tests {
     /// размеру со своим местом в разметке.
     #[test]
     fn blink_frames_are_embedded_and_fit() {
-        for name in ["window_small", "window_medium", "monitor_small", "monitor_medium"] {
+        for name in ["window_small", "window_medium", "monitor_small", "monitor_medium", "glass_small"] {
             let raw = crate::art::read("", &format!("виджет/целиком/{name}.json")).expect("разметка");
             let spec: serde_json::Value = serde_json::from_slice(&raw).expect("json");
+            // повторяющиеся кадры (хвост, пар, уши «Стекла») — тоже вшиты и по размеру
+            for l in spec["anim"]["loops"].as_array().into_iter().flatten() {
+                let sp = crate::widget_px::Sprite::load(l["file"].as_str().unwrap()).expect("кадр loops");
+                assert_eq!((sp.w as i64, sp.h as i64), (l["rect"][2].as_i64().unwrap(), l["rect"][3].as_i64().unwrap()), "{name} loops");
+                assert!(l["period"].as_f64().unwrap() > l["on"].as_f64().unwrap(), "{name}: on < period");
+            }
             for f in ["half", "closed"] {
                 let s = &spec["anim"]["blink"][f];
                 let sp = crate::widget_px::Sprite::load(s["file"].as_str().unwrap()).expect("кадр моргания");

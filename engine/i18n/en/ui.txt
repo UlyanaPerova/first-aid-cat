@@ -879,3 +879,27 @@ en: Couldn't write the licenses: {}
 # ui.rs:1562
 ru: «Стекло» бывает только маленьким. Средний размер — у «Окна» и «Монитора».
 en: “Glass” comes only in small. “Window” and “Monitor” have a medium size.
+
+# ui.rs:222
+ru: Картинка замерла. Окно тратит в 4–5 раз меньше процессора (в замере 0,7% → 0,2% одного ядра).
+en: The picture is still now. The window uses 4–5 times less CPU (measured: 0.7% → 0.2% of one core).
+
+# ui.rs:223
+ru: Кот снова живой.
+en: The cat is alive again.
+
+# ui.rs:225
+ru: Виджет замер. Выигрыш небольшой: примерно 0,3% → 0,1% одного ядра, а на Linux закрытый окнами виджет и так спит.
+en: The widget is still now. The saving is small: about 0.3% → 0.1% of one core, and on Linux a widget covered by windows sleeps anyway.
+
+# ui.rs:226
+ru: Виджет снова живой.
+en: The widget is alive again.
+
+# ui.rs:242
+ru: Анимация картинки
+en: Picture animation
+
+# ui.rs:288
+ru: Анимация виджета
+en: Widget animation

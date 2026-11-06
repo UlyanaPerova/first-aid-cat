@@ -218,6 +218,8 @@ struct App {
     prev: Vec<u32>,
     scale: usize,
     fps: f64,
+    /// анимация картинки (prefs::app_anim): выключена — кот замирает, кадр раз в секунду
+    anim: bool,
     window: Option<Rc<Window>>,
     surface: Option<softbuffer::Surface<Rc<Window>, Rc<Window>>>,
     t0: Instant,
@@ -681,6 +683,14 @@ impl App {
                     }
                 }
                 Cmd::RunChecks => self.start_checks(),
+                Cmd::AnimChanged => {
+                    self.anim = crate::prefs::app_anim();
+                    wlog(if self.anim {
+                        "анимация картинки включена"
+                    } else {
+                        "анимация картинки выключена"
+                    });
+                }
                 Cmd::IgnoreChanged => {
                     let t = self.t0.elapsed().as_secs_f64();
                     self.apply_checks(self.raw_checks.clone(), false, t);
@@ -758,7 +768,9 @@ impl App {
     fn render(&mut self, t: f64) {
         let dt = (t - self.last_t).max(0.0);
         self.last_t = t;
-        self.life.step(t, dt, &mut self.draws);
+        // анимация выключена — картинка замерла в покое (t = 0), шаг жизни нулевой
+        let (lt, ldt) = if self.anim { (t, dt) } else { (0.0, 0.0) };
+        self.life.step(lt, ldt, &mut self.draws);
         // тычки по расписанию (режим записи кадров)
         while let Some(&(ct, x, y)) = self.clicks.first() {
             if ct > t {
@@ -1546,6 +1558,8 @@ impl ApplicationHandler<AppEvent> for App {
             self.tick();
             // окна не видно — просыпаемся редко, только проверить, не показали ли его
             let step = frame_step(self.hidden || self.minimized(), self.focused, self.fps);
+            // без анимации — раз в секунду (данные, часы на экранчиках); нажатия всё равно сразу
+            let step = if self.anim { step } else { step.max(1.0) };
             self.next = now + Duration::from_secs_f64(step);
         }
         // во время анимации интерфейса — 60 кадров в секунду, иначе обычный темп
@@ -1872,6 +1886,7 @@ fn main() {
         prev: vec![0; n],
         scale: env::<usize>("SCALE").filter(|s| *s <= 16).unwrap_or(0),
         fps,
+        anim: crate::prefs::app_anim(),
         sc,
         ceiling: scene::load_png(&art, "потолок.png"),
         ceiling_px: (0, 0, 0, Vec::new()),

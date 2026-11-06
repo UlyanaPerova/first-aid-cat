@@ -187,6 +187,9 @@ enum MenuAct {
     Spravka,
     /// лицензии и уведомления (licenses.rs): положить в папку сеанса и открыть
     Licenses,
+    /// анимация картинки в окне / виджета: включить или выключить
+    AppAnim,
+    WidgetAnim,
     About,
     WidgetShow,
     WidgetStyle(u8),
@@ -214,6 +217,13 @@ fn lang_now() -> u8 {
 
 const FREQ_IDS: [&str; 3] = ["rare", "normal", "often"];
 
+/// Что даёт выключение анимации — по замеру (виртуальная машина, окно 30 с без фокуса, виджет «Окно» средний):
+/// окно 0,73% → 0,16% одного ядра, виджет 0,26% → 0,10%.
+const ANIM_OFF_APP: &str = "Картинка замерла. Окно тратит в 4–5 раз меньше процессора (в замере 0,7% → 0,2% одного ядра).";
+const ANIM_ON_APP: &str = "Кот снова живой.";
+const ANIM_OFF_WIDGET: &str = "Виджет замер. Выигрыш небольшой: примерно 0,3% → 0,1% одного ядра, а на Linux закрытый окнами виджет и так спит.";
+const ANIM_ON_WIDGET: &str = "Виджет снова живой.";
+
 fn freq_now() -> u8 {
     let v = crate::prefs::load().get("check_freq").and_then(|v| v.as_str()).map(String::from).unwrap_or_default();
     FREQ_IDS.iter().position(|f| *f == v).unwrap_or(1) as u8
@@ -228,6 +238,7 @@ fn menus() -> Vec<(&'static str, Vec<(String, MenuAct)>)> {
     let fixes_menu: Vec<(String, MenuAct)> = fixes::GENERAL.iter().enumerate().map(|(i, (_, l))| (l.to_string(), MenuAct::Fix(i as u8))).collect();
     let mut view: Vec<(String, MenuAct)> = (0..N_TABS).map(|i| (tab_name(i).to_string(), MenuAct::Tab(i as u8))).collect();
     view.push(("Журнал".into(), MenuAct::ToggleLog));
+    view.push(("Анимация картинки".into(), MenuAct::AppAnim));
     // названия языков — каждое на своём языке (не переводятся), чтобы найти свой в чужом интерфейсе
     view.push(("Язык: как в системе".into(), MenuAct::Lang(0)));
     view.push(("Русский".into(), MenuAct::Lang(1)));
@@ -273,6 +284,7 @@ fn widget_menu() -> Vec<(String, MenuAct)> {
     for (i, s) in crate::widget_look::STYLES.iter().enumerate() {
         v.push((format!("Вид: {}", s.name()), MenuAct::WidgetStyle(i as u8)));
     }
+    v.push(("Анимация виджета".into(), MenuAct::WidgetAnim));
     v.push(("Размер: маленький".into(), MenuAct::WidgetSize(0)));
     v.push(("Размер: средний".into(), MenuAct::WidgetSize(1)));
     v
@@ -307,6 +319,8 @@ pub enum Cmd {
     LangChanged,
     /// Строку велели игнорировать (или перестать): пересчитать итог, кота, экраны.
     IgnoreChanged,
+    /// Анимацию картинки включили или выключили.
+    AnimChanged,
 }
 
 /// Открытая «Справка от Мяудоктора»: текст и готовая раскладка листа.
@@ -1582,6 +1596,18 @@ impl Ui {
                     2 => "Проверяю чаще.",
                     _ => "Проверяю как обычно.",
                 });
+                Vec::new()
+            }
+            MenuAct::AppAnim => {
+                let on = !crate::prefs::app_anim();
+                crate::prefs::update(|v| v["app_anim"] = serde_json::json!(on));
+                self.say(if on { ANIM_ON_APP } else { ANIM_OFF_APP });
+                vec![Cmd::AnimChanged]
+            }
+            MenuAct::WidgetAnim => {
+                let on = !crate::widget_look::anim_enabled();
+                crate::prefs::update(|v| v["widget_anim"] = serde_json::json!(on));
+                self.say(if on { ANIM_ON_WIDGET } else { ANIM_OFF_WIDGET });
                 Vec::new()
             }
             MenuAct::Licenses => {
@@ -3010,6 +3036,8 @@ impl P<'_, '_> {
                         || matches!(act, MenuAct::WidgetStyle(i) if crate::widget_look::STYLES.get(*i as usize) == Some(&wst))
                         || matches!(act, MenuAct::WidgetSize(i) if (*i == 0) == (wsz == crate::widget_look::Size::Small))
                         || matches!(act, MenuAct::Freq(i) if *i == freq_now())
+                        || matches!(act, MenuAct::AppAnim) && crate::prefs::app_anim()
+                        || matches!(act, MenuAct::WidgetAnim) && crate::widget_look::anim_enabled()
                         || matches!(act, MenuAct::Lang(i) if *i == lang_now());
                     let col = if hov { WHITE } else { BLACK };
                     if mark {

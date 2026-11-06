@@ -90,13 +90,15 @@ A problem that doesn't matter to you can be ignored: **Ignore** next to the row,
 
 A small desktop widget shows the essentials: network, VPN, AI, CPU and disk. Click it to open the main window. Pick its look and size in the **Widget** menu.
 
-The cat in the **Window** and **Monitor** widgets is alive too: he blinks, the heart bubble bobs, sparks twinkle, and you can pull his ear to make him blush. On Linux the animation sleeps while other windows cover the widget.
+The cat in the widgets is alive too: he blinks, the heart bubble bobs, sparks twinkle, and in **Window** and **Monitor** you can pull his ear to make him blush. In **Glass** his tail sways with his breath, steam rises from the mug and his ears twitch now and then. On Linux the animation sleeps while other windows cover the widget.
+
+Animation can be switched off: **View → Picture animation** for the main window and **Widget → Widget animation** for the widget. Measured on a test machine, the main window then uses 4–5 times less CPU (0.7% → 0.2% of one core); for the widget the saving is small (about 0.3% → 0.1%).
 
 | Look | Medium | Small |
 |---|---|---|
-| **Window** | <img src="docs/screenshots/widget_window.png" alt="Window widget, medium" height="170"> | <img src="docs/screenshots/widget_window_small.png" alt="Window widget, small" height="170"> |
-| **Monitor** | <img src="docs/screenshots/widget_monitor.png" alt="Monitor widget, medium" height="190"> | <img src="docs/screenshots/widget_monitor_small.png" alt="Monitor widget, small" height="190"> |
-| **Glass** | — | <img src="docs/screenshots/widget_glass_small.png" alt="Glass widget, small" height="190"> |
+| **Window** | <img src="docs/screenshots/anim_window_medium.gif" alt="Window widget, medium" height="170"> | <img src="docs/screenshots/anim_window_small.gif" alt="Window widget, small" height="170"> |
+| **Monitor** | <img src="docs/screenshots/anim_monitor_medium.gif" alt="Monitor widget, medium" height="190"> | <img src="docs/screenshots/anim_monitor_small.gif" alt="Monitor widget, small" height="190"> |
+| **Glass** | — | <img src="docs/screenshots/anim_glass_small.gif" alt="Glass widget, small" height="190"> |
 
 On **macOS** the widget is a native WidgetKit widget (small and medium). Add it through *Edit Widgets* on the desktop. It is in full color while the desktop is in front, and macOS turns it pale when windows cover it.
 
