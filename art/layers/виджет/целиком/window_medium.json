@@ -127,8 +127,8 @@
    "bold": true,
    "dx": 6,
    "dy": 0.33,
-   "weight": 1,
-   "ls": 0,
+   "weight": 2,
+   "ls": 1,
    "sp": 1,
    "dash": 7
   },

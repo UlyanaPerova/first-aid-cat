@@ -253,6 +253,10 @@ pub struct Widget {
     covered: bool,
     #[cfg(all(unix, not(target_os = "macos")))]
     cover_t: Instant,
+    /// размер колесом мыши: ступеней клетки к обычной (ui.json widget_zoom, ZOOM_MIN..=ZOOM_MAX) и прокрутка,
+    /// ещё не набравшая ступень
+    zoom: i32,
+    wheel: f64,
     cursor: PhysicalPosition<f64>,
     /// нажата кнопка «закрыть» (отпускание над ней — закрыть виджет)
     close_down: bool,
@@ -341,6 +345,8 @@ impl Widget {
             covered: false,
             #[cfg(all(unix, not(target_os = "macos")))]
             cover_t: Instant::now(),
+            zoom: zoom_pref(),
+            wheel: 0.0,
             sprites,
             wholes,
             whole_specs,
@@ -415,7 +421,7 @@ impl Widget {
         if let (Some(spec), Some(sp)) = (self.whole_specs.get(&base), self.wholes.get(&key).or_else(|| self.wholes.get(&format!("{base}_ok")))) {
             // клетка картинки ≈ 1,5 точки экрана (на экране ×2 — 3 пикселя), текст и значки — ×k (чёткий шрифт)
             // (у концепта с крупной сеткой — "cell_scale" в описании: стекло ×4/3, чтобы было ростом с остальные)
-            let base_cell = ((3 * self.k + 1) / 2).max(2);
+            let (base_cell, _) = self.zoom_level();
             let cell = ((base_cell as f64) * spec["cell_scale"].as_f64().unwrap_or(1.0)).round().max(1.0) as i32;
             let t = self.anim_time();
             let caps = if self.anim_on { Caps::of(spec) } else { Caps::default() };
@@ -457,7 +463,9 @@ impl Widget {
                 let a = self.frame_anim(t, cell, caps);
                 anim::apply(&mut p, spec, cell, &a);
             }
-            self.ear_rects = if caps.ears > 0 { anim::ear_hits(spec, cell) } else { Vec::new() };
+            // места ушей — в точках окна (холст увеличен в scale раз)
+            let s = self.scale.max(1);
+            self.ear_rects = if caps.ears > 0 { anim::ear_hits(spec, cell).into_iter().map(|r| px::up(r, s)).collect() } else { Vec::new() };
             return (p, hits);
         }
         let pieces = Pieces { cat: self.sprites.get(&key), mug: &self.mugs[d.state.min(2)] };
@@ -523,7 +531,7 @@ impl Widget {
         // виджет из концепта рисуется сразу в пикселях экрана (клетка ≈1,5 точки) — без увеличения;
         // нарисованный кодом — подгонка под высоту ~240 точек
         let whole = self.whole_specs.contains_key(&format!("{}_{}", self.style.id(), self.size.id()));
-        self.scale = if whole { 1 } else { px::scale_for(p.h, self.k) };
+        self.scale = if whole { self.zoom_level().1 } else { px::scale_for(p.h, self.k) };
         self.win_size = (p.w * self.scale, p.h * self.scale);
     }
 
@@ -725,6 +733,58 @@ impl Widget {
         if self.size() != before {
             self.fit_window();
         }
+    }
+
+    /// Ступени размера (клетка, во сколько раз увеличить холст), от мелкой к крупной, и какая из них обычная.
+    /// Клетка крупнее обычной — только если для неё есть детальный слой вида (иначе картинка рисовалась бы из
+    /// грубой «целиком» и надписи считались бы в других единицах); дальше — обычный холст ровно ×2.
+    fn zoom_levels(&self) -> (Vec<(i32, i32)>, usize) {
+        let b0 = ((3 * self.k + 1) / 2).max(2);
+        let base = format!("{}_{}", self.style.id(), self.size.id());
+        let cs = self.whole_specs.get(&base).and_then(|s| s["cell_scale"].as_f64()).unwrap_or(1.0);
+        let layer = |b: i32| self.layers.contains_key(&format!("{base}@{}", ((b as f64) * cs).round() as i32));
+        let any = (2..=4).any(|c| self.layers.contains_key(&format!("{base}@{c}")));
+        let ok = |b: i32| b == b0 || if any { layer(b) } else { b < b0 };
+        let (lo, hi) = ((b0 * 2 + 2) / 3, b0 * 2);
+        let mut v: Vec<(i32, i32)> = Vec::new();
+        for m in 1..=2 {
+            for b in 2..=hi {
+                let size = b * m;
+                if ok(b) && (lo..=hi).contains(&size) && !v.iter().any(|(vb, vm)| vb * vm == size) {
+                    v.push((b, m));
+                }
+            }
+        }
+        v.sort_by_key(|(b, m)| b * m);
+        let def = v.iter().position(|l| *l == (b0, 1)).unwrap_or(0);
+        (v, def)
+    }
+
+    /// Нынешняя ступень размера (клетка, увеличение).
+    fn zoom_level(&self) -> (i32, i32) {
+        let (v, def) = self.zoom_levels();
+        let i = (def as i32 + self.zoom).clamp(0, v.len() as i32 - 1) as usize;
+        v.get(i).copied().unwrap_or((((3 * self.k + 1) / 2).max(2), 1))
+    }
+
+    /// Колесо мыши над виджетом: крупнее или мельче на одну ступень (пиксели остаются целыми — чётко).
+    fn wheel_zoom(&mut self, dy: f64) {
+        self.wheel += dy;
+        if self.wheel.abs() < 1.0 {
+            return;
+        }
+        let step = self.wheel.signum() as i32;
+        self.wheel = 0.0;
+        let (v, def) = self.zoom_levels();
+        let z = (self.zoom + step).clamp(-(def as i32), v.len() as i32 - 1 - def as i32);
+        if z == self.zoom {
+            return;
+        }
+        self.zoom = z;
+        crate::prefs::update(|v| v["widget_zoom"] = serde_json::json!(z));
+        self.relayout();
+        self.fit_window();
+        self.dirty = true;
     }
 
     /// Окно и буфер — под текущий размер картинки.
@@ -1006,6 +1066,14 @@ impl ApplicationHandler for Widget {
             }
             // правая кнопка — открыть Аптечку (там же меню «Вид» с видом виджета)
             WindowEvent::MouseInput { state: ElementState::Pressed, button: MouseButton::Right, .. } => open_main(),
+            // колесо — размер виджета (вверх — крупнее)
+            WindowEvent::MouseWheel { delta, .. } => {
+                let dy = match delta {
+                    winit::event::MouseScrollDelta::LineDelta(_, y) => y as f64,
+                    winit::event::MouseScrollDelta::PixelDelta(p) => p.y / 40.0,
+                };
+                self.wheel_zoom(dy);
+            }
             WindowEvent::MouseInput { state: ElementState::Released, button: MouseButton::Left, .. } => {
                 self.release_ear();
                 if std::mem::take(&mut self.close_down) {
@@ -1112,6 +1180,15 @@ fn on_screen(el: &ActiveEventLoop, x: i64, y: i64, w: i64, h: i64) -> bool {
         let iy = (y + h).min(p.y as i64 + s.height as i64) - y.max(p.y as i64);
         ix >= 80.min(w) && iy >= 80.min(h)
     })
+}
+
+/// Ступень размера из настроек (ui.json widget_zoom: на сколько ступеней от обычной; пределы — zoom_levels).
+/// На macOS виджет системный (WidgetKit), размер колесом там не нужен.
+fn zoom_pref() -> i32 {
+    if cfg!(target_os = "macos") {
+        return 0;
+    }
+    crate::prefs::load().get("widget_zoom").and_then(|v| v.as_i64()).unwrap_or(0).clamp(-4, 4) as i32
 }
 
 pub fn run() {

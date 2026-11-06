@@ -182,16 +182,6 @@
  ],
  "graded": true,
  "anim": {
-  "breath": {
-   "rect": [
-    30,
-    0,
-    86,
-    46
-   ],
-   "hold": 34,
-   "fx": 8
-  },
   "ears": [
    {
     "tip": [

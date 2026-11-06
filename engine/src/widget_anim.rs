@@ -12,6 +12,8 @@
 //!   "loops":  [{"rect", "file", "period", "on", "phase"?, "random"?}] — нарисованный кадр, который сам по себе
 //!                                появляется на «on» секунд каждые «period» (хвост в такт дыханию, пар над
 //!                                чашкой); "random": true — в случайный миг каждого периода (уши дёрнулись);
+//!   "sway":   {"tip", "r", "dir", "period", "clip"?} — хвост сам качается: изгиб за кончик туда и обратно
+//!                                (как ухо, но сам по себе, с периодом «period» секунд);
 //!   "ears":   [{"tip", "r", "dir", "hit"}] — ухо: от кончика «tip» в радиусе «r» картинка тянется на «dir»
 //!                                клеток (плавно к нулю), «hit» — куда нажимать; «clip» (необязательно) — тянется
 //!                                только внутри этого прямоугольника (у «Окна» уши у рамки — рамка остаётся на месте).
@@ -63,12 +65,14 @@ pub struct Anim {
     pub shy: bool,
     /// какие кадры «loops» сейчас видны (бит i — loops[i])
     pub loops: u8,
+    /// изгиб хвоста «sway», 0..=EAR_STEPS
+    pub sway: u8,
 }
 
 impl Default for Anim {
     /// Покой: всё как нарисовано (картинка без оживления).
     fn default() -> Anim {
-        Anim { bubble: 0, spark: [SPARK_FULL; MAX_SPARK], breath: 0, blink: 0, ear: [0; 2], shy: false, loops: 0 }
+        Anim { bubble: 0, spark: [SPARK_FULL; MAX_SPARK], breath: 0, blink: 0, ear: [0; 2], shy: false, loops: 0, sway: 0 }
     }
 }
 
@@ -82,6 +86,8 @@ pub struct Caps {
     pub ears: usize,
     /// кадры «loops»: сколько и их ритм
     pub loops: usize,
+    /// хвост качается: период в миллисекундах (0 — нет)
+    pub sway: u32,
     pub loop_t: [Loop; MAX_LOOPS],
 }
 
@@ -95,6 +101,12 @@ pub struct Loop {
     pub on: u32,
     pub phase: u32,
     pub random: bool,
+}
+
+/// Изгиб хвоста в момент t: плавно туда и обратно за период, целыми ступенями 0..=EAR_STEPS.
+pub fn sway_step(t: f64, period: f64) -> u8 {
+    let k = (1.0 - (std::f64::consts::TAU * t / period).cos()) / 2.0;
+    ear_step(k)
 }
 
 /// Виден ли кадр «loops» в момент t.
@@ -125,6 +137,7 @@ impl Caps {
             blink: an["blink"].is_object(),
             ears: n("ears").min(2),
             loops: n("loops").min(MAX_LOOPS),
+            sway: if an["sway"].is_object() { (an["sway"]["period"].as_f64().unwrap_or(3.4).max(0.5) * 1000.0) as u32 } else { 0 },
             loop_t: {
                 let mut a = [Loop::default(); MAX_LOOPS];
                 for (i, l) in an["loops"].as_array().into_iter().flatten().take(MAX_LOOPS).enumerate() {
@@ -136,7 +149,7 @@ impl Caps {
         }
     }
     pub fn any(&self) -> bool {
-        self.bubble || self.sparks > 0 || self.breath || self.blink || self.ears > 0 || self.loops > 0
+        self.bubble || self.sparks > 0 || self.breath || self.blink || self.ears > 0 || self.loops > 0 || self.sway > 0
     }
 }
 
@@ -247,6 +260,9 @@ impl Anim {
         }
         if caps.blink {
             a.blink = blink_frame(t);
+        }
+        if caps.sway > 0 {
+            a.sway = sway_step(t, caps.sway as f64 / 1000.0);
         }
         for i in 0..caps.loops {
             if loop_on(t, caps.loop_t[i]) {
@@ -483,6 +499,9 @@ pub fn apply(p: &mut Px, spec: &Value, cs: i32, a: &Anim) {
     for (i, e) in an["ears"].as_array().into_iter().flatten().take(2).enumerate() {
         ear(p, &g, e, a.ear[i]);
     }
+    if let Some(sw) = an.get("sway").filter(|s| s.is_object()) {
+        ear(p, &g, sw, a.sway);
+    }
     // смущение: нарисованная мордочка (ChatGPT по образцу «румянца» приложения, подогнана под клетки вида);
     // она закрывает глаза сама — моргание поверх не нужно
     for (i, l) in an["loops"].as_array().into_iter().flatten().take(MAX_LOOPS).enumerate() {
@@ -612,6 +631,13 @@ mod tests {
     }
 
     #[test]
+    fn sway_goes_and_returns() {
+        assert_eq!(sway_step(0.0, 3.4), 0);
+        assert_eq!(sway_step(1.7, 3.4), EAR_STEPS);
+        assert_eq!(sway_step(3.4, 3.4), 0);
+    }
+
+    #[test]
     fn loops_rhythm() {
         let l = Loop { period: 3400, on: 1500, phase: 0, random: false };
         assert!(loop_on(0.1, l) && loop_on(1.4, l) && !loop_on(1.6, l) && !loop_on(3.3, l) && loop_on(3.5, l));
@@ -679,7 +705,7 @@ mod tests {
         // нет разметки "anim" — любой кадр ничего не меняет
         let mut q = p0.clone();
         let bare = serde_json::json!({"step": [10.0, 10.0]});
-        apply(&mut q, &bare, 3, &Anim { bubble: 4, spark: [0; MAX_SPARK], breath: 1, blink: 2, ear: [4, 4], shy: false, loops: 0xF });
+        apply(&mut q, &bare, 3, &Anim { bubble: 4, spark: [0; MAX_SPARK], breath: 1, blink: 2, ear: [4, 4], shy: false, loops: 0xF, sway: 4 });
         assert!(q.same(&p0));
     }
 

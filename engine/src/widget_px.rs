@@ -925,7 +925,15 @@ pub fn whole(
                 let c = hex(&fl["colors"][st.as_str()], st_col(&st));
                 let (cx, cy) = (rect.x + rect.w / 2, rect.y + rect.h / 2);
                 match fl["shape"].as_str().unwrap_or("dot") {
-                    "check" => status_icon(&mut p, &st, cx - 5 * u - u / 2, cy - 5 * u - u / 2),
+                    "check" => {
+                        // своего значка концепта под эту клетку нет (крупный размер колесом) — рисуем запасной,
+                        // но по месту: точка значка растёт вместе с виджетом
+                        let sc = (rect.w.min(rect.h) / 11).max(u);
+                        let keep = p.unit;
+                        p.unit = sc;
+                        status_icon(&mut p, &st, cx - 5 * sc - sc / 2, cy - 5 * sc - sc / 2);
+                        p.unit = keep;
+                    }
                     "square" => p.fill(rect, c),
                     "heart" => {
                         p.icon(&[".hh.hh.", "hhhhhhh", "hhhhhhh", ".hhhhh.", "..hhh..", "...h..."], cx - 3 * u - u / 2, cy - 3 * u, &[('h', c)]);

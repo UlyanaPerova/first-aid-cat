@@ -90,7 +90,9 @@ A problem that doesn't matter to you can be ignored: **Ignore** next to the row,
 
 A small desktop widget shows the essentials: network, VPN, AI, CPU and disk. Click it to open the main window. Pick its look and size in the **Widget** menu.
 
-The cat in the widgets is alive too: he blinks, the heart bubble bobs, sparks twinkle, and in **Window** and **Monitor** you can pull his ear to make him blush. In **Glass** his tail sways with his breath, steam rises from the mug and his ears twitch now and then. On Linux the animation sleeps while other windows cover the widget.
+The cat in the widgets is alive too: he blinks, and you can pull his ear to make him blush. In **Window** the heart bubble bobs and sparks twinkle; in **Glass** steam rises from the mug and his ears twitch now and then. On Linux the animation sleeps while other windows cover the widget.
+
+**Resize the widget** with the mouse wheel over it (Linux and Windows): wheel up makes it bigger, wheel down smaller, from about two thirds up to twice the usual size. The size is remembered. The steps are chosen so that the picture is only ever drawn at whole pixels from its detailed artwork, so it stays crisp and the labels stay in place.
 
 Animation can be switched off: **View → Picture animation** for the main window and **Widget → Widget animation** for the widget. Measured on a test machine, the main window then uses 4–5 times less CPU (0.7% → 0.2% of one core); for the widget the saving is small (about 0.3% → 0.1%).
 
