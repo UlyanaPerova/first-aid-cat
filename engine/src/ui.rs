@@ -3292,7 +3292,7 @@ pub fn demo_sessions() -> Vec<Session> {
         agent: "claude",
     };
     vec![
-        mk("94381c64-23cd-4986-a58d-7fbeba172dd6", "собери окно в стиле XP", true, "busy", 30.0),
+        mk("0f1a2b3c-cafe-4cat-b0ba-00000000c0de", "собери окно в стиле XP", true, "busy", 30.0),
         mk("0f3a9c21-77aa-4be1-9d0e-123456789abc", "почини прокси", false, "", 7200.0),
         mk("c2d4e6f8-1111-2222-3333-444455556666", "что с видеокартой", false, "", 86400.0),
     ]

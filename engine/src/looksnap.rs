@@ -5,7 +5,9 @@
 //! Только чтение при проверке; запись — только по кнопке и только наших ключей (validate в fixes.rs).
 #![cfg(any(windows, target_os = "macos"))]
 
-use crate::diag::{fx, Check, BAD, INFO, OK, WARN};
+#[cfg(windows)]
+use crate::diag::BAD;
+use crate::diag::{fx, Check, INFO, OK, WARN};
 
 /// Ключ эталона: (id, название строки, вид значения).
 /// Вид: dword (число реестра), text (строка), bool/int/float/string — тип `defaults write`.

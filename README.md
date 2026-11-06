@@ -96,13 +96,14 @@ The cat in the **Window** and **Monitor** widgets is alive too: he blinks, the h
 |---|---|---|
 | **Window** | <img src="docs/screenshots/widget_window.png" alt="Window widget, medium" height="170"> | <img src="docs/screenshots/widget_window_small.png" alt="Window widget, small" height="170"> |
 | **Monitor** | <img src="docs/screenshots/widget_monitor.png" alt="Monitor widget, medium" height="190"> | <img src="docs/screenshots/widget_monitor_small.png" alt="Monitor widget, small" height="190"> |
-| **Glass** | <img src="docs/screenshots/widget_glass.png" alt="Glass widget, medium" height="170"><br>macOS only | <img src="docs/screenshots/widget_glass_small.png" alt="Glass widget, small" height="190"> |
+| **Glass** | — | <img src="docs/screenshots/widget_glass_small.png" alt="Glass widget, small" height="190"> |
 
-On **macOS** the widget is a native WidgetKit widget (small and medium). Add it through *Edit Widgets* on the desktop.
+On **macOS** the widget is a native WidgetKit widget (small and medium). Add it through *Edit Widgets* on the desktop. It is in full color while the desktop is in front, and macOS turns it pale when windows cover it.
 
-<p align="center">
-  <img src="docs/screenshots/widget_macos.png" alt="macOS WidgetKit widget" width="420">
-</p>
+| Size | In color | Pale |
+|---|---|---|
+| **Small** | <img src="docs/screenshots/widget_macos_small_color.png" alt="macOS widget, small, in color" height="170"> | <img src="docs/screenshots/widget_macos_small_white.png" alt="macOS widget, small, pale" height="170"> |
+| **Medium** | <img src="docs/screenshots/widget_macos_medium_color.png" alt="macOS widget, medium, in color" height="170"> | <img src="docs/screenshots/widget_macos.png" alt="macOS widget, medium, pale" height="170"> |
 
 <p align="center">
   <img src="docs/screenshots/medical_note.png" alt="Medical note from Dr. Meow" width="620">
