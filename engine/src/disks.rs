@@ -79,7 +79,7 @@ fn unescape(s: &str) -> String {
 
 /// Все разделы настоящих дисков. Не ответивший за 2 с (отвалившийся диск) пропускается.
 pub fn list() -> Vec<Fs> {
-    let mounts = std::fs::read_to_string("/proc/self/mounts").unwrap_or_default();
+    let mounts = crate::store::read_text_lossy("/proc/self/mounts").unwrap_or_default();
     let mut cand: Vec<(String, String)> = Vec::new();
     for l in mounts.lines() {
         let f: Vec<&str> = l.split_whitespace().collect();

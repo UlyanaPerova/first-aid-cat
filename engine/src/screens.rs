@@ -12,7 +12,8 @@ use crate::gfx::Face;
 use skrifa::outline::OutlinePen;
 use tiny_skia::{Color, FillRule, GradientStop, LinearGradient, Paint, PathBuilder, Pixmap, Point, Rect, SpreadMode, Transform};
 
-const FONT: &[u8] = include_bytes!("../assets/FusionPixel.ttf");
+// тот же пиксельный шрифт, что у окна (один экземпляр в программе)
+const FONT: &[u8] = crate::gfx::FONT_PIXEL;
 const INK: (f32, f32, f32) = (0.04, 0.15, 0.25);
 const DIGITS: [[&str; 5]; 10] = [
     ["111", "101", "101", "101", "111"],

@@ -286,9 +286,17 @@ en: Looks like a failure on their side.
 ru: ошибка сертификата
 en: certificate error
 
-# diag.rs:948
-ru: Защищённое соединение не сложилось. Чаще всего — неверные часы (смотри «Системное время»); реже сеть подменяет сертификаты (антивирус, рабочий фильтр).
-en: The secure connection failed. Most often the clock is wrong (see “System time”); less often the network swaps certificates (antivirus, work filter).
+# diag.rs:962
+ru: Сертификат сайта для этого компьютера просрочен или ещё не действует — чаще всего неверные часы (смотри «Системное время»).
+en: To this computer the site's certificate looks expired or not yet valid. Most often the clock is wrong (see “System time”).
+
+# diag.rs:965
+ru: сертификату нет доверия
+en: certificate not trusted
+
+# diag.rs:966
+ru: Связь есть, но сертификат сайта выдан не тем, кого программа знает. Так бывает, когда сеть подменяет сертификаты: антивирус с проверкой HTTPS, рабочий фильтр. Браузер при этом может работать. Если сеть чужая — осторожно.
+en: The connection works, but the site's certificate was issued by someone the app doesn't know. This happens when the network swaps certificates: an antivirus that scans HTTPS, a work filter. Your browser may still work. On a network you don't own, be careful.
 
 # diag.rs:952
 ru: нет ответа

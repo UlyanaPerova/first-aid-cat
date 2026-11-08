@@ -38,6 +38,7 @@ The app keeps no long-term history of measurements: no speed log, no scan cache 
 | File | What | Kept |
 |---|---|---|
 | `ui.json` | window layout, language, which checks are on, widget look | until you delete it |
+| `фразы_кота.txt` (only if you create it) | your own phrases for the cat; read once at start, never written | until you delete it |
 | `snapshot.json` | your themes and extensions as you saved them (to notice when something breaks); written only when you press "Save current as baseline" | until you save again |
 | `backups/` | a copy of a config file before the app edits it (for example before removing a proxy line), for undo. Lines that look like secrets are masked | 7 days, at most 10 copies |
 | `widget.json` (macOS) | the few short rows the WidgetKit widget shows | overwritten each run |
@@ -51,6 +52,7 @@ The app keeps no long-term history of measurements: no speed log, no scan cache 
 | the last duplicate-file search (`dupes.json`: paths and sizes) | same |
 | which problems you chose to ignore (`ignored.json`: check names) | same; also each time the window starts |
 | the license texts, when you open Help → Licenses (`licenses/`) | at a later start, once older than 12 hours |
+| a short-lived copy of OpenCode's session database (`oc_…/`), read to list OpenCode sessions (only titles and folders are shown; secrets in titles are masked) | right after reading; a leftover from a crash at the next start |
 
 If the app is killed or crashes, these files stay behind. The next start removes any of them older than 12 hours, together with half-written temporary copies (`*.tmp…`) left by an interrupted write. Newer ones are reused or overwritten.
 
@@ -66,8 +68,6 @@ Where the session folder is, and whether the system clears it:
 **Only in memory**, gone when the app closes:
 - speed results for the "slower than usual for this network" hint (the last 20 of this session);
 - which files the secret scan already looked at (path, size, time, *kinds* found; never the secret values).
-
-Older versions kept measurement files in the settings folder; the new version deletes them at start (`checks.json`, `checks.alive`, `check_now`, `speed.json`, `speed.net`, `speed_history.jsonl`, `footprint*.json`, `dupes.json`, and the old `~/.cache/aptechka/dupes.json`).
 
 Settings folder:
 - Linux: `~/.config/aptechka/` (or `$XDG_CONFIG_HOME/aptechka/`).

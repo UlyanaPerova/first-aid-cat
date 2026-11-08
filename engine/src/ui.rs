@@ -1637,7 +1637,7 @@ impl Ui {
             MenuAct::About => {
                 self.info_dialog(
                     &format!("Аптечка {}", env!("CARGO_PKG_VERSION")),
-                    "Офлайн-диагностика: сеть и VPN, графика, система и Клод. Один лёгкий файл, без GTK. Текстовый режим: aptechka --diag",
+                    "Диагностика компьютера с котом-доктором: сеть, VPN и прокси, ИИ-помощники, диски, темы и система. Без учётных записей и слежки: найденное не уходит с компьютера. Лицензия Apache 2.0, github.com/UlyanaPerova/first-aid-cat. Текстовый режим: aptechka --diag",
                 );
                 Vec::new()
             }
@@ -3251,7 +3251,6 @@ fn chk(key: &'static str, title: &str, status: &str, value: &str, fixes: &[(&str
         status: status.into(),
         value: value.into(),
         detail: String::new(),
-        fix: fixes.first().map(|f| f.0.to_string()),
         fixes: fixes.iter().map(|f| crate::diag::Fix { id: f.0.into(), label: f.1.into(), arg: f.2.map(|a| a.into()) }).collect(),
         unit: "",
         unchecked: false,

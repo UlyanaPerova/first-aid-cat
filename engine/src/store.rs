@@ -136,7 +136,8 @@ pub fn private_dir() -> PathBuf {
 }
 
 /// Имена файлов с данными измерений в папке сеанса (их же убирают при выходе и при старте, если старше 12 часов).
-pub const RUNTIME_DATA: [&str; 7] = ["checks.json", "checks.alive", "check_now", "speed.json", "speed.net", "dupes.json", "ignored.json"];
+pub const RUNTIME_DATA: [&str; 8] =
+    ["checks.json", "checks.alive", "check_now", "speed.json", "speed.net", "dupes.json", "ignored.json", "widget.show"];
 
 /// Папка сеанса для данных измерений (результаты проверок, замер скорости, поиск дублей, замок проверяющего):
 /// то, что не должно пережить выход из системы. Одна функция и для окна, и для виджета.
@@ -321,24 +322,6 @@ pub fn housekeeping() {
             }
         }
     }
-    // переезд: прежние версии держали данные измерений в папке настроек; теперь они живут только в памяти и в
-    // папке сеанса. Удаляем ровно эти имена, не переходя по ссылкам (ссылка удаляется сама, цель цела).
-    for name in OLD_PERSISTENT {
-        remove_file_nofollow(&d.join(name));
-    }
-    if let Ok(rd) = std::fs::read_dir(&d) {
-        for e in rd.flatten() {
-            let n = e.file_name();
-            let n = n.to_string_lossy();
-            // и недописанные временные копии этих же файлов от прежних версий («checks.tmp1234.0.ab12cd34»)
-            let stem = n.split_once(".tmp").map(|(s, _)| s);
-            let old_tmp = stem.is_some_and(|s| s.starts_with("footprint") || OLD_PERSISTENT.iter().any(|o| o.split('.').next() == Some(s)));
-            if (n.starts_with("footprint") && n.ends_with(".json")) || old_tmp {
-                remove_file_nofollow(&e.path());
-            }
-        }
-    }
-    crate::dupes::remove_legacy_cache();
     // папка сеанса: файлы старше 12 часов (на Windows и macOS её не чистят при выходе из системы)
     let rd_dir = runtime_dir();
     for name in RUNTIME_DATA {
@@ -365,14 +348,19 @@ pub fn housekeeping() {
             }
         }
     }
-    // забытые копии базы OpenCode (oc_<pid>_<ns>_<n>): только свои каталоги (не ссылки), старше 10 минут
-    if let Ok(rd) = std::fs::read_dir(&d) {
-        for e in rd.flatten() {
-            let p = e.path();
-            let ours = e.file_name().to_str().is_some_and(|n| n.starts_with("oc_"));
-            if ours && e.file_type().is_ok_and(|t| t.is_dir() && !t.is_symlink()) && age(&p).is_some_and(|a| a > std::time::Duration::from_secs(600))
-            {
-                remove_tree_nofollow(&p);
+    // забытые копии базы OpenCode (oc_<pid>_<ns>_<n>; процесс убили посреди чтения): только свои каталоги
+    // (не ссылки), старше 10 минут — в папке сеанса (сейчас копия там) и в папке настроек
+    for dir in [&rd_dir, &d] {
+        if let Ok(rd) = std::fs::read_dir(dir) {
+            for e in rd.flatten() {
+                let p = e.path();
+                let ours = e.file_name().to_str().is_some_and(|n| n.starts_with("oc_"));
+                if ours
+                    && e.file_type().is_ok_and(|t| t.is_dir() && !t.is_symlink())
+                    && age(&p).is_some_and(|a| a > std::time::Duration::from_secs(600))
+                {
+                    remove_tree_nofollow(&p);
+                }
             }
         }
     }
@@ -390,10 +378,6 @@ fn is_write_tmp(name: &str) -> bool {
         && parts[2].len() == 8
         && parts[2].bytes().all(|b| b.is_ascii_hexdigit())
 }
-
-/// Старые постоянные файлы данных измерений в папке настроек (их больше не пишем).
-pub const OLD_PERSISTENT: [&str; 9] =
-    ["checks.json", "checks.alive", "check_now", "checks.lock", "takeover.lock", "speed.json", "speed.net", "speed_history.jsonl", "dupes.json"];
 
 /// Удалить файл или ссылку (саму ссылку, не цель); каталоги не трогаем.
 pub fn remove_file_nofollow(p: &Path) {
@@ -746,10 +730,10 @@ fn runtime_dir_safety() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// Уборка при запуске удаляет ровно прежние файлы данных измерений (и ссылку — не цель), остальное цело.
+/// Уборка при запуске не трогает настройки и копии правок; в папке сеанса убирает только устаревшее.
 #[cfg(all(test, unix))]
 #[test]
-fn housekeeping_removes_exactly_old_measurement_files() {
+fn housekeeping_keeps_settings_and_expires_runtime() {
     let _g = crate::ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let root = std::env::temp_dir().join(format!("aptechka_hk2_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
@@ -761,16 +745,13 @@ fn housekeeping_removes_exactly_old_measurement_files() {
     let d = private_dir();
     let victim = root.join("victim.txt");
     std::fs::write(&victim, "INTACT").unwrap();
-    for n in OLD_PERSISTENT.iter().chain(["footprint.json", "footprint-v4.json", "footprint-v9.json"].iter()) {
-        std::fs::write(d.join(n), "x").unwrap();
-    }
-    // ссылка с таким именем: удаляется сама, цель цела
-    std::fs::remove_file(d.join("speed.json")).unwrap();
-    std::os::unix::fs::symlink(&victim, d.join("speed.json")).unwrap();
+    // ссылка в папке настроек на чужой файл: цель уборка не трогает
+    std::os::unix::fs::symlink(&victim, d.join("link.json")).unwrap();
     let keep = ["ui.json", "snapshot.json", "footprint_notes.txt", "backups.json"];
     for n in keep {
         std::fs::write(d.join(n), "keep").unwrap();
     }
+    let keep: Vec<&str> = keep.into_iter().chain(["link.json"]).collect();
     std::fs::create_dir(d.join("backups")).unwrap();
     std::fs::write(d.join("backups/a.1.bak"), "keep").unwrap();
     housekeeping();

@@ -65,7 +65,7 @@ if [ $DO_UNINSTALL = 1 ]; then
         rm -f "$DESKTOP_DIR/Аптечка.desktop"; log "убрала ярлык с рабочего стола" "removed the desktop shortcut"
     fi
     if [ -f "$DESK.bak" ]; then mv -f "$DESK.bak" "$DESK"; log "вернула прежний ярлык" "restored the previous menu entry"; else rm -f "$DESK"; fi
-    if [ -L "$BIN_DIR/aptechka-python" ]; then mv -f "$BIN_DIR/aptechka-python" "$BIN_DIR/aptechka"; log "вернула прежнюю команду aptechka" "restored the previous aptechka command"; else rm -f "$BIN_DIR/aptechka"; fi
+    rm -f "$BIN_DIR/aptechka"
     gtk-update-icon-cache -q -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
     update-desktop-database "$APPS" >/dev/null 2>&1 || true
     log "Аптечка убрана (настройки в ~/.config/aptechka остались)" "First Aid Cat removed (settings in ~/.config/aptechka are kept)"; exit 0
@@ -76,10 +76,6 @@ BIN="$HERE/aptechka"; [ -x "$BIN" ] || BIN="$ROOT/engine/target/release/aptechka
 ICON="$HERE/aptechka.png"; [ -f "$ICON" ] || ICON="$ROOT/assets/aptechka.png"
 mkdir -p "$BIN_DIR" "$APPS" "$AUTO" "$ICONS"
 
-# старая команда aptechka (например, ссылка на Python-версию) — сохраняем как aptechka-python
-if [ -L "$BIN_DIR/aptechka" ] && [ ! -e "$BIN_DIR/aptechka-python" ]; then
-    mv "$BIN_DIR/aptechka" "$BIN_DIR/aptechka-python"; log "прежняя команда сохранена: aptechka-python" "previous command kept as aptechka-python"
-fi
 install -m 755 "$BIN" "$BIN_DIR/aptechka"
 install -m 644 "$ICON" "$ICONS/$ID.png"
 [ -f "$HOME/.local/share/icons/hicolor/index.theme" ] || cp /usr/share/icons/hicolor/index.theme "$HOME/.local/share/icons/hicolor/" 2>/dev/null || true

@@ -342,7 +342,7 @@ pub struct Fonts {
     crisp: bool,
 }
 
-const FONT_PIXEL: &[u8] = include_bytes!("../assets/FusionPixel.ttf");
+pub(crate) const FONT_PIXEL: &[u8] = include_bytes!("../assets/FusionPixel.ttf");
 
 fn raster(face: &Face, ch: char, px: u16, crisp: bool) -> Glyph {
     let s = px as f32 / face.upm;

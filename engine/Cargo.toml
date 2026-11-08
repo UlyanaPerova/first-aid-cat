@@ -2,6 +2,8 @@
 name = "aptechka"
 version = "0.9.2"
 edition = "2021"
+# самая старая версия Rust, на которой собирается (rusqlite и uuid требуют 1.89); проверяет CI
+rust-version = "1.89"
 description = "Аптечка: живая слоёная пиксельная картинка (движок)"
 
 [build-dependencies]

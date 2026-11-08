@@ -16,7 +16,7 @@ These days everyone checks their computer by asking a terminal AI agent, and so 
 
 **First Aid Cat** (in Russian, *Аптечка*) is a desktop health checker with a doctor cat. It watches the things that usually break at the worst moment: the network, the VPN and its leftovers, proxies, the connection to AI assistants, disks, memory, updates, themes and drivers. It explains what is wrong in plain words, and it offers a fix only where a fix is safe.
 
-It is a single native binary written in Rust. There is no Electron and no GTK. It works offline, and its interface is available in English and Russian.
+It is a single native binary written in Rust. There is no Electron and no GTK. It has no accounts and no telemetry: the only network traffic is the checks themselves (listed in PRIVACY.md). The interface is available in English and Russian.
 
 <p align="center">
   <img src="docs/screenshots/main.png" alt="First Aid Cat main window" width="820">
@@ -46,6 +46,8 @@ He also reacts to you:
 - **poke the tail**, and he gets nervous: a drop of sweat, the tail freezes;
 - **poke his head**, and he is indignant: ears back, the tail lashes;
 - and he has something to say about each of these.
+
+His phrases live in a plain text file. To give him your own, put a file named `фразы_кота.txt` into the settings folder (`~/.config/aptechka/` on Linux, `~/Library/Application Support/aptechka/` on macOS, `%APPDATA%\aptechka\` on Windows). Copy [the built-in one](engine/assets/фразы_кота.txt) to see the format; it is read at each start.
 
 The window, the widgets and the cat make a cozy pixel-art corner for your desktop. He is at home in a customised desktop setup and in background shots for vibey videos and TikToks. What he shows on screen is not saved anywhere: see [Privacy](#privacy).
 
@@ -179,7 +181,7 @@ The program is a single Rust binary:
 
 ## Building from source
 
-You need Rust 1.85 or newer. All commands below start from the repository root (the folder that contains `engine/`, `packaging/` and `macos/`).
+You need Rust 1.89 or newer. All commands below start from the repository root (the folder that contains `engine/`, `packaging/` and `macos/`).
 
 **Build and test** (any system):
 

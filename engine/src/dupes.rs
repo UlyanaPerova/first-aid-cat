@@ -438,19 +438,6 @@ fn cache_path() -> PathBuf {
     crate::store::runtime_dir().join("dupes.json")
 }
 
-/// Прежние версии писали результат в ~/.cache/aptechka/dupes.json — убрать (ссылку — саму, не цель).
-pub fn remove_legacy_cache() {
-    let dir = std::env::var_os("XDG_CACHE_HOME")
-        .map(PathBuf::from)
-        .filter(|p| p.is_absolute())
-        .or_else(|| crate::store::home_dir().map(|h| h.join(".cache")))
-        .map(|d| d.join("aptechka"));
-    if let Some(dir) = dir {
-        crate::store::remove_file_nofollow(&dir.join("dupes.json"));
-        let _ = std::fs::remove_dir(&dir); // только если пуста
-    }
-}
-
 pub fn save(groups: &[Group], complete: bool) {
     let j = serde_json::json!({
         "time": std::time::SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0),

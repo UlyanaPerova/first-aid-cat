@@ -20,6 +20,19 @@ use crate::catalog::Unit;
 use crate::diag::{Check, Fix};
 
 /// Как часто проверять показатель (обычная частота, секунды).
+/// Тяжёлые проверки на старте — не все разом: у каждой своя отсрочка, чтобы на слабом ноутбуке первая
+/// минута не уходила на десятки процессов и чтение сотен мегабайт сразу. Сеть, система и прочее — сразу.
+/// «Проверить всё» отсрочку отменяет (due = сейчас у всех).
+fn first_delay(id: &str) -> Duration {
+    Duration::from_secs(match id {
+        "memory" => 20,
+        "stability" => 35,
+        "diskhealth" => 50,
+        "footprint" => 75,
+        _ => 0,
+    })
+}
+
 fn base_every(id: &str) -> u64 {
     match id {
         // сеть, VPN, прокси, загрузка процессора и диск — то, что ломается «прямо сейчас»
@@ -133,7 +146,9 @@ fn freq_factor() -> f64 {
 /// Попросить проверить всё сейчас (кнопка «Проверить всё»): у себя или у проверяющего процесса.
 pub fn check_now() {
     NOW.store(true, std::sync::atomic::Ordering::SeqCst);
-    let _ = crate::store::write_private(&req_path(), crate::ui::now_secs().to_string().as_bytes());
+    // наносекунды: два нажатия в одну секунду — два разных запроса (секунды совпадали, второй терялся)
+    let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    let _ = crate::store::write_private_quick(&req_path(), t.to_string().as_bytes());
 }
 
 static NOW: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -165,6 +180,12 @@ impl Drop for ProducingGuard {
 pub fn cleanup_on_exit() {
     let d = dir();
     let ours = PRODUCING.load(std::sync::atomic::Ordering::SeqCst);
+    // жива другая копия (окно или виджет) — файлы ей нужны (результаты, «игнорировать»): не трогаем, даже если
+    // проверяли мы; уберёт последняя
+    let me = std::process::id() as i64;
+    if crate::procs::list_fresh().iter().any(|p| p.pid != me && p.is_aptechka()) {
+        return;
+    }
     if ours || crate::store::lock::free(&d.join("checks.lock")) {
         for n in crate::store::RUNTIME_DATA {
             crate::store::remove_file_nofollow(&d.join(n));
@@ -217,7 +238,7 @@ pub fn start() -> Receiver<Vec<Check>> {
 
 /// Последняя отметка проверяющего: (номер процесса, время). Пишется раз в 5 с.
 fn heartbeat() -> Option<(u32, i64)> {
-    let t = std::fs::read_to_string(alive_path()).ok()?;
+    let t = crate::store::read_capped(&alive_path(), 256).ok()?;
     let (pid, at) = t.trim().split_once(' ')?;
     Some((pid.parse().ok()?, at.parse().ok()?))
 }
@@ -299,7 +320,8 @@ fn produce(tx: &Sender<Vec<Check>>, mut lock: Option<crate::store::lock::Held>) 
     let mut net_sig = net_signature();
     let mut dev_sig = dev_signature();
     let mut net_t = Instant::now();
-    let mut req_seen = std::fs::read_to_string(req_path()).unwrap_or_default();
+    let mut dev_t = Instant::now();
+    let mut req_seen = crate::store::read_capped(&req_path(), 64).unwrap_or_default();
     let mut factor = freq_factor();
     let mut factor_t = Instant::now();
     loop {
@@ -346,7 +368,8 @@ fn produce(tx: &Sender<Vec<Check>>, mut lock: Option<crate::store::lock::Held>) 
             }
         }
         // устройства: подключили/отключили звуковую карту, USB, питание — проверить устройства сразу
-        if net_t.elapsed() < Duration::from_millis(600) {
+        if dev_t.elapsed() > Duration::from_secs(3) {
+            dev_t = Instant::now();
             let sig = dev_signature();
             if sig != dev_sig {
                 crate::diag::log("проверки: устройства поменялись — проверяю устройства и звук");
@@ -360,7 +383,7 @@ fn produce(tx: &Sender<Vec<Check>>, mut lock: Option<crate::store::lock::Held>) 
             }
         }
         // «Проверить всё» — из этого процесса или от другого (файл-запрос)
-        let req = std::fs::read_to_string(req_path()).unwrap_or_default();
+        let req = crate::store::read_capped(&req_path(), 64).unwrap_or_default();
         if NOW.swap(false, std::sync::atomic::Ordering::SeqCst) || req != req_seen {
             req_seen = req;
             for (id, s) in slots.iter_mut() {
@@ -374,7 +397,10 @@ fn produce(tx: &Sender<Vec<Check>>, mut lock: Option<crate::store::lock::Held>) 
             factor = freq_factor();
         }
         // какие показатели включены (могли включить/выключить в «Показателях»)
-        let units: Vec<&'static Unit> = crate::catalog::units().iter().filter(|u| crate::prefs::unit_enabled(u.id, u.default_on)).collect();
+        // выбор человека читаем один раз за круг (было — по чтению настроек на каждый показатель)
+        let (off, on) = crate::prefs::unit_choice();
+        let units: Vec<&'static Unit> =
+            crate::catalog::units().iter().filter(|u| !off.contains(u.id) && (on.contains(u.id) || u.default_on)).collect();
         // выключили показатель — его строки уходят из итога: это тоже изменение, о котором надо сообщить
         let before = slots.len();
         slots.retain(|id, _| units.iter().any(|u| u.id == *id));
@@ -384,7 +410,7 @@ fn produce(tx: &Sender<Vec<Check>>, mut lock: Option<crate::store::lock::Held>) 
         for u in &units {
             let s = slots.entry(u.id).or_insert_with(|| Slot {
                 rows: vec![Check::new(u.cat.key(), u.title, "checking", "проверяю…")],
-                due: now,
+                due: now + first_delay(u.id),
                 every: base_every(u.id) as f64 * factor,
                 sig: String::new(),
                 running: false,
@@ -480,7 +506,7 @@ fn is_dev_id(id: &str) -> bool {
 /// Отпечаток устройств (Linux, без запуска программ): звуковые карты, USB-устройства, питание от сети.
 /// На Windows и macOS пока пусто — там устройства проверяются по расписанию.
 fn dev_signature() -> String {
-    let mut s = std::fs::read_to_string("/proc/asound/cards").unwrap_or_default();
+    let mut s = crate::store::read_text_lossy("/proc/asound/cards").unwrap_or_default();
     if let Ok(rd) = std::fs::read_dir("/sys/bus/usb/devices") {
         let mut v: Vec<String> = rd.flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect();
         v.sort();
@@ -488,7 +514,7 @@ fn dev_signature() -> String {
     }
     if let Ok(rd) = std::fs::read_dir("/sys/class/power_supply") {
         for e in rd.flatten() {
-            s.push_str(&std::fs::read_to_string(e.path().join("online")).unwrap_or_default());
+            s.push_str(&crate::store::read_text_lossy(e.path().join("online")).unwrap_or_default());
         }
     }
     s
@@ -526,7 +552,7 @@ fn net_signature() -> String {
         })
         .map(|a| a.ip().to_string())
         .unwrap_or_else(|_| "нет".into());
-    let route = std::fs::read_to_string("/proc/net/route").unwrap_or_default();
+    let route = crate::store::read_text_lossy("/proc/net/route").unwrap_or_default();
     let dflt =
         route.lines().skip(1).find(|l| l.split_whitespace().nth(1) == Some("00000000")).and_then(|l| l.split_whitespace().next()).unwrap_or("");
     format!("{local} {dflt}")
@@ -552,7 +578,8 @@ fn write_checks(path: &std::path::Path, all: &[Check]) {
             "fixes": c.fixes.iter().map(|f| serde_json::json!({"id": f.id, "label": f.label, "arg": f.arg})).collect::<Vec<_>>(),
         })).collect::<Vec<_>>(),
     });
-    let _ = crate::store::write_private(path, j.to_string().as_bytes());
+    // папка сеанса, файлы одноразовые: без принудительной записи на диск (fsync), атомарность — та же (tmp → rename)
+    let _ = crate::store::write_private_quick(path, j.to_string().as_bytes());
 }
 
 /// Прочитать строки проверок: (когда записаны, строки).
@@ -581,7 +608,6 @@ fn read_checks(path: &std::path::Path) -> Option<(i64, Vec<Check>)> {
                 .collect();
             let mut ch = Check::new(key, &s(c, "title"), &s(c, "status"), &s(c, "value"));
             ch.detail = s(c, "detail");
-            ch.fix = fixes.first().map(|f| f.id.clone());
             ch.fixes = fixes;
             ch.unit = unit;
             // старые файлы без поля — как «проверено»
@@ -607,7 +633,7 @@ pub fn save_speed(rows: &[Check]) {
     }
     write_checks(&dir().join("speed.json"), rows);
     // в какой сети мерили: другая сеть (дом → кафе, включили VPN) — замер уже не про неё
-    let _ = crate::store::write_private(&dir().join("speed.net"), net_hash().as_bytes());
+    let _ = crate::store::write_private_quick(&dir().join("speed.net"), net_hash().as_bytes());
 }
 
 /// Отпечаток сети для файла (не сам адрес и маршрут): совпадает — та же сеть.

@@ -14,7 +14,6 @@ pub fn config_dir() -> PathBuf {
     if let Some(x) = std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from).filter(|p| p.is_absolute()) {
         return x.join("aptechka");
     }
-    // без домашней папки — временная папка, но не «.config» в текущем каталоге
     // без домашней папки — личная папка сеанса ($XDG_RUNTIME_DIR, 0700), а не общий /tmp (там её мог бы
     // заранее занять другой пользователь)
     let home = || {
@@ -263,16 +262,9 @@ pub fn set_ignored(titles: &[String], on: bool) {
     save_ignored(&set);
 }
 
-/// Окно запустилось: игнор снимается (ключ "ignored" в ui.json — от версии, где он жил в настройках).
+/// Окно запустилось: игнор снимается (за время, пока программа была закрыта, могла появиться новая беда).
 pub fn clear_ignored() {
     save_ignored(&HashSet::new());
-    if load().get("ignored").is_some() {
-        update(|v| {
-            if let Some(o) = v.as_object_mut() {
-                o.remove("ignored");
-            }
-        });
-    }
 }
 
 pub fn set_unit(id: &str, enabled: bool) {

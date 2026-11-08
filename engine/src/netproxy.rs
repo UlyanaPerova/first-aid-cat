@@ -466,7 +466,11 @@ fn captive_verdict(r: &[Probe]) -> Option<Check> {
 }
 
 pub fn check_captive() -> Vec<Check> {
-    let agent = ureq::AgentBuilder::new().timeout(std::time::Duration::from_secs(5)).redirects(0).user_agent("aptechka/1.0").build();
+    let agent = ureq::AgentBuilder::new()
+        .timeout(std::time::Duration::from_secs(5))
+        .redirects(0)
+        .user_agent(concat!("aptechka/", env!("CARGO_PKG_VERSION")))
+        .build();
     // (адрес, что должно прийти): 204 без тела у Google, «Success» у Apple — оба сразу, параллельно
     let probes = [("http://connectivitycheck.gstatic.com/generate_204", None), ("http://captive.apple.com/hotspot-detect.html", Some("Success"))];
     let res: Vec<Probe> = std::thread::scope(|sc| {

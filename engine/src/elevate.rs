@@ -117,8 +117,9 @@ fn arg_ok(a: &str) -> bool {
     !a.contains('\0') && !a.contains('\n') && a.len() <= 4096
 }
 
-/// Собрать команду для pkexec: [pkexec, (systemd-run …песочница… --,) /абсолютный/путь, аргументы…].
-/// None — программа не найдена среди доверенных или аргумент недопустим.
+/// Собрать команду для pkexec: [pkexec, systemd-run …песочница… --, /абсолютный/путь, аргументы…].
+/// None — программа (или pkexec, или systemd-run для песочницы) не найдена среди доверенных, или аргумент
+/// недопустим.
 #[cfg(target_os = "linux")]
 pub fn linux_cmd(prog: &str, args: &[&str], p: Profile) -> Option<Vec<String>> {
     if !args.iter().all(|a| arg_ok(a)) {
@@ -127,7 +128,10 @@ pub fn linux_cmd(prog: &str, args: &[&str], p: Profile) -> Option<Vec<String>> {
     let bin = trusted_binary(prog)?;
     let pkexec = trusted_binary("pkexec")?;
     let mut c = vec![pkexec.to_string_lossy().into_owned()];
-    if let Some(run) = trusted_binary("systemd-run") {
+    // без песочницы systemd-run (нет systemd или его файлы не принадлежат root) — не запускаем вовсе: права
+    // администратора без ProtectHome/NoNewPrivileges/ProtectSystem обещанной защиты не дают
+    let run = trusted_binary("systemd-run")?;
+    {
         c.push(run.to_string_lossy().into_owned());
         // --pipe: вывод — нам; --wait: код выхода — программы; --collect: не оставлять упавший блок
         c.extend(["--quiet", "--wait", "--pipe", "--collect", "--service-type=exec"].map(String::from));

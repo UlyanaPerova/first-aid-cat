@@ -33,8 +33,8 @@ fn parse(text: &'static str) -> HashMap<String, Vec<&'static str>> {
 fn load() -> HashMap<String, Vec<&'static str>> {
     let mut all = parse(DEFAULT);
     let own = crate::prefs::config_dir().join("фразы_кота.txt");
-    if let Ok(t) = crate::store::read_text(&own) {
-        // строки живут до конца программы (фраз немного, читаем раз за запуск)
+    // не больше 1 МБ: строки живут до конца программы (читаем раз за запуск)
+    if let Some(t) = crate::store::read_bytes(&own, 1 << 20).ok().and_then(|b| String::from_utf8(b).ok()) {
         let t: &'static str = Box::leak(t.into_boxed_str());
         for (k, v) in parse(t) {
             all.insert(k, v);

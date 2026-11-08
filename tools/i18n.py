@@ -4,6 +4,7 @@
   python3 tools/i18n.py check              — сколько строк без перевода (по модулям); код 1, если есть
   python3 tools/i18n.py missing MODULE     — непереведённые строки модуля MODULE.rs в формате таблицы
                                              (ru: …  /  en: пусто) — дописать в engine/i18n/en/MODULE.txt
+  python3 tools/i18n.py unused             — строки таблиц, которых в коде уже нет (убрать вручную)
 Строки, которые никогда не показываются (имена слоёв картинки, служебные ключи, разбор чужого вывода), —
 в engine/i18n/ignore/MODULE.txt (по одной, в том же виде, что после «ru: »; # — комментарий).
 """
@@ -175,6 +176,31 @@ def main():
         for key, line in module_strings(os.path.join(SRC, mod + ".rs")):
             if key not in done and key not in ign:
                 print(f"# {mod}.rs:{line}\nru: {esc(key)}\nen: \n")
+        return 0
+    if cmd == "unused":
+        used = {k for m in mods for k, _ in module_strings(os.path.join(SRC, m + ".rs"))}
+        # строки, собранные в коде из кусков («Мур! Беда:» + имя + «—» + значение), целиком в коде не встречаются:
+        # такая строка жива, если каждый её русский кусок между {} есть в исходниках
+        src = "".join(open(os.path.join(SRC, m + ".rs"), encoding="utf-8").read() for m in mods)
+        assets = os.path.join(SRC, "..", "assets")  # фразы кота — из текстового файла, а не из кода
+        src += "".join(open(os.path.join(assets, f), encoding="utf-8").read() for f in os.listdir(assets) if f.endswith(".txt"))
+
+        def alive(ru):
+            parts = [p.strip(" .,:;!?…()[]«»—-\n") for p in re.split(r"\{\}|\|", ru)]
+            parts = [p for p in parts if CYR.search(p)]
+            return not parts or all(esc(p) in src or p in src for p in parts)  # без русских слов — не судим
+
+        n = 0
+        for f in sorted(os.listdir(TABLES)):
+            if not f.endswith(".txt"):
+                continue
+            for line in open(os.path.join(TABLES, f), encoding="utf-8"):
+                if line.startswith("ru: "):
+                    ru = unesc(line[4:].rstrip("\n").rstrip("\r"))
+                    if ru not in used and not any(p in used for p in ru.split("|")) and not alive(ru):
+                        print(f"{f}: {line[4:].rstrip()}")
+                        n += 1
+        print(f"{n:5}  строк в таблицах, которых в коде уже нет")
         return 0
     total = 0
     for m in mods:

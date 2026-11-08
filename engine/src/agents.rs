@@ -759,16 +759,17 @@ fn oc_copy(src: &Path, dst: &Path, max: u64, deadline: std::time::Instant) -> Re
     }
 }
 
-/// Почему копия в закрытой папке, а не в памяти: запросы к базе в режиме WAL видят свежие записи только
+/// Почему копия во временной папке сеанса (не в папке настроек: та постоянная и попадает в резервные копии),
+/// а не в памяти: запросы к базе в режиме WAL видят свежие записи только
 /// при открытии файла вместе с `-wal` (Connection::deserialize принимает один образ основной базы,
 /// журнал к нему не применяется, и список отстал бы). Поэтому копия на диске: папка 0700, файлы 0600,
-/// уборка в Drop и при запуске (housekeeping).
+/// уборка в Drop и при запуске (housekeeping). На Linux папка сеанса — в памяти (tmpfs).
 fn opencode_read_db(db: &Path) -> Result<Vec<AgentSession>, String> {
     let deadline = std::time::Instant::now() + OC_BUDGET;
     static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
     let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let tmp = crate::store::private_dir().join(format!("oc_{}_{nanos}_{n}", std::process::id()));
+    let tmp = crate::store::runtime_dir().join(format!("oc_{}_{nanos}_{n}", std::process::id()));
     #[allow(unused_mut)]
     let mut b = std::fs::DirBuilder::new();
     #[cfg(unix)]
@@ -1203,7 +1204,7 @@ mod tests {
         // кэш по времени и размеру: тот же ответ без чтения
         assert_eq!(opencode_read(&d).unwrap().len(), 4);
         // временных копий не осталось
-        let left = std::fs::read_dir(crate::store::private_dir())
+        let left = std::fs::read_dir(crate::store::runtime_dir())
             .map(|r| r.flatten().filter(|e| e.file_name().to_string_lossy().starts_with(&format!("oc_{}_", std::process::id()))).count())
             .unwrap_or(0);
         assert_eq!(left, 0);

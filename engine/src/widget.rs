@@ -209,8 +209,6 @@ pub struct Widget {
     /// они же как пришли (до «Игнорировать») и какие строки игнорировались при подсчёте
     raw: Vec<Check>,
     ignored: std::collections::HashSet<String>,
-    /// коты и сцены для видов (art/layers/виджет/спрайты/<вид>_<размер>_<ok|warn|bad>.png)
-    sprites: std::collections::HashMap<String, Sprite>,
     /// виджеты целиком из концептов на сетке (art/layers/виджет/целиком) и их разметка
     wholes: std::collections::HashMap<String, Sprite>,
     whole_specs: std::collections::HashMap<String, serde_json::Value>,
@@ -262,7 +260,7 @@ pub struct Widget {
     close_down: bool,
     /// мышь над виджетом — показать крестик «закрыть»
     hover: bool,
-    /// последняя просьба «показать» (ui.json widget_show) и до какого времени держать поверх окон
+    /// последняя просьба «показать» (файл widget.show в папке сеанса) и до какого времени держать поверх окон
     show_seen: i64,
     on_top_until: Option<Instant>,
     /// картинка не совпала с окном — перестроить окно к следующему кадру
@@ -297,7 +295,6 @@ impl Widget {
     pub fn new(k: i32) -> Widget {
         let (style, size) = look::chosen();
         let mug = |s: &str| Sprite::load(&format!("виджет/кружка_{s}.png")).unwrap_or(Sprite { w: 1, h: 1, px: vec![0] });
-        let mut sprites = std::collections::HashMap::new();
         let mut layers = std::collections::HashMap::new();
         let (mut wholes, mut whole_specs) = (std::collections::HashMap::new(), std::collections::HashMap::new());
         let art = std::env::var("ART").unwrap_or_default();
@@ -307,10 +304,9 @@ impl Widget {
                 if let Some(spec) =
                     crate::art::read(&art, &format!("виджет/целиком/{base}.json")).and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
                 {
-                    for s in ["ok", "warn", "bad"] {
-                        if let Some(sp) = Sprite::load(&format!("виджет/целиком/{base}_{s}.png")) {
-                            wholes.insert(format!("{base}_{s}"), sp);
-                        }
+                    // кот в виджете всегда обычный (о беде говорят значки и цвет итога) — картинка одна
+                    if let Some(sp) = Sprite::load(&format!("виджет/целиком/{base}_ok.png")) {
+                        wholes.insert(format!("{base}_ok"), sp);
                     }
                     whole_specs.insert(base.clone(), spec);
                 }
@@ -324,12 +320,6 @@ impl Widget {
                         if let Some(sp) = Sprite::load(&format!("виджет/слои/{key}.png")) {
                             layers.insert(key, sp);
                         }
-                    }
-                }
-                for s in ["ok", "warn", "bad"] {
-                    let key = format!("{}_{}_{s}", st.id(), sz.id());
-                    if let Some(sp) = Sprite::load(&format!("виджет/спрайты/{key}.png")) {
-                        sprites.insert(key, sp);
                     }
                 }
             }
@@ -347,7 +337,6 @@ impl Widget {
             cover_t: Instant::now(),
             zoom: zoom_pref(),
             wheel: 0.0,
-            sprites,
             wholes,
             whole_specs,
             layers,
@@ -375,7 +364,7 @@ impl Widget {
             cursor: PhysicalPosition::new(0.0, 0.0),
             close_down: false,
             hover: false,
-            show_seen: crate::prefs::load().get("widget_show").and_then(|v| v.as_i64()).unwrap_or(0),
+            show_seen: show_request(),
             on_top_until: None,
             refit: false,
             quips: Quips::new(),
@@ -411,9 +400,7 @@ impl Widget {
             Some(f) => f.clone(),
             None => self.tpl_data(),
         };
-        let st = ["ok", "warn", "bad"][d.state.min(2)];
         // кот всегда обычный (грустная и испуганная мордочки не нужны — о беде говорят значки и цвет итога)
-        let _ = st;
         let key = format!("{}_{}_ok", self.style.id(), self.size.id());
         let show_close = (self.hover || std::env::var_os("WIDGET_HOVER").is_some()) && self.style != Style::Window;
         // есть виджет целиком (концепт на сетке) — он; иначе вид рисуется кодом
@@ -468,7 +455,8 @@ impl Widget {
             self.ear_rects = if caps.ears > 0 { anim::ear_hits(spec, cell).into_iter().map(|r| px::up(r, s)).collect() } else { Vec::new() };
             return (p, hits);
         }
-        let pieces = Pieces { cat: self.sprites.get(&key), mug: &self.mugs[d.state.min(2)] };
+        // запасной путь (у вида нет картинки «целиком»): рисуется кодом, без спрайта кота
+        let pieces = Pieces { cat: None, mug: &self.mugs[d.state.min(2)] };
         px::draw(self.style, self.size, &d, &pieces, &mut self.pixel, show_close)
     }
 
@@ -648,7 +636,7 @@ impl Widget {
     /// Аптечка попросила показать виджет («Показать на рабочем столе», а он уже открыт): поднять поверх
     /// окон на 5 секунд и вернуть на экран, если уехал за край.
     fn check_show_request(&mut self) {
-        let req = crate::prefs::load().get("widget_show").and_then(|v| v.as_i64()).unwrap_or(0);
+        let req = show_request();
         if req != self.show_seen {
             self.show_seen = req;
             if let Some(w) = &self.window {
@@ -1116,9 +1104,9 @@ impl ApplicationHandler for Widget {
                     // программу заменили новой версией: запускаем новый виджет на том же месте, этот закрываем
                     self.save_pos();
                     if let Some((path, _)) = &self.exe {
-                        let spawned =
-                            std::process::Command::new(path).arg("--widget").env("APTECHKA_REPLACES", std::process::id().to_string()).spawn();
-                        if spawned.is_ok() {
+                        let mut c = std::process::Command::new(path);
+                        c.arg("--widget").env("APTECHKA_REPLACES", std::process::id().to_string());
+                        if crate::procs::spawn_detached(&mut c) {
                             el.exit();
                         }
                     }
@@ -1197,15 +1185,50 @@ fn zoom_pref() -> i32 {
     crate::prefs::load().get("widget_zoom").and_then(|v| v.as_i64()).unwrap_or(0).clamp(-4, 4) as i32
 }
 
-pub fn run() {
-    // виджет один: если уже открыт (ярлык нажали дважды, меню и ярлык разом) — второй не нужен
-    let me = std::process::id() as i64;
-    // (кроме перезапуска новой версией: старый виджет сейчас закроется сам, его номер — в APTECHKA_REPLACES)
+/// Окно просит открытый виджет показаться поверх окон: метка в папке сеанса (не в ui.json — это не
+/// настройка, и постоянный файл с fsync на каждый щелчок незачем). Наносекунды — два щелчка в одну
+/// секунду тоже разные просьбы.
+pub fn request_show() {
+    let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    let _ = crate::store::write_private_quick(&crate::store::runtime_dir().join("widget.show"), t.to_string().as_bytes());
+}
+
+fn show_request() -> i64 {
+    crate::store::read_capped(&crate::store::runtime_dir().join("widget.show"), 64)
+        .ok()
+        .and_then(|t| t.trim().parse::<u128>().ok())
+        .map_or(0, |n| (n % i64::MAX as u128) as i64)
+}
+
+/// Замок «виджет один» (widget.lock в папке сеанса). None — уже открыт другой виджет.
+/// Перезапуск новой версией (APTECHKA_REPLACES) ждёт до 5 с, пока старый закроется и отпустит замок.
+/// Замок не создаётся (испорчена папка) — по-старому, по списку процессов: лучше так, чем без виджета.
+fn one_widget() -> Option<Option<crate::store::lock::Held>> {
+    use crate::store::lock::{take, Take};
+    let p = crate::store::runtime_dir().join("widget.lock");
     let old: i64 = std::env::var("APTECHKA_REPLACES").ok().and_then(|v| v.parse().ok()).unwrap_or(-1);
-    if crate::procs::list().iter().any(|p| p.pid != me && p.pid != old && p.is_our("--widget")) {
+    let until = Instant::now() + Duration::from_secs(if old >= 0 { 5 } else { 0 });
+    loop {
+        match take(&p) {
+            Take::Got(h) => return Some(Some(h)),
+            Take::Busy if Instant::now() < until => std::thread::sleep(Duration::from_millis(100)),
+            Take::Busy => return None,
+            Take::Broken(_) => {
+                let me = std::process::id() as i64;
+                let other = crate::procs::list().iter().any(|p| p.pid != me && p.pid != old && p.is_our("--widget"));
+                return (!other).then_some(None);
+            }
+        }
+    }
+}
+
+pub fn run() {
+    // виджет один: если уже открыт (ярлык нажали дважды, меню и ярлык разом) — второй не нужен. Замок, а не
+    // поиск по списку процессов: два запуска разом не могут ни оба уйти, ни оба остаться. Держится до выхода.
+    let Some(_one) = one_widget() else {
         eprintln!("[виджет] уже открыт");
         return;
-    }
+    };
     let el = match EventLoop::new() {
         Ok(e) => e,
         Err(e) => {
@@ -1232,7 +1255,6 @@ pub fn shot(path: &str) {
     };
     w.rows = summarize(&checks);
     w.checks = checks.clone();
-    // WIDGET_MAC=папка — картинки для виджета macOS (как их рисует Аптечка на Маке), для проверки на любой системе
     // WIDGET_MAC=папка — widget.json для виджета macOS (что Аптечка пишет на Маке), для проверки на любой системе
     if let Ok(dir) = std::env::var("WIDGET_MAC") {
         let _ = std::fs::create_dir_all(&dir);
@@ -1503,7 +1525,7 @@ fn mac_concept_data() -> Option<TplData> {
 /// Прозрачные места «слоёного» окна пропускают насквозь — такие точки просто не засчитываются.
 /// None — не узнать (нет описателя окна).
 #[cfg(windows)]
-fn covered_windows(win: &Window) -> Option<bool> {
+pub(crate) fn covered_windows(win: &Window) -> Option<bool> {
     use core::ffi::c_void;
     use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
     type H = *mut c_void;
@@ -1653,5 +1675,31 @@ mod unchecked_tests {
         let all = [Check::new("sys", "Память", "ok", "40%"), Check::new("sys", "Диск", INFO, "не проверить").unknown()];
         let j: serde_json::Value = serde_json::from_str(&mac_state(&all, false, None)).unwrap();
         assert_eq!(j["state"], "unknown");
+    }
+}
+
+#[cfg(test)]
+mod lock_tests {
+    /// Второй виджет не запускается, пока первый держит замок; после выхода первого — запускается.
+    #[cfg(unix)]
+    #[test]
+    fn one_widget_lock() {
+        let _g = crate::ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let root = std::env::temp_dir().join(format!("aptechka_onew_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::set_permissions(&root, std::os::unix::fs::PermissionsExt::from_mode(0o700)).unwrap();
+        let old = std::env::var_os("XDG_RUNTIME_DIR");
+        std::env::set_var("XDG_RUNTIME_DIR", &root);
+        let first = super::one_widget();
+        assert!(matches!(first, Some(Some(_))), "первый берёт замок");
+        assert!(super::one_widget().is_none(), "второй при живом первом — нет");
+        drop(first);
+        assert!(super::one_widget().is_some(), "первый закрылся — можно");
+        match old {
+            Some(v) => std::env::set_var("XDG_RUNTIME_DIR", v),
+            None => std::env::remove_var("XDG_RUNTIME_DIR"),
+        }
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

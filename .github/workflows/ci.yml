@@ -46,13 +46,20 @@ jobs:
       - name: Format
         run: cargo fmt --check
       - name: Clippy (Linux)
-        run: cargo clippy --release --locked -- -D warnings
+        run: cargo clippy --release --locked --all-targets -- -D warnings
       - name: Clippy (Windows)
-        run: cargo clippy --release --locked --target x86_64-pc-windows-gnu -- -D warnings
+        run: cargo clippy --release --locked --all-targets --target x86_64-pc-windows-gnu -- -D warnings
       - name: Tests
         run: cargo test --release --locked
       - name: Every user-visible string is translated
         run: python3 ../tools/i18n.py check
+      - name: Third-party notices match Cargo.lock
+        run: python3 ../tools/notices.py --check
+      - name: Builds with the oldest supported Rust (rust-version)
+        run: |
+          retry(){ for i in 1 2 3; do timeout 300 "$@" && return 0; echo "retry $i: $*"; sleep 10; done; return 1; }
+          retry rustup toolchain install 1.89 --profile minimal --no-self-update
+          cargo +1.89 check --release --locked
       - name: Builds with the custom/ example (CUSTOM.md)
         run: |
           cp -r ../examples/custom ../custom
@@ -101,6 +108,9 @@ jobs:
           key: ${{ runner.os }}-${{ github.job }}-cargo-${{ hashFiles('engine/Cargo.lock', 'engine/build.rs', 'engine/.cargo/config.toml') }}
           restore-keys: ${{ runner.os }}-${{ github.job }}-cargo-
       - run: rustup update stable --no-self-update && rustup default stable
+      - name: Clippy (macOS)
+        working-directory: engine
+        run: rustup component add clippy && cargo clippy --release --locked --all-targets -- -D warnings
       - name: Tests
         working-directory: engine
         run: cargo test --release --locked

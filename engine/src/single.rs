@@ -1,6 +1,7 @@
 //! Одна копия Аптечки на пользователя: вторая копия просит первую показать окно и выходит.
 //! «Почтовый ящик»: Linux — абстрактный unix-сокет (в памяти ядра, без файлов: после падения исчезает сам);
-//! macOS — unix-сокет в папке временных файлов пользователя; Windows — TCP на 127.0.0.1, порт от имени пользователя.
+//! macOS — unix-сокет в папке временных файлов пользователя; Windows — TCP на 127.0.0.1, порт от папки пользователя.
+//! Вторая копия пишет «show <кто>», первая отвечает «aptechka», только если это тот же пользователь.
 
 use std::io::{Read, Write};
 
@@ -39,6 +40,10 @@ mod imp {
         let me = std::fs::metadata("/proc/self").map(|m| m.uid()).unwrap_or(u32::MAX - 1);
         r == 0 && c.uid == me
     }
+    /// Пользователя сверяет само ядро (same_user).
+    pub fn who() -> String {
+        String::new()
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -62,15 +67,23 @@ mod imp {
     pub fn same_user(_: &UnixStream) -> bool {
         true
     }
+    pub fn who() -> String {
+        String::new()
+    }
 }
 
 #[cfg(windows)]
 mod imp {
     use std::net::{TcpListener, TcpStream};
     pub type Listener = TcpListener;
+    /// Кто мы: папка профиля (C:\Users\Имя) у каждого пользователя своя. Порт общий на всю машину
+    /// (быстрое переключение пользователей, RDP) и может совпасть у двоих — тогда чужая копия на «show»
+    /// с нашим профилем не ответит «aptechka», и мы работаем сами, а не молча выходим.
+    pub fn who() -> String {
+        std::env::var("USERPROFILE").or_else(|_| std::env::var("USERNAME")).unwrap_or_default()
+    }
     fn port() -> u16 {
-        let user = std::env::var("USERNAME").unwrap_or_default();
-        let h = user.bytes().fold(5381u32, |h, b| h.wrapping_mul(33) ^ b as u32);
+        let h = who().to_lowercase().bytes().fold(5381u32, |h, b| h.wrapping_mul(33) ^ b as u32);
         47000 + (h % 2000) as u16
     }
     pub fn connect() -> std::io::Result<TcpStream> {
@@ -79,7 +92,7 @@ mod imp {
     pub fn bind() -> std::io::Result<TcpListener> {
         TcpListener::bind(("127.0.0.1", port()))
     }
-    /// TCP не говорит, чей процесс: опираемся на ответ «aptechka» (см. claim).
+    /// TCP не говорит, чей процесс: сверяем «кто» в самом запросе (см. who) и ответ «aptechka».
     pub fn same_user(_: &TcpStream) -> bool {
         true
     }
@@ -94,10 +107,8 @@ pub fn claim() -> std::io::Result<Option<Listener>> {
             // настоящая Аптечка этого же пользователя отвечает «aptechka»; чужой процесс, занявший ящик,
             // не должен мешать запуску — тогда работаем без «одной копии»
             let _ = s.set_read_timeout(Some(std::time::Duration::from_secs(1)));
-            let _ = s.write_all(b"show\n");
-            let mut buf = [0u8; 16];
-            let n = s.read(&mut buf).unwrap_or(0);
-            if imp::same_user(&s) && buf[..n].starts_with(b"aptechka") {
+            let _ = s.write_all(format!("show {}\n", imp::who()).as_bytes());
+            if imp::same_user(&s) && read_line(&mut s).starts_with(b"aptechka") {
                 return Ok(None);
             }
             return Err(std::io::Error::new(std::io::ErrorKind::AddrInUse, "ящик занят чужим процессом"));
@@ -121,18 +132,38 @@ pub fn listen(l: Listener, show: impl Fn() + Send + 'static) {
             if last.elapsed() < std::time::Duration::from_secs(1) {
                 continue;
             }
-            let mut buf = [0u8; 16];
             let mut s = s;
             let _ = s.set_read_timeout(Some(std::time::Duration::from_secs(1)));
             if !imp::same_user(&s) {
                 continue; // «покажись» от чужого пользователя не слушаем
             }
-            let n = s.read(&mut buf).unwrap_or(0);
-            if buf[..n].starts_with(b"show") {
+            let line = read_line(&mut s);
+            if line.strip_prefix(b"show").is_some_and(|w| w.trim_ascii() == imp::who().as_bytes()) {
                 let _ = s.write_all(b"aptechka\n");
                 last = std::time::Instant::now();
                 show();
             }
         }
     });
+}
+
+/// Одна строка запроса или ответа (до «\n», не больше 1 КБ; тайм-аут чтения задан заранее).
+fn read_line(s: &mut impl Read) -> Vec<u8> {
+    let mut out = Vec::new();
+    let mut b = [0u8; 256];
+    while out.len() < 1024 {
+        match s.read(&mut b) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => {
+                out.extend_from_slice(&b[..n]);
+                if out.contains(&b'\n') {
+                    break;
+                }
+            }
+        }
+    }
+    if let Some(i) = out.iter().position(|&c| c == b'\n') {
+        out.truncate(i);
+    }
+    out
 }

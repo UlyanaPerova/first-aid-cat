@@ -8,7 +8,7 @@
 
 ## 1. Поставить инструменты
 
-- **Rust** 1.85 или новее — с сайта [rustup.rs](https://rustup.rs). На Linux и macOS это одна команда в терминале, на Windows — установщик.
+- **Rust** 1.89 или новее — с сайта [rustup.rs](https://rustup.rs). На Linux и macOS это одна команда в терминале, на Windows — установщик.
 - **Git** — чтобы скачать исходники.
 - На **Windows** — средства сборки C++, которые предложит установщик Rust. На **macOS** — `xcode-select --install`.
 

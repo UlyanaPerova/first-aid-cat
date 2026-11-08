@@ -3,8 +3,8 @@ ru: Пустая команда.
 en: Empty command.
 
 # fixes.rs:67
-ru: Не запускаю «{}» с правами администратора: нет такой системной программы (или она не принадлежит root).
-en: I won't run “{}” as administrator: there's no such system program (or it isn't owned by root).
+ru: Не запускаю «{}» с правами администратора: нет такой системной программы, pkexec или systemd-run для песочницы (или они не принадлежат root).
+en: I won't run “{}” as administrator: the system program, pkexec or systemd-run for the sandbox is missing (or not owned by root).
 
 # fixes.rs:75
 ru: Только для Linux.

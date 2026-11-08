@@ -15,40 +15,32 @@ use std::sync::mpsc::{self, Receiver};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-/// Статусы (как в Python; `checking` и `off` нужны экранам, сами проверки их не выдают).
+/// Статусы строки. Ещё бывают «checking» и «off» — их ставят планировщик и экраны, не сами проверки.
 pub const OK: &str = "ok";
 pub const WARN: &str = "warn";
 pub const BAD: &str = "bad";
 pub const INFO: &str = "info";
-#[allow(dead_code)]
-pub const CHECKING: &str = "checking";
-#[allow(dead_code)]
-pub const OFF: &str = "off";
 
 /// Кнопка починки: (идентификатор, подпись, аргумент). Здесь только описание.
 #[derive(Clone, Debug)]
-#[allow(dead_code)]
 pub struct Fix {
     pub id: String,
     pub label: String,
     pub arg: Option<String>,
 }
 
-/// Результат одной проверки (аналог Result из checks.py).
+/// Результат одной проверки: строка таблицы.
 #[derive(Clone, Debug)]
-#[allow(dead_code)]
 pub struct Check {
-    /// Группа: "net", "gpu", "sys" (в Python это Result.group).
+    /// Вкладка: "net", "ai", "gpu", "dev", "theme", "sys".
     pub key: &'static str,
     pub title: String,
     /// ok | warn | bad | info | checking | off
     pub status: String,
     pub value: String,
-    /// Подсказка (в Python это Result.hint).
+    /// Подсказка.
     pub detail: String,
-    /// Идентификатор первой кнопки починки, если она есть.
-    pub fix: Option<String>,
-    /// Все кнопки починки (в Python это Result.fixes).
+    /// Кнопки починки (первая — на строке таблицы).
     pub fixes: Vec<Fix>,
     /// Код показателя из каталога, который дал эту строку ("" — не из каталога, например замер скорости).
     pub unit: &'static str,
@@ -86,7 +78,6 @@ impl Check {
             status: status.to_string(),
             value: crate::proxyaddr::redact(value),
             detail: String::new(),
-            fix: None,
             fixes: Vec::new(),
             unit: "",
             unchecked: false,
@@ -102,7 +93,6 @@ impl Check {
         self
     }
     pub(crate) fn fixes(mut self, f: Vec<Fix>) -> Check {
-        self.fix = f.first().map(|x| x.id.clone());
         self.fixes = f;
         self
     }
@@ -196,7 +186,7 @@ pub(crate) fn http_get_ms(url: &str, timeout_s: u64, limit: u64, proxy: Option<&
 }
 
 fn http_get_once(url: &str, timeout_s: u64, limit: u64, proxy: Option<&str>) -> (Option<u16>, String, String) {
-    let mut b = ureq::AgentBuilder::new().timeout(Duration::from_secs(timeout_s)).user_agent("aptechka/1.0");
+    let mut b = ureq::AgentBuilder::new().timeout(Duration::from_secs(timeout_s)).user_agent(concat!("aptechka/", env!("CARGO_PKG_VERSION")));
     if let Some(p) = proxy {
         match ureq::Proxy::new(p) {
             Ok(px) => b = b.proxy(px),
@@ -218,7 +208,11 @@ fn http_get_once(url: &str, timeout_s: u64, limit: u64, proxy: Option<&str>) -> 
 /// GET без переадресаций: (код, начало тела, ошибка). Для адресов проверки подключения: переадресация —
 /// признак страницы входа, а не «интернет есть».
 pub(crate) fn http_get_noredirect(url: &str, timeout_s: u64, limit: u64) -> (Option<u16>, String, String) {
-    let agent = ureq::AgentBuilder::new().timeout(Duration::from_secs(timeout_s)).redirects(0).user_agent("aptechka/1.0").build();
+    let agent = ureq::AgentBuilder::new()
+        .timeout(Duration::from_secs(timeout_s))
+        .redirects(0)
+        .user_agent(concat!("aptechka/", env!("CARGO_PKG_VERSION")))
+        .build();
     match agent.get(url).call() {
         Ok(resp) => {
             let code = resp.status();
@@ -247,7 +241,11 @@ fn short_err(e: &str) -> String {
 pub(crate) fn http_date(url: &str, timeout_s: u64) -> Option<String> {
     // без переадресаций: http://… часто переадресует на https://, а там при неверных часах TLS не сложится;
     // заголовок Date есть и у ответа-переадресации
-    let agent = ureq::AgentBuilder::new().timeout(Duration::from_secs(timeout_s)).redirects(0).user_agent("aptechka/1.0").build();
+    let agent = ureq::AgentBuilder::new()
+        .timeout(Duration::from_secs(timeout_s))
+        .redirects(0)
+        .user_agent(concat!("aptechka/", env!("CARGO_PKG_VERSION")))
+        .build();
     match agent.head(url).call() {
         Ok(r) => r.header("Date").map(|s| s.to_string()),
         Err(ureq::Error::Status(_, r)) => r.header("Date").map(|s| s.to_string()),
@@ -959,12 +957,15 @@ pub(crate) fn site_row(cat: &'static str, title: &str, url: &str) -> Check {
         Some(403) => Check::new(cat, title, WARN, "доступ запрещён (403)")
             .hint("Сервер отказал. Так бывает при блоке по стране (тогда поможет VPN), при защите от ботов и в рабочих сетях с фильтром."),
         Some(c) => Check::new(cat, title, WARN, &format!("ошибка {c}")).hint("Похоже, сбой на их стороне."),
-        None if low.contains("certificate") || low.contains("notvalidyet") || low.contains("expired") || low.contains("unknownissuer") => {
-            Check::new(cat, title, WARN, "ошибка сертификата").hint(
-                "Защищённое соединение не сложилось. Чаще всего — неверные часы (смотри «Системное время»); \
-                 реже сеть подменяет сертификаты (антивирус, рабочий фильтр).",
-            )
-        }
+        // Сертификат просрочен или «ещё не действует» — почти всегда неверные часы.
+        None if low.contains("notvalidyet") || low.contains("expired") => Check::new(cat, title, WARN, "ошибка сертификата")
+            .hint("Сертификат сайта для этого компьютера просрочен или ещё не действует — чаще всего неверные часы (смотри «Системное время»)."),
+        // Чужой выпускающий: сеть подменяет сертификаты (антивирус, рабочий фильтр, свой центр сертификации).
+        // Связь при этом есть — нет доверия; программа доверяет только общеизвестным центрам, браузер может работать.
+        None if low.contains("certificate") || low.contains("unknownissuer") => Check::new(cat, title, WARN, "сертификату нет доверия").hint(
+            "Связь есть, но сертификат сайта выдан не тем, кого программа знает. Так бывает, когда сеть подменяет \
+                 сертификаты: антивирус с проверкой HTTPS, рабочий фильтр. Браузер при этом может работать. Если сеть чужая — осторожно.",
+        ),
         None => Check::new(cat, title, BAD, "нет ответа").hint(if err.is_empty() {
             "Не достучаться. Проверь интернет и VPN."
         } else {
@@ -1693,8 +1694,7 @@ fn apt_hosts() -> BTreeMap<String, String> {
     }
     let mut urls: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for f in files {
-        let Ok(bytes) = std::fs::read(&f) else { continue };
-        let txt = String::from_utf8_lossy(&bytes).to_string();
+        let Ok(txt) = crate::store::read_text_lossy(&f) else { continue };
         if f.extension().and_then(|x| x.to_str()) == Some("sources") {
             // блоки разделены пустыми строками
             let mut blocks: Vec<Vec<&str>> = vec![Vec::new()];
@@ -1876,7 +1876,7 @@ fn disk_rows() -> Vec<Check> {
     }
     let home_dev = crate::disks::for_path(&all, &home()).map(|f| f.dev.clone());
     // разделы, которые и задуманы «только для чтения» (fstab с ro), не тревожат
-    let fstab = std::fs::read_to_string("/etc/fstab").unwrap_or_default();
+    let fstab = crate::store::read_text_lossy("/etc/fstab").unwrap_or_default();
     let ro_planned = |t: &str| {
         fstab.lines().any(|l| {
             let f: Vec<&str> = l.split_whitespace().collect();
@@ -2110,22 +2110,6 @@ pub fn worst(results: &[Check]) -> &str {
         }
     }
     best.map_or("ok", |b| b.status.as_str())
-}
-
-/// Фоновый запуск: проверки идут сразу, потом каждые `every`. Каждый прогон приходит
-/// в канал целым списком. Когда получатель закрыт, поток тихо завершается.
-#[allow(dead_code)]
-pub fn spawn_periodic(every: Duration) -> Receiver<Vec<Check>> {
-    let (tx, rx) = mpsc::channel();
-    log(&format!("фоновая диагностика: каждые {} с", every.as_secs()));
-    thread::spawn(move || loop {
-        if tx.send(run_all()).is_err() {
-            log("получатель закрыт, фоновая диагностика остановлена");
-            break;
-        }
-        thread::sleep(every);
-    });
-    rx
 }
 
 /// Режим `--diag`: один прогон и таблица в stdout.
@@ -2651,7 +2635,7 @@ fn speed_agent(timeout_s: u64, overall_s: f64) -> ureq::Agent {
         .timeout_connect(Duration::from_secs(timeout_s))
         .timeout_read(Duration::from_secs(timeout_s))
         .timeout_write(Duration::from_secs(timeout_s))
-        .user_agent("aptechka/1.0")
+        .user_agent(concat!("aptechka/", env!("CARGO_PKG_VERSION")))
         .build()
 }
 

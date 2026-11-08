@@ -53,7 +53,6 @@ fn main() {
         }
     }
     println!("cargo:rerun-if-changed={}", dir.join("виджет").display());
-    println!("cargo:rerun-if-changed={}", dir.join("виджет/шаблоны").display());
     walk(&dir.join("виджет"), &dir, &mut files);
     // среднее «Стекло» — только для macOS (там его рисует виджет WidgetKit); в Linux и Windows его нет
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos") {

@@ -24,11 +24,16 @@ impl Proc {
     /// Это запущенная копия Аптечки с таким аргументом (сама программа, а не `timeout aptechka …`,
     /// `gdb aptechka` или редактор с файлом «aptechka»): сравниваем имя программы процесса с нашим.
     pub fn is_our(&self, arg: &str) -> bool {
+        self.is_aptechka() && self.args.iter().skip(1).any(|a| a == arg)
+    }
+
+    /// Это Аптечка (окно или виджет — всё равно).
+    pub fn is_aptechka(&self) -> bool {
         let base = |s: &str| s.rsplit(['/', '\\']).next().unwrap_or(s).trim_end_matches(".exe").to_lowercase();
         let ours = self_exe().map(|p| base(&p.to_string_lossy())).unwrap_or_else(|| "aptechka".into());
         // на Linux имя процесса обрезано до 15 символов
         let name = base(&self.name);
-        (name == ours || ours.starts_with(&name) && name.len() == 15) && self.args.iter().skip(1).any(|a| a == arg)
+        name == ours || ours.starts_with(&name) && name.len() == 15
     }
 
     pub fn is(&self, bin: &str) -> bool {

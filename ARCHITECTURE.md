@@ -43,11 +43,12 @@ First Aid Cat is one Rust crate (`engine/`) that builds a single binary, `aptech
 |---|---|
 | `main.rs` | Entry point, command line, winit event loop, window, accessibility tree |
 | `ui.rs` | The main window: XP-style layout, tabs, table, menus, dialogs, mouse and keyboard |
-| `gfx.rs` | Own drawing toolkit: rectangles, bevels, gradients, icons, TrueType text (ttf-parser) |
+| `gfx.rs` | Own drawing toolkit: rectangles, bevels, gradients, icons, TrueType text (skrifa) |
 | `spravka.rs` | The "Medical Note from Dr. Meow" page and its export to PNG |
 | `scene.rs`, `life.rs`, `screens.rs` | The living picture: layered art, breathing and frame animation, the small monitors that show live data |
 | `colorman.rs` | Colour management for the display profile |
-| `widget.rs`, `widget_px.rs`, `widget_tpl.rs`, `widget_look.rs` | The desktop widget: data, pixel-exact rendering of three looks, hit areas; `widget.json` for macOS |
+| `widget.rs`, `widget_px.rs`, `widget_tpl.rs`, `widget_look.rs` | The desktop widget: data, pixel-exact rendering of three looks, hit areas, size steps with the mouse wheel; `widget.json` for macOS |
+| `widget_anim.rs` | Widget animation: blink frames, heart bubble, sparks, ear pull with a blush face, drawn loops (steam, ear twitch); frames are pure functions of time |
 | `sched.rs` | Scheduler: each check has its own interval; runs in parallel with timeouts and panic isolation; one shared result set for the window and the widget |
 | `catalog.rs` | Catalogue of checks by category (what can be switched on and off) |
 | `diag.rs` | Common and Linux checks: network, VPN, clock, graphics, sessions of Claude Code, speed test, CLI output |
@@ -67,16 +68,19 @@ First Aid Cat is one Rust crate (`engine/`) that builds a single binary, `aptech
 | `store.rs`, `prefs.rs` | Files on disk: private settings folder, per-session runtime folder for measurement data, atomic writes, safe reads, settings |
 | `cover.rs` | Linux: whether the widget is fully covered by other windows (asks the window manager), so its animation sleeps while nobody can see it. On Windows the same is done in `widget.rs` with `WindowFromPoint` |
 | `notify.rs` | Desktop notification when a new problem appears in a category where something is ignored |
-| `single.rs` | One instance per user; a second launch asks the first to show its window |
+| `single.rs` | One instance per user; a second launch asks the first to show its window (the widget has its own lock, `widget.lock`) |
 | `clip.rs` | Clipboard without GTK |
 | `i18n.rs` | Interface language (see below) |
+| `quips.rs` | What the cat says in the balloon and the widget |
+| `looksnap.rs` | Windows and macOS: the theme baseline ("Save current as baseline") and "Restore" |
+| `licenses.rs` | License texts and the custom-checks guide embedded in the binary, opened from the Help menu |
 | `art.rs` + `build.rs` | Pictures from `art/layers` embedded into the binary at build time |
 
 A local build can add its own checks and fixes from an optional, untracked `custom/` folder next to `engine/` (`build.rs` turns on `cfg(aptechka_custom)` when `custom/mod.rs` exists). Its checks join the catalogue, its fixes use IDs starting with `my_` and still pass through `fixes::validate`. Release builds and CI never have this folder.
 
 ## Rendering
 
-The window is drawn in software into a `softbuffer` surface. A slightly patched copy is in `engine/vendor/softbuffer`, with checked arithmetic and validated damage rectangles. Only changed regions are redrawn. The art scene is composited from PNG layers with `tiny-skia`. The widget is drawn on a small pixel canvas and scaled by whole numbers, so it stays crisp at any display scale.
+The window is drawn in software into a `softbuffer` surface. A patched copy of softbuffer 0.4.8 is in `engine/vendor/softbuffer`: an alpha channel, the display colour space and reused frame buffers on macOS, and size checks instead of panics. Every change is in `softbuffer-0.4.8.patch` next to it. Only changed regions are redrawn. The art scene is composited from PNG layers with `tiny-skia`. The widget is drawn on a small pixel canvas and scaled by whole numbers, so it stays crisp at any display scale.
 
 ## Checks and the scheduler
 

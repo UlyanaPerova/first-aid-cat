@@ -83,7 +83,7 @@ fn sh_admin(prog: &str, args: &[&str], timeout_s: u64, p: crate::elevate::Profil
     #[cfg(target_os = "linux")]
     {
         let Some(c) = crate::elevate::linux_cmd(prog, args, p) else {
-            return (false, format!("Не запускаю «{prog}» с правами администратора: нет такой системной программы (или она не принадлежит root)."));
+            return (false, format!("Не запускаю «{prog}» с правами администратора: нет такой системной программы, pkexec или systemd-run для песочницы (или они не принадлежат root)."));
         };
         let v: Vec<&str> = c.iter().map(String::as_str).collect();
         sh(&v, timeout_s)
@@ -694,7 +694,8 @@ pub fn validate(id: &str, arg: Option<&str>) -> Result<(), String> {
         "open_url" => {
             (a.starts_with("http://") || a.starts_with("https://"))
                 && a.len() <= 2048
-                && !a.chars().any(|c| c.is_whitespace() || c.is_control() || "\"'`<>".contains(c))
+                // те же запреты, что у самого open_url (один шлюз — одна строгость)
+                && !a.chars().any(|c| c.is_whitespace() || c.is_control() || "\"'`<>|^".contains(c))
         }
         // номер процесса и время его запуска (без времени процесс под этим номером мог смениться)
         "proc_term" => a.split_once('@').is_some_and(|(p, t)| digits(p) && digits(t) && p.parse::<u32>().is_ok_and(|p| p > 1)),
@@ -970,8 +971,8 @@ fn win_apply(id: &str, arg: Option<&str>) -> (bool, String) {
                 return (true, "Открыла «Очистку диска».".into());
             }
             // окно «Очистки диска» живёт своей жизнью — не ждём его
-            let r = crate::diag::quiet(&mut std::process::Command::new("cleanmgr")).spawn();
-            (r.is_ok(), if r.is_ok() { "Открыла «Очистку диска».".into() } else { "Не удалось открыть «Очистку диска».".into() })
+            let ok = crate::procs::spawn_detached(crate::diag::quiet(&mut std::process::Command::new("cleanmgr")));
+            (ok, if ok { "Открыла «Очистку диска».".into() } else { "Не удалось открыть «Очистку диска».".into() })
         }
         other => (false, format!("Неизвестное действие: {other}")),
     }
@@ -1395,11 +1396,10 @@ fn open_url(url: &str) -> (bool, String) {
     done(r, "Открыла страницу входа в браузере.")
 }
 
-/// Пакеты старых ядер: всё, что относится к версиям ядра, кроме работающей сейчас (uname -r) и самой новой.
+/// Пакеты старых ядер, которые можно удалить (исправление «apt_autoremove» — имя историческое: сам
+/// `apt autoremove` не запускается, удаляются только эти пакеты). Оставляем: работающее ядро (uname -r), и для
+/// каждого вида ядра (generic, lowlatency, oem…) — самое новое и предыдущее (запасное, если новое не загрузится).
 /// Только пакеты с версией в имени (linux-image-6.8.0-45-generic и т.п.) — общие linux-generic не трогаем.
-/// Раньше «Убрать старые ядра» запускала apt autoremove --purge -y: удаляла всё, что apt счёл лишним, не глядя.
-/// Пакеты старых ядер, которые можно удалить. Оставляем: работающее ядро, и для каждого вида ядра
-/// (generic, lowlatency, oem…) — самое новое и предыдущее (запасное, если новое не загрузится).
 /// Версии сравнивает dpkg (как сам apt), а не разбор чисел.
 fn old_kernel_packages() -> Vec<String> {
     let (_, running) = crate::diag::run(&["uname", "-r"], 5);

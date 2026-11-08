@@ -239,7 +239,7 @@ fn os_family() -> &'static str {
 
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 fn os_name() -> String {
-    let txt = std::fs::read_to_string("/etc/os-release").unwrap_or_default();
+    let txt = crate::store::read_text_lossy("/etc/os-release").unwrap_or_default();
     txt.lines()
         .find_map(|l| l.strip_prefix("PRETTY_NAME=\""))
         .and_then(|r| r.split('"').next())
@@ -250,7 +250,7 @@ fn os_name() -> String {
 
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 fn read_trim(path: &str) -> String {
-    std::fs::read_to_string(path).map(|s| s.trim().to_string()).unwrap_or_default()
+    crate::store::read_text_lossy(path).map(|s| s.trim().to_string()).unwrap_or_default()
 }
 
 /// Собрать содержимое справки по результатам проверок.

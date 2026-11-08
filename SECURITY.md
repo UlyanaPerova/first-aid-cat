@@ -18,7 +18,7 @@ First Aid Cat reads a lot of sensitive local state, and some of its fixes need a
 
 - Every fix ID and argument goes through **one validation gate** (`fixes::validate`). Unknown IDs, unexpected arguments and arguments with control characters are refused, whether they come from the UI, the command line or the cache.
 - A fix that needs administrator rights runs **only** an absolute path from a system directory. The binary and every directory above it must be owned by root and not writable by group or others. The fix runs under its own name, so multicall binaries behave correctly.
-- **Linux:** elevation is `pkexec systemd-run --pipe --wait` with a sandbox profile: `NoNewPrivileges`, `PrivateTmp`, `ProtectHome=read-only`, `RestrictSUIDSGID`, `ProtectKernelModules` and more. The package-manager profile is looser only where apt and dnf need it.
+- **Linux:** elevation is `pkexec systemd-run --pipe --wait` with a sandbox profile: `NoNewPrivileges`, `PrivateTmp`, `ProtectHome=read-only`, `RestrictSUIDSGID`, `ProtectKernelModules` and more. The package-manager profile is looser only where apt and dnf need it. On a system without `systemd-run` (or where it isn't owned by root) such fixes are refused instead of running without the sandbox; the manual command is still shown.
 - **Windows:** elevated PowerShell is passed as `-EncodedCommand`, so there is no quoting to break. Processes are killed through a handle after checking the executable path.
 - **macOS:** `osascript … with administrator privileges` gets the command as a separate argument, never spliced into AppleScript source.
 - **Processes** are stopped by identity, never by a bare PID. Linux uses `pidfd` plus a start-time check; Windows uses a process handle plus the image path; macOS checks the start time. A recycled PID is never killed.
@@ -29,7 +29,7 @@ First Aid Cat reads a lot of sensitive local state, and some of its fixes need a
 
 - State files are written atomically (a temporary file with an unpredictable name, `fsync`, then rename), with mode `0600` in a folder created `0700`. The app refuses a state folder owned by someone else.
 - Measurement results (check results, speed test, duplicate search) are not kept in the state folder. They live in memory and in a per-session runtime folder (`$XDG_RUNTIME_DIR/aptechka`, `$TMPDIR/aptechka`, `%TEMP%\\aptechka`) that is `0700`, owned by the user and not a symlink. It is in memory on usual Linux desktops (cleared at logout) but on disk in the Linux `/tmp` fallback, on Windows and on macOS; the app empties it when the last copy exits, and the next start removes leftovers older than 12 hours (see PRIVACY.md). The state folder keeps only settings, the saved theme baseline and edit backups.
-- Files from the user's home are opened with `O_NOFOLLOW | O_NONBLOCK`, must be regular files and are size-capped. A planted symlink, FIFO or huge file can't redirect a read, hang it or exhaust memory.
+- Files from the user's home are opened non-blocking, must be regular files and are size-capped, so a planted FIFO, device or huge file can't hang a read or exhaust memory. Symlinks to regular files are followed on purpose (dotfiles are often symlinks); a few sensitive reads use `O_NOFOLLOW` (`store::read_capped`). Windows has no equivalent of `O_NOFOLLOW`, so links and junctions are followed there.
 - Cross-process locks keep two copies of the app from running the same fix, or two scans, at once.
 
 ### Robustness

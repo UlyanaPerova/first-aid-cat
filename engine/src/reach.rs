@@ -105,7 +105,7 @@ pub fn dns_ms() -> Option<f64> {
 
 /// DNS-серверы системы (Linux и macOS — /etc/resolv.conf; на Windows — пусто, там остаётся системный поиск).
 fn system_resolvers() -> Vec<std::net::IpAddr> {
-    std::fs::read_to_string("/etc/resolv.conf")
+    crate::store::read_text_lossy("/etc/resolv.conf")
         .unwrap_or_default()
         .lines()
         .filter_map(|l| l.trim().strip_prefix("nameserver")?.split_whitespace().next()?.split('%').next()?.parse().ok())

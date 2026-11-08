@@ -1,127 +1,18 @@
-# Аптечка — движок живой картинки (Rust)
+# engine
 
-Собирает кадр из слоёв `art/layers` и оживляет их. Окно — winit + softbuffer, без GTK.
-Картинки вшиты в программу (`build.rs` берёт из `art/layers` только нужное: ≈4 МБ, 137 файлов) — один файл без папок рядом.
-`ART=art/layers` — читать слои с диска (правишь позы — видно без пересборки).
+The Rust crate that builds the `aptechka` binary (First Aid Cat): the main window, the desktop widget, the checks and the fixes.
 
-## Что умеет
-- **Дыхание.** Голова, шея, плечи и грудь поднимаются на клетку, планшет, руки на нём и ноги
-  стоят. Между ними — шов в свитере (`art/layers/дыхание.json`), строка шва повторяется.
-- **Покадровые движения** (позы слоёв из `art/layers/позы`): моргание, дёрганье ушами,
-  рука с ручкой-луком, хвост, огурец в банке, листья.
-- **Тычки мышкой:** ухо или ножки — смущение, голова — возмущение (значок 💢), хвост — беспокойство
-  (капля пота), растение — качается. На каждый тычок кот отвечает репликой в облачке (4 с, потом
-  облачко возвращает прежнее сообщение). Реплики — `src/quips.rs`, дописывать можно туда.
-- **Диагностика** (`src/diag.rs`, перенос `aptechka/checks.py`): сеть, VPN, прокси, связь с
-  Claude, видеокарта, система, часы, темы и расширения, док, репозитории apt — в фоне сразу и раз в минуту. Если итог «bad» — кот
-  беспокоится. `aptechka --diag` — таблица в терминал.
-- **Экраны в картинке** (`src/screens.rs`): главный монитор, «Сеть», «Система», робот
-  (Claude ON/OFF), часы на роботе-телевизоре — с живыми данными, помехами кинескопа;
-  видны только клетки «стекла» (`art/layers/экраны.png`, считает `tools/screen_masks.py`).
-  Шрифт Fusion Pixel вшит в программу (`assets/`).
-
-## Показатели (`src/catalog.rs`)
-Все проверки — «показатели» по категориям-вкладкам: Сеть, ИИ, Графика, Устройства, Темы, Система.
-Вкладка «Показатели» включает и выключает их (выключенные не запускаются); выбор — в `ui.json` (`"off"`, `"on"`).
-- **ИИ** (`src/agents.rs`): Claude, Codex, Qwen Code, Kimi, Gemini CLI, Antigravity, Cursor — связь, статус серверов,
-  сессии (живые, думает/ждёт), общий список «Сессии» с командой продолжения. Агент показывается, только если установлен.
-  Форматы Codex/Qwen/Kimi проверены на настоящих сессиях (`tests/fixtures/agents`); устройство файлов других агентов
-  можно снять без содержимого разговоров: `tools/agent_probe.py`.
-- **Прокси не только в системе** (`src/netproxy.rs`): прокси-расширения Firefox (обычный/snap/flatpak) и Chrome/Brave/Яндекс/Vivaldi/Opera/Edge,
-  ручной прокси и PAC в Firefox, `http_proxy` в `~/.bashrc`/`.profile`/`.zshrc`/`/etc/environment`/`environment.d`, прокси у git/npm/pip/apt.
-  Прокси на 127.0.0.1, где никто не слушает, — поломка (VPN выключен, прокси остался); проверено в ВМ (раздел 13).
-- **Частые поломки** (`src/more.rs`): звук (PipeWire, вывод, выключен/0%, микрофон), Bluetooth и Wi-Fi (rfkill, служба),
-  печать (принтер на паузе, очередь), раскладка (нечем переключать), пакеты (прерванная установка, зависимости,
-  перезагрузка, /boot), место (корзина, миниатюры, журнал), нехватка памяти (OOM, подкачка), прожорливые программы,
-  Secure Boot и NVIDIA. Лечение проверено в ВМ (`tools/vm_test_fixes.sh`, разделы 8–12); звук, Bluetooth и печать —
-  только вживую (в ВМ нет устройств).
-- У каждого лечения окно подтверждения с той же командой для терминала и кнопкой «Копировать команду» (`fixes::manual`).
-
-## Окно в стиле Windows XP (`src/ui.rs`, `src/gfx.rs`)
-Всё нарисовано своими руками (tiny-skia + растры глифов DejaVu Sans Condensed с кэшем по размеру)
-прямо в буфер softbuffer. Без GTK, egui, OpenGL. Заголовок окна свой (синий, как XP), системной рамки нет.
-- Меню Файл / Проверки / Вид / Лечение / Справка, слева панель больших значков, картинка в утопленной рамке.
-- Справа: полоса Claude (живые сессии, «Копировать resume», выпадающий список «Сессии»), облачко кота
-  с лицом из картинки и ×, вкладки Сеть / Графика / Темы / Система, строка скорости с кнопкой «Проверить»,
-  таблица «Проверка / Статус / Действие» с кнопками лечения и полосой прокрутки, журнал, строка состояния из трёх частей.
-- Масштаб интерфейса берётся из масштаба монитора (на 5K ×2 окно 2444×1456, клетка картинки ×5); `UI_K=…` переопределяет, `SCALE=…` — клетку.
-- Перерисовка только «грязных» кусков (наведение, нажатие, данные, прокрутка). Строки картинки — по прежней логике.
-- Буфер обмена X11 — свой поток (`src/clip.rs`, x11rb без libxcb): работает, пока открыта Аптечка.
-- Сессии Claude обновляются раз в 4 с; экран-робот в картинке показывает «вкл · N · думает/ждёт» или «выключен».
-- Лечение (`src/fixes.rs`, перенос `fixes.py`): окно подтверждения как в Python. **`DRY_RUN=1`** — команды только пишутся в журнал.
-
-### Темы, справка, подсказки
-- **Темы** (`check_themes`, `check_dock`, `check_repos` в `diag.rs`): сравнение с эталоном `~/.config/aptechka/snapshot.json` —
-  тот же файл, что у Python-версии, формат совместим в обе стороны. Если файла нет, проверки берут текущее состояние
-  «в уме» и **ничего не пишут** (в Python тут создавался файл); записывает эталон только кнопка `snapshot`.
-- **Справка от Мяудоктора** (`src/spravka.rs`, меню «Справка»): лист «из поликлиники» в окне XP с прокруткой
-  (колесо, стрелки, PageUp/PageDown, Home/End), «Сохранить как картинку…» (в `~/Изображения` или `~/Pictures`,
-  двойной размер) и «Закрыть». Раскладка считается один раз при открытии. Вместо Liberation Serif и Marck Script —
-  DejaVu Sans Condensed (без курсива, подпись «Даня» жирным).
-- **Подсказки** при наведении (через 0,6 с): панель инструментов, кнопки лечения (подпись кнопки), «Проверить»,
-  полоса скорости, «Копировать resume», × облачка, кнопки заголовка; на строках таблицы — пояснение проверки.
-- **Alt+буква** открывает меню (Alt+Ф, Alt+П, Alt+В, Alt+Л, Alt+С), как в Python.
-
-### Снимки без окна
+```sh
+cargo build --release            # target/release/aptechka
+cargo test --release
+cargo clippy --release --all-targets -- -D warnings
+python3 ../tools/i18n.py check   # every user-visible string has an English translation
+python3 ../tools/notices.py --check   # THIRD_PARTY_NOTICES matches Cargo.lock
 ```
-UI_SHOT=файл.png UI_FAKE=ok|fix SCALE=3 T=3 engine/target/release/aptechka
-UI_DO="fix1;speed;menu3;sessions;heal;about;tab1;hover0"     # состояние окна перед снимком
-UI_POKE="160,120;135,205"                                     # тычки в картинку (клетки) — реплики в облачке
-# ещё: spravka; spscroll<N>; tiptool3|tipfix0|tiprow1|tipcheck|tipspeed; alt:с; runfix:<id>;yes
-UI_CLICK="230,42;260,76"                                      # настоящие нажатия мышью (x,y в пикселях окна)
-DRY_RUN=1 …                                                   # RunFix из UI_CLICK выполняется как пробный
-```
-Без `UI_FAKE` берутся настоящие проверки (они только читают систему). Готовые снимки: `art/preview/окно_*.png`.
 
-## Windows (`src/win.rs`)
-Собирается здесь же: `cargo build --release --target x86_64-pc-windows-gnu` (нужен `gcc-mingw-w64-x86-64`), один `aptechka.exe` ≈5 МБ, без консоли.
-Проверки — из PowerShell в JSON (вывод команд в русской Windows переведён): интернет и DNS, системный прокси WinINet и WinHTTP
-(брошенный Happ: `socks=127.0.0.1:10808`), VPN Happ/Outline/Proton/Amnezia/Hiddify/v2rayN/WireGuard и туннель без программы,
-ошибки Windows Update с расшифровкой кода, внезапные выключения (Kernel-Power 41), падающие и зависшие программы, проводник,
-часы, службы звука/печати/Bluetooth, место на C:. Лечение с UAC (`Start-Process -Verb RunAs`), команды PowerShell «вручную».
-Текстовые режимы в PowerShell: `.\aptechka.exe --diag | Out-String` (иначе PowerShell не ждёт оконную программу).
-Тестовая Windows: `tools/winvm/winvm.sh` (QEMU/KVM, SATA+e1000e без virtio, TPM, установка без человека, SSH по ключу;
-пароль — `WINVM_PASSWORD` в `.env`), тест лечения — `tools/winvm/win_test_fixes.ps1`: прокси, WinHTTP, служба, часы, проводник,
-закрытие программы — проверено; внезапное выключение — жёстким сбросом ВМ.
+How the code is organised: [ARCHITECTURE.md](../ARCHITECTURE.md). Rules for changes: [AGENTS.md](../AGENTS.md). Your own checks and fixes: [CUSTOM.md](../CUSTOM.md).
 
-## Одна копия
-Аптечка открывается одна на пользователя (`src/single.rs`): второй запуск просит открытую копию показать окно
-и сразу выходит. «Почтовый ящик» — абстрактный unix-сокет `io.github.aptechka-<uid>`, без файлов: после падения
-программы он исчезает сам. Режимы без окна (`--diag`, `--fix`, `UI_SHOT`, `FRAMES`) работают и при открытой копии.
-
-## Лечение из терминала
-```
-aptechka --fix proxy_off                   # одно лечение; код выхода 0 — получилось
-aptechka --fix svc_restart systemd-resolved
-DRY_RUN=1 aptechka --fix time_sync         # только показать команду
-```
-Ошибки объясняются по-русски: пароль не введён, некому спросить пароль (подсказка с `sudo`), команда зависла,
-программы или службы нет. Проверено в ВМ (`tools/vm_test_fixes.sh`): прокси, эталон и возврат темы, время (часы +10 мин),
-DNS, перезапуск службы; с GNOME Shell под systemd, как в Ubuntu: перезапуск оболочки (окна остаются, расширения не
-отключаются), включение/перезапуск расширения. Не проверено вживую: перезапуск VPN-клиентов, PRIME, `nmcli`.
-
-## Запуск
-```
-engine/target/release/aptechka                    # окно
-SCALE=1 FRAMES=папка N=400 engine/target/release/aptechka   # кадры PNG без окна
-CLICK="1:84,146;3.5:81,101" …                    # тычки при записи кадров
-DRY_RUN=1 engine/target/release/aptechka          # окно; лечение только пишет команды в журнал
-```
-Сборка: `cd engine && ~/.cargo/bin/cargo build --release`.
-
-## Откуда данные
-| Что | Чем делается |
-|---|---|
-| `art/clean/B1_clean.png` | `tools/pixel_grid.py` |
-| `art/layers/*.png`, `layers.json` | `tools/split_layers.py` → `tools/apply_fills.py` |
-| дорисовка под слоями | `tools/fill_holes.py` (ChatGPT, ключ в `.env`) |
-| `art/layers/дыхание.json` | `tools/breath_seam.py` |
-| `art/layers/позы/` | `tools/port_frames.py`, `tools/make_pose.py` → `tools/restore_original.py` → `tools/head_only.py` |
-| значки 💢 и 💧 | `tools/add_symbols.py` (после `apply_fills.py` — заново) |
-| маски экранов | `tools/screen_masks.py` |
-
-## Ещё не перенесено из gui_xp.py
-Кнопка «Запомнить текущее как норму» у строки «Эталон» показывается только при статусе
-warn/bad (как в Python), а у «Эталона» статус info, так что из окна она недоступна; проверить действие можно
-через `DRY_RUN=1 UI_DO="runfix:snapshot;yes"`.
-Шрифт интерфейса: DejaVu Sans Condensed (`assets/LICENSE-DejaVu.txt`).
+- `src/` — the code; `i18n/en/` — English for the Russian strings, `i18n/ignore/` — strings that are never shown.
+- `assets/` — fonts and their licenses.
+- `vendor/softbuffer/` — a patched copy of softbuffer (see `vendor/softbuffer/АПТЕЧКА.md`).
+- `build.rs` — embeds the art from `../art/layers`, the license texts and the guide; turns on the optional `custom/` module.

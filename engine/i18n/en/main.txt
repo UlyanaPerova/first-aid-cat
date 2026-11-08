@@ -133,3 +133,7 @@ en: picture animation on
 # main.rs:691
 ru: анимация картинки выключена
 en: picture animation off
+
+# main.rs:117
+ru: PowerShell не запустился
+en: PowerShell did not start

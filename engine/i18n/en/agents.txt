@@ -69,9 +69,6 @@ en: {}: sessions
 ru: не смогла прочитать
 en: could not read
 
-ru: ссылка вместо файла
-en: a link instead of a file
-
 ru: слишком долго
 en: took too long
 

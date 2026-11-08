@@ -209,6 +209,69 @@ fn scan_file(p: &Path, until: Instant) -> Option<Vec<&'static str>> {
     scan_state(p, until).ok().flatten()
 }
 
+/// Низкий приоритет текущему потоку: Linux — nice 19 и диск «лучшее усилие, последний» (не IDLE: тот может
+/// не дождаться диска вовсе); Windows — фоновый режим потока (и процессор, и диск). macOS — как есть.
+fn background_priority() {
+    #[cfg(target_os = "linux")]
+    // SAFETY: обычные системные вызовы для своего потока (tid), без указателей
+    unsafe {
+        let tid = libc::syscall(libc::SYS_gettid) as libc::id_t;
+        libc::setpriority(libc::PRIO_PROCESS, tid, 19);
+        // IOPRIO_WHO_PROCESS = 1; класс 2 (best-effort) << 13 | уровень 7
+        libc::syscall(libc::SYS_ioprio_set, 1, tid as libc::c_long, (2 << 13) | 7);
+    }
+    #[cfg(windows)]
+    {
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn GetCurrentThread() -> *mut core::ffi::c_void;
+            fn SetThreadPriority(h: *mut core::ffi::c_void, p: i32) -> i32;
+        }
+        const THREAD_MODE_BACKGROUND_BEGIN: i32 = 0x0001_0000;
+        // SAFETY: псевдоописатель своего потока
+        unsafe {
+            SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_BEGIN);
+        }
+    }
+}
+
+/// Linux: просмотр файла — подряд (система читает вперёд), а по окончании его страницы выбрасываются из
+/// кэша: они чистые, ничего не теряется, просто не вытесняют чужое.
+struct CacheDrop {
+    #[cfg(target_os = "linux")]
+    fd: i32,
+}
+
+impl CacheDrop {
+    fn new(f: &std::fs::File) -> CacheDrop {
+        #[cfg(target_os = "linux")]
+        {
+            use std::os::unix::io::AsRawFd;
+            let fd = f.as_raw_fd();
+            // SAFETY: fd живёт, пока жив f; CacheDrop создаётся после f и уничтожается раньше
+            unsafe {
+                libc::posix_fadvise(fd, 0, 0, libc::POSIX_FADV_SEQUENTIAL);
+            }
+            CacheDrop { fd }
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            let _ = f;
+            CacheDrop {}
+        }
+    }
+}
+
+impl Drop for CacheDrop {
+    fn drop(&mut self) {
+        #[cfg(target_os = "linux")]
+        // SAFETY: см. new — файл ещё открыт
+        unsafe {
+            libc::posix_fadvise(self.fd, 0, 0, libc::POSIX_FADV_DONTNEED);
+        }
+    }
+}
+
 /// Итог просмотра одного файла: Ok(Some) — просмотрен, Ok(None) — файла нет (это не «неполный охват»),
 /// Err — файл есть, но прочитан не весь (не успели, нет прав, не обычный файл): «ключей нет» тут не доказано.
 fn scan_state(p: &Path, until: Instant) -> Result<Option<Vec<&'static str>>, ()> {
@@ -218,6 +281,9 @@ fn scan_state(p: &Path, until: Instant) -> Result<Option<Vec<&'static str>>, ()>
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(_) => return Err(()),
     };
+    // читаем подряд один раз: система может читать вперёд, а после — выбросить эти страницы из кэша
+    // (сотни мегабайт чатов не вытесняют из памяти то, что нужно другим программам)
+    let _cache = CacheDrop::new(&f);
     let mut found: Vec<&'static str> = Vec::new();
     let mut buf = vec![0u8; 1 << 20];
     let mut tail: Vec<u8> = Vec::new();
@@ -372,8 +438,13 @@ const HISTORIES: [&str; 6] = [
 
 pub fn check() -> Vec<Check> {
     let Some(h) = crate::store::home_dir() else { return Vec::new() };
+    // поток проверки — свой на каждый запуск: снижаем ему приоритет процессора и диска, чтобы чтение сотен
+    // мегабайт не мешало работать (на слабом ноутбуке с HDD особенно)
+    background_priority();
     let mut out = Vec::new();
-    let until = Instant::now() + Duration::from_secs(20);
+    // с низким приоритетом холодный проход дольше; не успели — «просмотрено не всё», память проверенного
+    // сохраняется, и следующий проход доберёт остальное
+    let until = Instant::now() + Duration::from_secs(60);
     let short = |p: &Path| p.strip_prefix(&h).map(|r| format!("~/{}", r.display())).unwrap_or_else(|_| p.display().to_string());
     let mut exposed: Vec<PathBuf> = Vec::new(); // открыты другим — для кнопки «закрыть»
 

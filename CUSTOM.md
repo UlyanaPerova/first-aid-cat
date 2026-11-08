@@ -8,7 +8,7 @@ You need to build the program from source for this. The steps below start from n
 
 ## 1. Install the tools
 
-- **Rust** 1.85 or newer: install it from [rustup.rs](https://rustup.rs). On Linux and macOS that is one command in the terminal; on Windows, the installer.
+- **Rust** 1.89 or newer: install it from [rustup.rs](https://rustup.rs). On Linux and macOS that is one command in the terminal; on Windows, the installer.
 - **Git**, to download the source.
 - On **Windows**, the C++ build tools that the Rust installer offers. On **macOS**, `xcode-select --install`.
 

@@ -1,31 +1,25 @@
 // Windows: окно без консоли; для --diag/--fix подключаемся к консоли, из которой запустили (attach_console)
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
-//! Аптечка — движок живой слоёной картинки.
+//! Аптечка: окно с живым котом и проверками, виджет на рабочем столе, команды для терминала.
 // Стиль, который в проекте принят сознательно: длинные типы каналов и кортежей, функции рисования с многими
 // параметрами, заполнение структур по полям после Default — понятнее здесь, чем обёртки ради правила.
 #![allow(clippy::type_complexity, clippy::too_many_arguments, clippy::field_reassign_with_default)]
 //!
-//! Сейчас умеет: собрать кадр из слоёв art/layers и дыхание (плечи, грудь и голова
-//! поднимаются по шву дыхания, низ стоит).
+//! Команды: --diag (проверки таблицей в терминал), --sessions, --speed, --fix ИД [ПАРАМЕТР], --widget.
 //!
-//! Переменные окружения:
-//!   ART=папка        — брать слои с диска (по умолчанию — вшитые в программу)
-//!   SCALE=4          — во сколько раз увеличить клетку (по умолчанию — по экрану)
-//!   FPS=20           — кадров в секунду
-//!   FRAMES=папка N=… — без окна записать N кадров PNG (для проверки глазами)
-//!   SEED=1           — зерно случайностей (одинаковые прогоны для сравнения)
-//!   SCHED=0          — не трогать планировщик
-//!   CLICK=1.5:84,146 — тычки при записи кадров (секунда:клетка x,y; через «;»)
-//!   TROUBLE=1        — кот беспокоится всё время (для проверки)
-//!   NODIAG=1         — не запускать проверки; DIAG_WAIT=сек — при записи кадров подождать их
-//!   --diag           — только проверки: таблица в терминал
-//!   --sessions       — сессии Claude Code и команды продолжения
-//!   --speed          — тест скорости (качает ~60 МБ, отдаёт 25 МБ)
-//!   UI_SHOT=файл.png — без окна нарисовать всё окно в PNG; UI_K=2 (масштаб интерфейса),
-//!                      UI_H=высота окна, T=секунды (на каком моменте анимации), UI_FAKE=ok|fix (образцы данных
-//!                      вместо настоящих проверок), UI_DO="fix0;speed;menu2;sessions;heal;about;tab1"
-//!   DRY_RUN=1        — кнопки «полечить» только пишут команды в журнал, ничего не выполняют
+//! Переменные окружения — для разработки и проверки (в обычной работе не нужны; описаны в TESTING.md):
+//!   DRY_RUN=1        — исправления только пишут команды в журнал, ничего не выполняют
 //!   UI_K=2           — масштаб интерфейса (по умолчанию — масштаб монитора)
+//!   UI_SHOT=файл.png — без окна нарисовать всё окно в PNG; UI_H=высота окна, T=секунды (момент анимации),
+//!                      UI_FAKE=ok|fix (образцы данных вместо проверок), UI_DO="fix0;speed;menu2;sessions;heal;about;tab1"
+//!   WIDGET_SHOT=файл.png — то же для виджета; WIDGET_HOVER=1 — как под мышью; WIDGET_MAC=папка — widget.json
+//!                      для виджета macOS; WIDGET_CONCEPT=1|warn|bad — данные как на концептах
+//!   WIDGET_ANIM_LOG=1 — виджет пишет в журнал, какие кадры анимации рисует
+//!   FRAMES=папка N=… — без окна записать N кадров PNG; CLICK=1.5:84,146 — тычки (секунда:клетка x,y; через «;»)
+//!   ART=папка        — брать слои с диска, а не вшитые (картинки должны быть целы: для художника)
+//!   SCALE=4, FPS=20, SEED=1 — клетка, кадры в секунду, зерно случайностей (одинаковые прогоны)
+//!   TROUBLE=1        — кот беспокоится всё время; APP_ANIM=0 — без анимации окна
+//!   SCHED=0          — не трогать планировщик (CORES=8-15 — привязать к ядрам); NODIAG=1 — без проверок; DIAG_WAIT=сек — подождать их при записи кадров
 //!
 //! Мышь: ухо — смущение, голова — возмущение, хвост — беспокойство, растение — качается.
 
@@ -114,7 +108,7 @@ fn open_terminal_with(script: &str) -> Result<&'static str, String> {
         use std::os::windows::process::CommandExt;
         let mut c = Command::new("powershell");
         c.args(["-NoExit", "-Command", script]).creation_flags(0x0000_0010);
-        return c.spawn().map(|_| "PowerShell").map_err(|e| format!("PowerShell не запустился: {e}"));
+        return procs::spawn_detached(&mut c).then_some("PowerShell").ok_or_else(|| "PowerShell не запустился".into());
     }
     #[cfg(target_os = "macos")]
     {
@@ -151,9 +145,11 @@ fn open_terminal_with(script: &str) -> Result<&'static str, String> {
             if procs::which(t).is_none() {
                 continue;
             }
+            // окружение — полное (не scrub_env): в терминале человек работает дальше, ему нужны его PATH и ключи
             let mut c = Command::new(t);
             c.args(how).args(["bash", "-lc", &keep]).stdin(std::process::Stdio::null());
-            if c.spawn().is_ok() {
+            // spawn_detached дожидается терминала в своём потоке — иначе на каждое «открыть» оставался «зомби»
+            if procs::spawn_detached(&mut c) {
                 return Ok(t);
             }
         }
@@ -199,6 +195,12 @@ struct App {
     back: Vec<u32>,
     /// Окно не видно (закрыто другими окнами, свёрнуто): не рисуем.
     hidden: bool,
+    /// окно целиком закрыто другими (Linux — спрашиваем оконный менеджер, Windows — точки окна); проверяется
+    /// раз в секунду, только без фокуса (в фокусе окно не закрыто); закрыто — не рисуем, как скрытое
+    covered: bool,
+    cover_t: Instant,
+    #[cfg(all(unix, not(target_os = "macos")))]
+    cover: Option<Option<crate::cover::Cover>>,
     /// Окно в фокусе. Без фокуса, но на виду — рисуем втрое реже (живые показания в картинке всё равно идут).
     focused: bool,
     /// файл программы при запуске (время изменения) и сказали ли уже, что её обновили
@@ -266,6 +268,8 @@ struct App {
     /// подпись последнего отданного дерева (чтобы не слать одно и то же) и когда сверяли
     a11y_sig: u64,
     a11y_t: Instant,
+    /// экранный диктор подключён (InitialTreeRequested … AccessibilityDeactivated): без него дерево не строим
+    a11y_on: bool,
 }
 
 /// События от других потоков: вторая копия попросила показать окно; специальные возможности.
@@ -481,7 +485,7 @@ impl App {
     /// Обновить дерево специальных возможностей, если интерфейс поменялся (не чаще 4 раз в секунду;
     /// force — сразу, после нажатия). Если ими никто не пользуется, адаптер ничего не делает.
     fn a11y_refresh(&mut self, force: bool) {
-        if self.a11y.is_none() || (!force && self.a11y_t.elapsed() < Duration::from_millis(250)) {
+        if self.a11y.is_none() || !self.a11y_on || (!force && self.a11y_t.elapsed() < Duration::from_millis(250)) {
             return;
         }
         self.a11y_t = Instant::now();
@@ -719,7 +723,7 @@ impl App {
                     let open = procs::list().iter().any(|p| p.is_our("--widget"));
                     if open {
                         // уже открыт, но под окнами — попросить его показаться поверх на несколько секунд
-                        crate::prefs::update(|v| v["widget_show"] = serde_json::json!(ui::now_secs()));
+                        widget::request_show();
                         wlog("виджет уже открыт — показываю его поверх окон");
                     } else if let Some(exe) = procs::self_exe() {
                         crate::procs::spawn_detached(std::process::Command::new(exe).arg("--widget"));
@@ -761,7 +765,16 @@ impl App {
         }
         // такой файл уже есть — «Справка_…(2).png», а не поверх
         let path = (1..100)
-            .map(|i| if i == 1 { path.clone() } else { path.replace(".png", &format!(" ({i}).png")) })
+            .map(|i| {
+                if i == 1 {
+                    path.clone()
+                } else {
+                    match path.strip_suffix(".png") {
+                        Some(stem) => format!("{stem} ({i}).png"),
+                        None => format!("{path} ({i})"),
+                    }
+                }
+            })
             .find(|p| std::fs::symlink_metadata(p).is_err())
             .unwrap_or(path);
         match save_rgb(&path, w, h, &rgb) {
@@ -872,9 +885,51 @@ impl App {
         cfg!(windows) && self.window.as_ref().and_then(|w| w.is_minimized()) == Some(true)
     }
 
+    /// Закрыто ли окно целиком другими окнами (раз в секунду; в фокусе — нет). Открылось — сразу полный кадр.
+    fn check_covered(&mut self) {
+        if self.focused {
+            if self.covered {
+                self.need_full = true;
+            }
+            self.covered = false;
+            return;
+        }
+        if self.cover_t.elapsed() < Duration::from_secs(1) {
+            return;
+        }
+        self.cover_t = Instant::now();
+        let Some(w) = self.window.as_ref() else { return };
+        #[cfg(all(unix, not(target_os = "macos")))]
+        let now = {
+            let (Ok(p), s) = (w.outer_position(), w.outer_size()) else { return };
+            let cover = self.cover.get_or_insert_with(crate::cover::Cover::new);
+            cover.as_ref().and_then(|c| c.covered((p.x, p.y, s.width as i32, s.height as i32))).unwrap_or(false)
+        };
+        #[cfg(windows)]
+        let now = widget::covered_windows(w).unwrap_or(false);
+        #[cfg(target_os = "macos")]
+        let now = {
+            let _ = w;
+            false
+        };
+        if self.covered && !now {
+            self.need_full = true;
+        }
+        self.covered = now;
+    }
+
     fn tick(&mut self) {
         self.a11y_refresh(false);
-        if self.hidden || self.minimized() {
+        self.check_covered();
+        let quiet = self.hidden || self.minimized() || self.covered;
+        // окно снова на виду — сессии обновить сразу, а не через 30 с
+        if !quiet && SESS_QUIET.swap(false, std::sync::atomic::Ordering::Relaxed) {
+            SESS_POKE.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        if quiet {
+            SESS_QUIET.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        if quiet {
             // окна не видно — не рисуем, только принимаем результаты проверок и сессий
             let t = self.t0.elapsed().as_secs_f64();
             self.drain_bg(t);
@@ -1523,6 +1578,9 @@ impl ApplicationHandler<AppEvent> for App {
             }
             AppEvent::A11y(e) => match e.window_event {
                 accesskit_winit::WindowEvent::InitialTreeRequested => {
+                    // диктор подключился (в любой момент) — с этого времени дерево обновляется
+                    self.a11y_on = true;
+                    self.a11y_sig = 0;
                     let tree = self.a11y_tree();
                     if let Some(a) = self.a11y.as_mut() {
                         a.update_if_active(|| tree);
@@ -1537,7 +1595,8 @@ impl ApplicationHandler<AppEvent> for App {
                         self.a11y_refresh(true);
                     }
                 }
-                accesskit_winit::WindowEvent::AccessibilityDeactivated => {}
+                // диктор отключился — дерево 4 раза в секунду больше не строим
+                accesskit_winit::WindowEvent::AccessibilityDeactivated => self.a11y_on = false,
             },
         }
     }
@@ -1562,7 +1621,7 @@ impl ApplicationHandler<AppEvent> for App {
         } else if now >= self.next {
             self.tick();
             // окна не видно — просыпаемся редко, только проверить, не показали ли его
-            let step = frame_step(self.hidden || self.minimized(), self.focused, self.fps);
+            let step = frame_step(self.hidden || self.minimized() || self.covered, self.focused, self.fps);
             // без анимации — раз в секунду (данные, часы на экранчиках); нажатия всё равно сразу
             let step = if self.anim { step } else { step.max(1.0) };
             self.next = now + Duration::from_secs_f64(step);
@@ -1581,13 +1640,18 @@ impl ApplicationHandler<AppEvent> for App {
     }
 }
 
+/// Окно не видно (скрыто, свёрнуто, закрыто другими): сессии опрашиваются реже. И просьба опросить сейчас.
+static SESS_QUIET: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static SESS_POKE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// Шаг между кадрами, секунды: окна не видно (закрыто другим окном, свёрнуто) — раз в секунду, только принять
 /// результаты проверок; на виду, но без фокуса — втрое реже обычного; в фокусе — обычный темп.
 fn frame_step(hidden: bool, focused: bool, fps: f64) -> f64 {
     if hidden {
         1.0
     } else if !focused {
-        3.0 / fps
+        // без фокуса — 4 кадра в секунду при 20 (моргание ещё видно; реже — кадры заметно пропадают)
+        5.0 / fps
     } else {
         1.0 / fps
     }
@@ -1897,6 +1961,10 @@ fn main() {
         ceiling_px: (0, 0, 0, Vec::new()),
         back: Vec::new(),
         hidden: false,
+        covered: false,
+        cover_t: Instant::now(),
+        #[cfg(all(unix, not(target_os = "macos")))]
+        cover: None,
         focused: true,
         last_present: Instant::now(),
         exe_stamp: procs::self_stamp(),
@@ -1945,6 +2013,7 @@ fn main() {
         a11y: None,
         proxy: None,
         a11y_sig: 0,
+        a11y_on: false,
         a11y_t: Instant::now(),
     };
 
@@ -1955,7 +2024,14 @@ fn main() {
             if tx.send(Bg::Sessions(diag::all_sessions(12))).is_err() {
                 break;
             }
-            std::thread::sleep(Duration::from_secs(4));
+            // окно на виду — раз в 4 с; скрыто, свёрнуто, закрыто другими — раз в 30 с (опрос — это обход
+            // процессов и папок сессий); показали снова — сразу (SESS_POKE)
+            let every = if SESS_QUIET.load(std::sync::atomic::Ordering::Relaxed) { 30_000 } else { 4_000 };
+            let mut waited = 0;
+            while waited < every && !SESS_POKE.swap(false, std::sync::atomic::Ordering::Relaxed) {
+                std::thread::sleep(Duration::from_millis(250));
+                waited += 250;
+            }
         });
     }
 
@@ -2024,7 +2100,7 @@ mod frame_step_tests {
     #[test]
     fn throttled_when_nobody_looks() {
         assert_eq!(frame_step(false, true, 20.0), 0.05);
-        assert!((frame_step(false, false, 20.0) - 0.15).abs() < 1e-9);
+        assert!((frame_step(false, false, 20.0) - 0.25).abs() < 1e-9);
         assert_eq!(frame_step(true, true, 20.0), 1.0);
         assert_eq!(frame_step(true, false, 20.0), 1.0);
     }

@@ -1,0 +1,714 @@
+diff -ruN -x АПТЕЧКА.md -x softbuffer-0.4.8.patch -x Cargo.toml.orig -x .cargo_vcs_info.json -x .cargo-ok a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml	2026-11-08 21:38:19.479757978 +0300
++++ b/Cargo.toml	2026-11-08 21:38:19.490254919 +0300
+@@ -243,6 +243,7 @@
+ features = [
+     "std",
+     "CFCGTypes",
++    "CFData",
+ ]
+ default-features = false
+ 
+diff -ruN -x АПТЕЧКА.md -x softbuffer-0.4.8.patch -x Cargo.toml.orig -x .cargo_vcs_info.json -x .cargo-ok a/src/backends/cg.rs b/src/backends/cg.rs
+--- a/src/backends/cg.rs	2026-11-08 21:38:19.489358261 +0300
++++ b/src/backends/cg.rs	2026-11-08 21:38:19.490418127 +0300
+@@ -24,6 +24,7 @@
+ use std::num::NonZeroU32;
+ use std::ops::Deref;
+ use std::ptr::{self, slice_from_raw_parts_mut, NonNull};
++use std::sync::atomic::{AtomicUsize, Ordering};
+ 
+ define_class!(
+     #[unsafe(super(NSObject))]
+@@ -226,7 +227,9 @@
+         layer.setContentsGravity(unsafe { kCAGravityTopLeft });
+ 
+         // Initialize color space here, to reduce work later on.
+-        let color_space = CGColorSpace::new_device_rgb().unwrap();
++        // Аптечка: пространство цветов главного экрана (у MacBook — Display P3). С «device RGB» система
++        // на каждый показ перекодировала цвета всего окна на процессоре (ColorSync/vImage, ~15 мс на кадр 5K)
++        let color_space = display_color_space().unwrap_or_else(|| CGColorSpace::new_device_rgb().unwrap());
+ 
+         // Grab initial width and height from the layer (whose properties have just been initialized
+         // by the observer using `NSKeyValueObservingOptionInitial`).
+@@ -255,12 +258,23 @@
+     fn resize(&mut self, width: NonZeroU32, height: NonZeroU32) -> Result<(), SoftBufferError> {
+         self.width = width.get() as usize;
+         self.height = height.get() as usize;
++        // Drop pooled frames of other sizes right away (e.g. after shrinking the window).
++        if let Some(n) = frame_len(self.width, self.height) {
++            pool_set_len(n);
++        }
+         Ok(())
+     }
+ 
+     fn buffer_mut(&mut self) -> Result<BufferImpl<'_, D, W>, SoftBufferError> {
++        // Аптечка: буфер из запаса (отданные системе кадры возвращаются в него), без выделения и обнуления
++        // 14 МБ на каждый кадр; содержимое не определено — как и положено при age() == 0
++        let n = frame_len(self.width, self.height).ok_or_else(|| {
++            SoftBufferError::PlatformError(Some("buffer size overflows".to_string()), None)
++        })?;
++        pool_set_len(n);
++        let reused = POOL.lock().ok().and_then(|mut p| p.pop());
+         Ok(BufferImpl {
+-            buffer: util::PixelBuffer(vec![0; self.width * self.height]),
++            buffer: util::PixelBuffer(reused.map(|b| b.into_vec()).unwrap_or_else(|| vec![0; n])),
+             imp: self,
+         })
+     }
+@@ -304,7 +318,17 @@
+             let data = data.cast::<u32>();
+             let slice = slice_from_raw_parts_mut(data.as_ptr(), size / size_of::<u32>());
+             // SAFETY: This is the same slice that we passed to `Box::into_raw` below.
+-            drop(unsafe { Box::from_raw(slice) })
++            let b = unsafe { Box::from_raw(slice) };
++            // Аптечка: вернуть в запас (CoreAnimation держит несколько кадров — запас побольше)
++            // Only keep frames of the current size, within the count and byte budget.
++            if b.len() == POOL_LEN.load(Ordering::Relaxed) {
++                if let Ok(mut p) = POOL.lock() {
++                    let used: usize = p.iter().map(|x| x.len() * size_of::<u32>()).sum();
++                    if p.len() < 8 && used + b.len() * size_of::<u32>() <= POOL_BUDGET_BYTES {
++                        p.push(b);
++                    }
++                }
++            }
+         }
+ 
+         let data_provider = {
+@@ -324,8 +348,14 @@
+         // `CGImageByteOrderInfo` and `CGImagePixelFormatInfo` (see e.g. `CGBitmapInfoMake`).
+         //
+         // TODO: Use `CGBitmapInfo::new` once the next version of objc2-core-graphics is released.
+-        let bitmap_info = CGBitmapInfo(
++        // Аптечка: виджет с прозрачными краями — альфа из буфера (предумноженная)
++        let alpha = if crate::MACOS_ALPHA.load(core::sync::atomic::Ordering::Relaxed) {
++            CGImageAlphaInfo::PremultipliedFirst.0
++        } else {
+             CGImageAlphaInfo::NoneSkipFirst.0
++        };
++        let bitmap_info = CGBitmapInfo(
++            alpha
+                 | CGImageComponentInfo::Integer.0
+                 | CGImageByteOrderInfo::Order32Little.0
+                 | CGImagePixelFormatInfo::Packed.0,
+@@ -386,3 +416,46 @@
+         &self.0
+     }
+ }
++
++/// Аптечка: пространство цветов главного экрана.
++pub(crate) fn display_color_space() -> Option<CFRetained<CGColorSpace>> {
++    extern "C" {
++        fn CGMainDisplayID() -> u32;
++        fn CGDisplayCopyColorSpace(display: u32) -> *mut CGColorSpace;
++    }
++    // SAFETY: функции CoreGraphics; Copy возвращает объект с +1 — отдаём его CFRetained
++    let raw = unsafe { CGDisplayCopyColorSpace(CGMainDisplayID()) };
++    NonNull::new(raw).map(|p| unsafe { CFRetained::from_raw(p) })
++}
++
++/// Аптечка: запас буферов кадра для повторного использования.
++static POOL: std::sync::Mutex<Vec<Box<[u32]>>> = std::sync::Mutex::new(Vec::new());
++/// Pixel count of the frames the pool currently serves; frames of other sizes are evicted.
++static POOL_LEN: AtomicUsize = AtomicUsize::new(0);
++/// Overall byte budget of the pool.
++const POOL_BUDGET_BYTES: usize = 64 * 1024 * 1024;
++
++/// Number of pixels for a frame, or `None` if the byte size would overflow.
++fn frame_len(width: usize, height: usize) -> Option<usize> {
++    let n = width.checked_mul(height)?;
++    n.checked_mul(size_of::<u32>())?;
++    // CGImage row stride is `width * 4`.
++    width.checked_mul(4)?;
++    Some(n)
++}
++
++/// Switch the pool to frames of `n` pixels, freeing buffers of any other size.
++fn pool_set_len(n: usize) {
++    if POOL_LEN.swap(n, Ordering::Relaxed) != n {
++        if let Ok(mut p) = POOL.lock() {
++            p.retain(|b| b.len() == n);
++        }
++    }
++}
++
++/// Аптечка: ICC-профиль того же пространства, которым помечаются пиксели слоя (см. `display_color_space`).
++pub(crate) fn display_icc() -> Option<Vec<u8>> {
++    let space = display_color_space()?;
++    let data = CGColorSpace::icc_data(Some(&space))?;
++    Some(data.to_vec())
++}
+diff -ruN -x АПТЕЧКА.md -x softbuffer-0.4.8.patch -x Cargo.toml.orig -x .cargo_vcs_info.json -x .cargo-ok a/src/backends/kms.rs b/src/backends/kms.rs
+--- a/src/backends/kms.rs	2026-11-08 21:38:19.489371741 +0300
++++ b/src/backends/kms.rs	2026-11-08 21:38:19.490436737 +0300
+@@ -230,7 +230,18 @@
+ 
+         // Create a new buffer set.
+         let front_buffer = SharedBuffer::new(&self.display, width, height)?;
+-        let back_buffer = SharedBuffer::new(&self.display, width, height)?;
++        let back_buffer = match SharedBuffer::new(&self.display, width, height) {
++            Ok(back_buffer) => back_buffer,
++            Err(err) => {
++                // Don't leak the buffer that was already created.
++                front_buffer.destroy(&self.display);
++                return Err(err);
++            }
++        };
++
++        // NOTE: The previous buffer set (if any) is not destroyed here, because it may still be
++        // scanned out, and removing a framebuffer that is in use would disable the CRTC. It is
++        // released in `Drop` only for the final set.
+ 
+         self.buffer = Some(Buffers {
+             first_is_front: true,
+@@ -297,6 +308,14 @@
+                 self.crtc.mode(),
+             )
+             .ok();
++
++        // The previous framebuffer is back on the CRTC, so ours are no longer scanned out and can
++        // be released.
++        if let Some(buffers) = self.buffer.take() {
++            for buffer in buffers.buffers {
++                buffer.destroy(&self.display);
++            }
++        }
+     }
+ }
+ 
+@@ -402,13 +421,26 @@
+         let db = display
+             .create_dumb_buffer((width.get(), height.get()), DrmFourcc::Xrgb8888, 32)
+             .swbuf_err("failed to create dumb buffer")?;
+-        let fb = display
+-            .add_framebuffer(&db, 24, 32)
+-            .swbuf_err("failed to add framebuffer")?;
++        let fb = match display.add_framebuffer(&db, 24, 32) {
++            Ok(fb) => fb,
++            Err(err) => {
++                // Don't leak the dumb buffer.
++                let _ = display.destroy_dumb_buffer(db);
++                return Err(err).swbuf_err("failed to add framebuffer");
++            }
++        };
+ 
+         Ok(SharedBuffer { fb, db, age: 0 })
+     }
+ 
++    /// Release the framebuffer and the dumb buffer.
++    ///
++    /// The buffer must not be scanned out anymore.
++    fn destroy<D: ?Sized>(self, display: &KmsDisplayImpl<D>) {
++        let _ = display.destroy_framebuffer(self.fb);
++        let _ = display.destroy_dumb_buffer(self.db);
++    }
++
+     /// Get the size of this buffer.
+     pub(crate) fn size(&self) -> (NonZeroU32, NonZeroU32) {
+         let (width, height) = self.db.size();
+diff -ruN -x АПТЕЧКА.md -x softbuffer-0.4.8.patch -x Cargo.toml.orig -x .cargo_vcs_info.json -x .cargo-ok a/src/backends/wayland/buffer.rs b/src/backends/wayland/buffer.rs
+--- a/src/backends/wayland/buffer.rs	2026-11-08 21:38:19.489408910 +0300
++++ b/src/backends/wayland/buffer.rs	2026-11-08 21:38:19.490487876 +0300
+@@ -15,6 +15,11 @@
+ };
+ 
+ use super::State;
++use crate::SoftBufferError;
++
++fn platform_err(msg: &str) -> SoftBufferError {
++    SoftBufferError::PlatformError(Some(msg.to_string()), None)
++}
+ 
+ #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+ fn create_memfile() -> File {
+@@ -59,12 +64,35 @@
+ }
+ 
+ // Round size to use for pool for given dimensions, rounding up to power of 2
+-fn get_pool_size(width: i32, height: i32) -> i32 {
+-    ((width * height * 4) as u32).next_power_of_two() as i32
+-}
+-
+-unsafe fn map_file(file: &File) -> MmapMut {
+-    unsafe { MmapMut::map_mut(file.as_raw_fd()).expect("Failed to map shared memory") }
++fn get_pool_size(width: i32, height: i32) -> Result<i32, SoftBufferError> {
++    let too_large = || platform_err("buffer size is too large");
++    if width <= 0 || height <= 0 {
++        return Err(too_large());
++    }
++    let bytes = width
++        .checked_mul(height)
++        .and_then(|n| n.checked_mul(4))
++        .ok_or_else(too_large)?;
++    let pool = (bytes as u32).checked_next_power_of_two().ok_or_else(too_large)?;
++    i32::try_from(pool).map_err(|_| too_large())
++}
++
++unsafe fn map_file(file: &File) -> Result<MmapMut, SoftBufferError> {
++    unsafe { MmapMut::map_mut(file.as_raw_fd()) }.map_err(|err| {
++        SoftBufferError::PlatformError(
++            Some("Failed to map shared memory".to_string()),
++            Some(Box::new(err)),
++        )
++    })
++}
++
++fn set_file_len(file: &File, size: i32) -> Result<(), SoftBufferError> {
++    file.set_len(size as u64).map_err(|err| {
++        SoftBufferError::PlatformError(
++            Some("Failed to resize shared memory".to_string()),
++            Some(Box::new(err)),
++        )
++    })
+ }
+ 
+ #[derive(Debug)]
+@@ -82,14 +110,19 @@
+ }
+ 
+ impl WaylandBuffer {
+-    pub fn new(shm: &wl_shm::WlShm, width: i32, height: i32, qh: &QueueHandle<State>) -> Self {
++    pub fn new(
++        shm: &wl_shm::WlShm,
++        width: i32,
++        height: i32,
++        qh: &QueueHandle<State>,
++    ) -> Result<Self, SoftBufferError> {
+         // Calculate size to use for shm pool
+-        let pool_size = get_pool_size(width, height);
++        let pool_size = get_pool_size(width, height)?;
+ 
+         // Create an `mmap` shared memory
+         let tempfile = create_memfile();
+-        let _ = tempfile.set_len(pool_size as u64);
+-        let map = unsafe { map_file(&tempfile) };
++        set_file_len(&tempfile, pool_size)?;
++        let map = unsafe { map_file(&tempfile)? };
+ 
+         // Create wayland shm pool and buffer
+         let pool = shm.create_pool(tempfile.as_fd(), pool_size, qh, ());
+@@ -104,7 +137,7 @@
+             released.clone(),
+         );
+ 
+-        Self {
++        Ok(Self {
+             qh: qh.clone(),
+             map,
+             tempfile,
+@@ -115,24 +148,27 @@
+             height,
+             released,
+             age: 0,
+-        }
++        })
+     }
+ 
+-    pub fn resize(&mut self, width: i32, height: i32) {
++    pub fn resize(&mut self, width: i32, height: i32) -> Result<(), SoftBufferError> {
+         // If size is the same, there's nothing to do
+         if self.width != width || self.height != height {
+-            // Destroy old buffer
+-            self.buffer.destroy();
++            // Validate the new size before touching any state.
++            let size = get_pool_size(width, height)?;
+ 
+             // Grow pool, if needed
+-            let size = ((width * height * 4) as u32).next_power_of_two() as i32;
+             if size > self.pool_size {
+-                let _ = self.tempfile.set_len(size as u64);
++                set_file_len(&self.tempfile, size)?;
++                let map = unsafe { map_file(&self.tempfile)? };
+                 self.pool.resize(size);
+                 self.pool_size = size;
+-                self.map = unsafe { map_file(&self.tempfile) };
++                self.map = map;
+             }
+ 
++            // Destroy old buffer
++            self.buffer.destroy();
++
+             // Create buffer with correct size
+             self.buffer = self.pool.create_buffer(
+                 0,
+@@ -146,6 +182,7 @@
+             self.width = width;
+             self.height = height;
+         }
++        Ok(())
+     }
+ 
+     pub fn attach(&self, surface: &wl_surface::WlSurface) {
+@@ -157,12 +194,18 @@
+         self.released.load(Ordering::SeqCst)
+     }
+ 
+-    fn len(&self) -> usize {
+-        self.width as usize * self.height as usize
++    fn len(&self) -> Option<usize> {
++        (self.width as usize).checked_mul(self.height as usize)
+     }
+ 
+-    pub unsafe fn mapped_mut(&mut self) -> &mut [u32] {
+-        unsafe { slice::from_raw_parts_mut(self.map.as_mut_ptr() as *mut u32, self.len()) }
++    pub unsafe fn mapped_mut(&mut self) -> Result<&mut [u32], SoftBufferError> {
++        // Make sure the mapping really covers the pixels before building a slice over it.
++        let map_len = self.map.len();
++        let len = self
++            .len()
++            .filter(|len| len.checked_mul(4).is_some_and(|bytes| bytes <= map_len))
++            .ok_or_else(|| platform_err("shared memory mapping is smaller than the buffer"))?;
++        Ok(unsafe { slice::from_raw_parts_mut(self.map.as_mut_ptr() as *mut u32, len) })
+     }
+ }
+ 
+diff -ruN -x АПТЕЧКА.md -x softbuffer-0.4.8.patch -x Cargo.toml.orig -x .cargo_vcs_info.json -x .cargo-ok a/src/backends/wayland/mod.rs b/src/backends/wayland/mod.rs
+--- a/src/backends/wayland/mod.rs	2026-11-08 21:38:19.489423910 +0300
++++ b/src/backends/wayland/mod.rs	2026-11-08 21:38:19.490507746 +0300
+@@ -188,14 +188,15 @@
+     }
+ 
+     fn resize(&mut self, width: NonZeroU32, height: NonZeroU32) -> Result<(), SoftBufferError> {
+-        self.size = Some(
+-            (|| {
+-                let width = NonZeroI32::try_from(width).ok()?;
+-                let height = NonZeroI32::try_from(height).ok()?;
+-                Some((width, height))
+-            })()
+-            .ok_or(SoftBufferError::SizeOutOfRange { width, height })?,
+-        );
++        let size = (|| {
++            let width = NonZeroI32::try_from(width).ok()?;
++            let height = NonZeroI32::try_from(height).ok()?;
++            // The pixel buffer is `width * height * 4` bytes and must fit in an i32.
++            width.get().checked_mul(height.get())?.checked_mul(4)?;
++            Some((width, height))
++        })()
++        .ok_or(SoftBufferError::SizeOutOfRange { width, height })?;
++        self.size = Some(size);
+         Ok(())
+     }
+ 
+@@ -223,7 +224,7 @@
+             }
+ 
+             // Resize, if buffer isn't large enough
+-            back.resize(width.get(), height.get());
++            back.resize(width.get(), height.get())?;
+         } else {
+             // Allocate front and back buffer
+             self.buffers = Some((
+@@ -232,13 +233,13 @@
+                     width.get(),
+                     height.get(),
+                     &self.display.qh,
+-                ),
++                )?,
+                 WaylandBuffer::new(
+                     &self.display.shm,
+                     width.get(),
+                     height.get(),
+                     &self.display.qh,
+-                ),
++                )?,
+             ));
+         };
+ 
+@@ -247,7 +248,7 @@
+         let age = self.buffers.as_mut().unwrap().1.age;
+         Ok(BufferImpl {
+             stack: util::BorrowStack::new(self, |buffer| {
+-                Ok(unsafe { buffer.buffers.as_mut().unwrap().1.mapped_mut() })
++                unsafe { buffer.buffers.as_mut().unwrap().1.mapped_mut() }
+             })?,
+             width,
+             height,
+diff -ruN -x АПТЕЧКА.md -x softbuffer-0.4.8.patch -x Cargo.toml.orig -x .cargo_vcs_info.json -x .cargo-ok a/src/backends/win32.rs b/src/backends/win32.rs
+--- a/src/backends/win32.rs	2026-11-08 21:38:19.489451060 +0300
++++ b/src/backends/win32.rs	2026-11-08 21:38:19.490541385 +0300
+@@ -48,9 +48,18 @@
+ }
+ 
+ impl Buffer {
+-    fn new(window_dc: Gdi::HDC, width: NonZeroI32, height: NonZeroI32) -> Self {
+-        let dc = Allocator::get().allocate(window_dc);
+-        assert!(!dc.is_null());
++    fn new(
++        window_dc: Gdi::HDC,
++        width: NonZeroI32,
++        height: NonZeroI32,
++    ) -> Result<Self, SoftBufferError> {
++        let dc = Allocator::get().allocate(window_dc)?;
++        if dc.is_null() {
++            return Err(SoftBufferError::PlatformError(
++                Some("Failed to create a compatible device context".into()),
++                Some(Box::new(io::Error::last_os_error())),
++            ));
++        }
+ 
+         // Create a new bitmap info struct.
+         let bitmap_info = BitmapInfo {
+@@ -85,7 +94,6 @@
+ 
+         // XXX alignment?
+         // XXX better to use CreateFileMapping, and pass hSection?
+-        // XXX test return value?
+         let mut pixels: *mut u32 = ptr::null_mut();
+         let bitmap = unsafe {
+             Gdi::CreateDIBSection(
+@@ -97,21 +105,35 @@
+                 0,
+             )
+         };
+-        assert!(!bitmap.is_null());
+-        let pixels = NonNull::new(pixels).unwrap();
++        let pixels = NonNull::new(pixels).filter(|_| !bitmap.is_null());
++        let Some(pixels) = pixels else {
++            // Capture the error before cleanup can overwrite it.
++            let err = io::Error::last_os_error();
++            // Clean up the partially created resources.
++            if !bitmap.is_null() {
++                unsafe {
++                    Gdi::DeleteObject(bitmap);
++                }
++            }
++            Allocator::get().deallocate(dc);
++            return Err(SoftBufferError::PlatformError(
++                Some("Failed to create a DIB section".into()),
++                Some(Box::new(err)),
++            ));
++        };
+ 
+         unsafe {
+             Gdi::SelectObject(dc, bitmap);
+         }
+ 
+-        Self {
++        Ok(Self {
+             dc,
+             bitmap,
+             width,
+             height,
+             pixels,
+             presented: false,
+-        }
++        })
+     }
+ 
+     #[inline]
+@@ -186,7 +208,7 @@
+                     ))
+                 })()
+                 .ok_or(SoftBufferError::DamageOutOfRange { rect })?;
+-                Gdi::BitBlt(
++                let ok = Gdi::BitBlt(
+                     self.dc.0,
+                     x,
+                     y,
+@@ -197,10 +219,21 @@
+                     y,
+                     Gdi::SRCCOPY,
+                 );
++                if ok == 0 {
++                    return Err(SoftBufferError::PlatformError(
++                        Some("BitBlt failed".into()),
++                        Some(Box::new(io::Error::last_os_error())),
++                    ));
++                }
+             }
+ 
+             // Validate the window.
+-            Gdi::ValidateRect(self.window.0, ptr::null_mut());
++            if Gdi::ValidateRect(self.window.0, ptr::null_mut()) == 0 {
++                return Err(SoftBufferError::PlatformError(
++                    Some("ValidateRect failed".into()),
++                    Some(Box::new(io::Error::last_os_error())),
++                ));
++            }
+         }
+         buffer.presented = true;
+ 
+@@ -225,7 +258,7 @@
+         // Get the handle to the device context.
+         // SAFETY: We have confirmed that the window handle is valid.
+         let hwnd = handle.hwnd.get() as HWND;
+-        let dc = Allocator::get().get_dc(hwnd);
++        let dc = Allocator::get().get_dc(hwnd)?;
+ 
+         // GetDC returns null if there is a platform error.
+         if dc.is_null() {
+@@ -264,7 +297,7 @@
+             }
+         }
+ 
+-        self.buffer = Some(Buffer::new(self.dc.0, width, height));
++        self.buffer = Some(Buffer::new(self.dc.0, width, height)?);
+ 
+         Ok(())
+     }
+@@ -364,43 +397,52 @@
+     }
+ 
+     /// Send a command to the allocator thread.
+-    fn send_command(&self, cmd: Command) {
+-        self.sender.lock().unwrap().send(cmd).unwrap();
++    fn send_command(&self, cmd: Command) -> Result<(), SoftBufferError> {
++        self.sender
++            .lock()
++            .unwrap_or_else(|x| x.into_inner())
++            .send(cmd)
++            .map_err(|_| allocator_lost())
+     }
+ 
+     /// Get the device context for a window.
+-    fn get_dc(&self, window: HWND) -> Gdi::HDC {
++    fn get_dc(&self, window: HWND) -> Result<Gdi::HDC, SoftBufferError> {
+         let (callback, waiter) = mpsc::sync_channel(1);
+ 
+         // Send command to the allocator.
+-        self.send_command(Command::GetDc { window, callback });
++        self.send_command(Command::GetDc { window, callback })?;
+ 
+-        // Wait for the response back.
+-        waiter.recv().unwrap()
++        // Wait for the response back; fails if the allocator thread is gone.
++        waiter.recv().map_err(|_| allocator_lost())
+     }
+ 
+     /// Allocate a new device context.
+-    fn allocate(&self, dc: Gdi::HDC) -> Gdi::HDC {
++    fn allocate(&self, dc: Gdi::HDC) -> Result<Gdi::HDC, SoftBufferError> {
+         let (callback, waiter) = mpsc::sync_channel(1);
+ 
+         // Send command to the allocator.
+-        self.send_command(Command::Allocate { dc, callback });
++        self.send_command(Command::Allocate { dc, callback })?;
+ 
+-        // Wait for the response back.
+-        waiter.recv().unwrap()
++        // Wait for the response back; fails if the allocator thread is gone.
++        waiter.recv().map_err(|_| allocator_lost())
+     }
+ 
+     /// Deallocate a device context.
+     fn deallocate(&self, dc: Gdi::HDC) {
+-        self.send_command(Command::Deallocate(dc));
++        // Nothing to do if the allocator is gone: there is no thread left to free the DC.
++        let _ = self.send_command(Command::Deallocate(dc));
+     }
+ 
+     /// Release a device context.
+     fn release(&self, owner: HWND, dc: Gdi::HDC) {
+-        self.send_command(Command::Release { dc, owner });
++        let _ = self.send_command(Command::Release { dc, owner });
+     }
+ }
+ 
++fn allocator_lost() -> SoftBufferError {
++    SoftBufferError::PlatformError(Some("The DC allocator thread is not running".into()), None)
++}
++
+ /// Commands to be sent to the allocator.
+ enum Command {
+     /// Call `GetDc` to get the device context for the provided window.
+diff -ruN -x АПТЕЧКА.md -x softbuffer-0.4.8.patch -x Cargo.toml.orig -x .cargo_vcs_info.json -x .cargo-ok a/src/backends/x11.rs b/src/backends/x11.rs
+--- a/src/backends/x11.rs	2026-11-08 21:38:19.489466090 +0300
++++ b/src/backends/x11.rs	2026-11-08 21:38:19.490563215 +0300
+@@ -460,10 +460,12 @@
+                 // SAFETY: We know that we called finish_wait() before this.
+                 // Put the image into the window.
+                 if let Some((_, segment_id)) = shm.seg {
+-                    damage
++                    // Validate every rectangle before sending anything, so that a bad rectangle
++                    // can't leave a partially sent frame without a `begin_wait()`.
++                    let rects = damage
+                         .iter()
+-                        .try_for_each(|rect| {
+-                            let (src_x, src_y, dst_x, dst_y, width, height) = (|| {
++                        .map(|rect| {
++                            (|| {
+                                 Some((
+                                     u16::try_from(rect.x).ok()?,
+                                     u16::try_from(rect.y).ok()?,
+@@ -472,10 +474,16 @@
+                                     u16::try_from(rect.width.get()).ok()?,
+                                     u16::try_from(rect.height.get()).ok()?,
+                                 ))
+-                            })(
+-                            )
+-                            .ok_or(SoftBufferError::DamageOutOfRange { rect: *rect })?;
+-                            imp.display
++                            })()
++                            .ok_or(SoftBufferError::DamageOutOfRange { rect: *rect })
++                        })
++                        .collect::<Result<Vec<_>, _>>()?;
++
++                    let mut sent = false;
++                    let result = rects.into_iter().try_for_each(
++                        |(src_x, src_y, dst_x, dst_y, width, height)| {
++                            let res = imp
++                                .display
+                                 .connection()
+                                 .shm_put_image(
+                                     imp.window,
+@@ -496,13 +504,26 @@
+                                 )
+                                 .push_err()
+                                 .map(|c| c.ignore_error())
+-                                .swbuf_err("Failed to draw image to window")
+-                        })
+-                        .and_then(|()| {
+-                            // Send a short request to act as a notification for when the X server is done processing the image.
+-                            shm.begin_wait(imp.display.connection())
+-                                .swbuf_err("Failed to draw image to window")
+-                        })?;
++                                .swbuf_err("Failed to draw image to window");
++                            sent |= res.is_ok();
++                            res
++                        },
++                    );
++
++                    match result {
++                        // Send a short request to act as a notification for when the X server is done processing the image.
++                        Ok(()) => shm
++                            .begin_wait(imp.display.connection())
++                            .swbuf_err("Failed to draw image to window")?,
++                        Err(err) => {
++                            // The server may still read the segment for the requests that were
++                            // already sent, so the buffer must be waited for before reuse.
++                            if sent {
++                                let _ = shm.begin_wait(imp.display.connection());
++                            }
++                            return Err(err);
++                        }
++                    }
+                 }
+             }
+         }
+diff -ruN -x АПТЕЧКА.md -x softbuffer-0.4.8.patch -x Cargo.toml.orig -x .cargo_vcs_info.json -x .cargo-ok a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs	2026-11-08 21:38:19.489497859 +0300
++++ b/src/lib.rs	2026-11-08 21:38:19.490597764 +0300
+@@ -23,6 +23,23 @@
+ use error::InitError;
+ pub use error::SoftBufferError;
+ 
++/// Аптечка: macOS — учитывать альфу буфера (ARGB с предумноженной альфой), чтобы окно могло быть
++/// прозрачным там, где прозрачен рисунок (виджет любой формы). По умолчанию — как в оригинале, без альфы.
++pub static MACOS_ALPHA: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
++
++/// Аптечка: ICC-профиль цветового пространства, которым macOS-бэкенд помечает пиксели (пространство
++/// главного экрана). Приложение само переводит sRGB в него. На других платформах — `None`.
++#[cfg(target_os = "macos")]
++pub fn macos_display_icc() -> Option<Vec<u8>> {
++    backends::cg::display_icc()
++}
++
++/// Аптечка: ICC-профиль экрана есть только на macOS.
++#[cfg(not(target_os = "macos"))]
++pub fn macos_display_icc() -> Option<Vec<u8>> {
++    None
++}
++
+ use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle};
+ 
+ #[cfg(target_family = "wasm")]
