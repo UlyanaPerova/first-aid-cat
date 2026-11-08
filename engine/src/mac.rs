@@ -333,13 +333,13 @@ pub(crate) fn check_apps() -> Vec<Check> {
             None => by.push((app, hang, 1)),
         }
     }
-    by.sort_by(|a, b| b.2.cmp(&a.2));
+    by.sort_by_key(|x| std::cmp::Reverse(x.2));
     for (app, hang, n) in by.into_iter().take(3) {
         out.push(Check::new(
             "sys",
             &app,
             if n >= 3 { WARN } else { INFO },
-            &format!("{} {} за неделю", if hang { "зависала" } else { "падала" }, crate::diag::plural(n as usize, "раз", "раза", "раз")),
+            &format!("{} {} за неделю", if hang { "зависала" } else { "падала" }, crate::diag::plural(n, "раз", "раза", "раз")),
         ));
     }
     // открытые программы — кнопка принудительного закрытия (то, что не всегда может «Завершить принудительно»)
