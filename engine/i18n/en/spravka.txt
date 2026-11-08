@@ -346,10 +346,6 @@ en: Date issued: {}, {}
 ru: Лечащий врач: ____________________
 en: Attending physician: ____________________
 
-# spravka.rs:559
-ru: Даня
-en: Danya
-
 # spravka.rs:561
 ru: М.П. (место лапки)
 en: Seal (paw goes here)

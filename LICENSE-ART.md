@@ -8,6 +8,7 @@ The Apache License 2.0 in [LICENSE](LICENSE) applies to the **source code only**
 - the background art;
 - the widget art and its looks (`art/layers/виджет/`, `macos/widget/*.png`);
 - the program icons (`assets/aptechka.*`, `assets/xp/`);
+- the doctor's handwritten signature on the certificate (`engine/assets/подпись_*.png`);
 - the screenshots in `docs/`.
 
 You may not use, copy, modify, extract or redistribute these images, alone or as part of another work, without written permission.
@@ -19,3 +20,4 @@ You may build and run this program, including the images embedded in its binary,
 - **Background art:** by @kael333_. The original appears to have been deleted from all platforms or could not be found; only reposts on Pinterest exist. The rights to the background belong to its author. It is not licensed by this project, and nothing here grants you any right to it.
 - **Character:** integrated into the art with the help of image generation in ChatGPT.
 - **Icons** (`assets/xp/`, the program icon): generated with an image-generation model for this project.
+- **Doctor's signature** (`engine/assets/подпись_*.png`): generated with an image-generation model for this project.

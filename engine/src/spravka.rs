@@ -4,7 +4,7 @@
 //! открытии справки, а не при каждой перерисовке, поэтому лист не тормозит, пока кот дышит под ним.
 //!
 //! Отличие от Python: нет шрифтов Liberation Serif / Marck Script (в программе вшит только DejaVu
-//! Sans Condensed), поэтому курсива нет, а подпись «Даня» набрана жирным крупным шрифтом.
+//! Sans Condensed), поэтому курсива нет; подпись врача — картинка от руки (assets/подпись_*.png).
 
 use crate::diag::{Check, Session};
 use crate::gfx::{Canvas, Fonts, Rect};
@@ -326,9 +326,32 @@ pub const W: i32 = 820;
 const M: i32 = 56;
 
 pub enum Item {
-    Text { x: i32, base: i32, s: String, col: u32, px: u16, bold: bool },
-    Rule { x: i32, y: i32, w: i32, thick: i32 },
-    Paw { x: i32, y: i32, size: f32 },
+    Text {
+        x: i32,
+        base: i32,
+        s: String,
+        col: u32,
+        px: u16,
+        bold: bool,
+    },
+    Rule {
+        x: i32,
+        y: i32,
+        w: i32,
+        thick: i32,
+    },
+    Paw {
+        x: i32,
+        y: i32,
+        size: f32,
+    },
+    /// Подпись врача от руки (картинка): левый верхний угол и высота русской подписи.
+    Sign {
+        x: i32,
+        y: i32,
+        h: i32,
+        en: bool,
+    },
 }
 
 pub struct Page {
@@ -576,9 +599,12 @@ pub fn layout(fonts: &mut Fonts, doc: &Doc, pw: i32) -> Page {
     let doctor_line_y = b.y;
     b.text("Лечащий врач: ____________________", 15, false, INK, left, 4);
     b.flow(&[sp(DOCTOR, INK, false)], M + 108, 300, 14, left, 10);
-    let (sx, sy) = (b.l(M + 120), doctor_line_y - b.l(16));
-    let base = b.fonts.center_base(sy, b.l(30), b.l(30) as u16);
-    b.items.push(Item::Text { x: sx, base, s: "Даня".into(), col: BLUE_INK, px: b.l(30) as u16, bold: true });
+    let en = crate::i18n::lang() == crate::i18n::Lang::En;
+    // подпись — над чертой, сразу за «Лечащий врач:» (на английском надпись длиннее)
+    let line = crate::i18n::t("Лечащий врач: ____________________");
+    let label = line.split('_').next().unwrap_or("");
+    let lx = b.l(M) + b.fonts.width(label, b.l(15) as u16, false);
+    b.items.push(Item::Sign { x: lx + b.l(4), y: doctor_line_y - b.l(22), h: b.l(40), en });
     b.items.push(Item::Paw { x: b.l(W - M - 110), y: sig_y + b.l(40), size: 1.25 * s });
     let label = "М.П. (место лапки)";
     let (lpx, lw) = (b.l(12) as u16, b.l(160));
@@ -673,6 +699,47 @@ pub fn draw(page: &Page, c: &mut Canvas, fonts: &mut Fonts, ox: i32, oy: i32) {
             Item::Text { x, base, s, col, px, bold } => fonts.draw(c, ox + x, oy + base, s, *col, *px, *bold),
             Item::Rule { x, y, w, thick } => c.fill(Rect::new(ox + x, oy + y, *w, *thick), INK),
             Item::Paw { x, y, size } => paw(c, ox + x, oy + y, *size),
+            Item::Sign { x, y, h, en } => sign(c, ox + x, oy + y, *h, *en),
+        }
+    }
+}
+
+/// Подписи врача (нарисованы ChatGPT): маска чернил в оттенках серого, белое — чернила. Обе в одном
+/// масштабе, у «Danya» хвост «y» уходит ниже, поэтому она выше.
+const SIGN_RU: &[u8] = include_bytes!("../assets/подпись_ru.png");
+const SIGN_EN: &[u8] = include_bytes!("../assets/подпись_en.png");
+
+/// Маска подписи: (ширина, высота, покрытие 0..255). Разбирается один раз.
+fn sign_mask(en: bool) -> Option<&'static (usize, usize, Vec<u8>)> {
+    static M: [std::sync::OnceLock<Option<(usize, usize, Vec<u8>)>>; 2] = [std::sync::OnceLock::new(), std::sync::OnceLock::new()];
+    M[en as usize]
+        .get_or_init(|| {
+            let pm = crate::gfx::decode_png(if en { SIGN_EN } else { SIGN_RU })?;
+            Some((pm.width() as usize, pm.height() as usize, pm.data().chunks(4).map(|p| p[0]).collect()))
+        })
+        .as_ref()
+}
+
+/// Подпись синими чернилами: масштаб — по высоте русской (h), сглаживание — средним по клетке.
+fn sign(c: &mut Canvas, x: i32, y: i32, h: i32, en: bool) {
+    let (Some(ru), Some((sw, sh, m))) = (sign_mask(false), sign_mask(en)) else { return };
+    let f = h.max(1) as f32 / ru.1 as f32;
+    let (dw, dh) = ((*sw as f32 * f).round() as i32, (*sh as f32 * f).round() as i32);
+    let n = ((1.0 / f).ceil() as usize).clamp(1, 8);
+    for dy in 0..dh {
+        for dx in 0..dw {
+            let mut sum = 0u32;
+            for j in 0..n {
+                for i in 0..n {
+                    let sx = (((dx as f32 + (i as f32 + 0.5) / n as f32) / f) as usize).min(sw - 1);
+                    let sy = (((dy as f32 + (j as f32 + 0.5) / n as f32) / f) as usize).min(sh - 1);
+                    sum += m[sy * sw + sx] as u32;
+                }
+            }
+            let a = sum / (n * n) as u32;
+            if a > 0 {
+                c.blend(x + dx, y + dy, BLUE_INK, a);
+            }
         }
     }
 }
@@ -704,5 +771,26 @@ mod unchecked_tests {
         let d = build(&[ok, Check::new("sys", "Диск", "info", "не проверить").unknown()], &[]);
         assert!(!d.healthy);
         assert_eq!(d.unchecked, 1);
+    }
+
+    /// Подпись врача на месте на обоих языках: синие чернила у строки «Лечащий врач».
+    /// SPRAVKA_SHOT=папка — заодно сохранить листы картинками (посмотреть глазами).
+    #[test]
+    fn signature_drawn_in_both_languages() {
+        for lang in [crate::i18n::Lang::Ru, crate::i18n::Lang::En] {
+            crate::i18n::TEST_LANG.with(|l| l.set(lang));
+            let doc = build(&[Check::new("sys", "Память", "ok", "40%")], &[]);
+            let mut fonts = Fonts::new();
+            let (w, h, rgb) = render_rgb(&mut fonts, &doc, 760);
+            let ink = rgb.chunks(3).filter(|p| p[2] > 120 && p[0] < 90 && p[1] < 110).count();
+            assert!(ink > 300, "{lang:?}: подписи не видно ({ink})");
+            if let Some(dir) = std::env::var_os("SPRAVKA_SHOT") {
+                let f = std::fs::File::create(std::path::Path::new(&dir).join(format!("{lang:?}.png"))).unwrap();
+                let mut e = png::Encoder::new(f, w as u32, h as u32);
+                e.set_color(png::ColorType::Rgb);
+                e.write_header().unwrap().write_image_data(&rgb).unwrap();
+            }
+        }
+        crate::i18n::TEST_LANG.with(|l| l.set(crate::i18n::Lang::Ru));
     }
 }

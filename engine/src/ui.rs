@@ -3273,7 +3273,7 @@ pub fn demo_checks(kind: &str) -> Vec<Check> {
         chk("net", "VPN (итог)", "ok", "мир видит CA", &[]),
         chk("ai", "Связь с Claude API", "ok", "750 мс", &[]),
         chk("ai", "Связь с claude.ai", "ok", "635 мс", &[]),
-        chk("net", "Мой локальный IP", "info", "192.168.2.207", &[]),
+        chk("net", "Мой локальный IP", "info", "192.168.1.23", &[]),
         chk("net", "Канал Happ", if fix { "warn" } else { "info" }, "выключен", &[("happ_restart", "Перезапустить Happ", None)]),
         chk("net", "Канал Outline", "info", "выключен", &[("outline_restart", "Перезапустить Outline", None)]),
         chk("gpu", "Видеокарта", "ok", "41°C · загрузка 2 %", &[]),

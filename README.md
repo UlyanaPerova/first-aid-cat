@@ -123,11 +123,11 @@ Download the installer for your system from [Releases](../../releases). Every fi
 
 | System | Installer | How |
 |---|---|---|
-| **Linux**, Debian and Ubuntu | `first-aid-cat_0.9.2_amd64.deb` | `sudo apt install ./first-aid-cat_0.9.2_amd64.deb` |
-| **Linux**, Fedora and openSUSE | `first-aid-cat-0.9.2-1.x86_64.rpm` | `sudo dnf install ./first-aid-cat-0.9.2-1.x86_64.rpm` |
-| **Linux**, any distribution | `first-aid-cat-0.9.2-linux-x86_64.AppImage` | `chmod +x` it and double-click. Needs FUSE; without it run `./first-aid-cat-0.9.2-linux-x86_64.AppImage --appimage-extract-and-run` |
-| **Windows** 10 and 11, x86-64 | `first-aid-cat-0.9.2-windows-x86_64-setup.exe` | Double-click. Installs for your user only, no administrator rights needed. The binary is not signed yet, so SmartScreen may warn about an unknown publisher |
-| **macOS** 14 Sonoma or later, Apple silicon | `first-aid-cat-0.9.2-macos-arm64.dmg` | Open it and drag the app to *Applications*. The app has an ad-hoc signature, not a Developer ID, so macOS blocks the first launch: open *System Settings → Privacy & Security* and click *Open Anyway* (on older macOS, right-click the app and choose *Open*) |
+| **Linux**, Debian and Ubuntu | `first-aid-cat_1.0.0_amd64.deb` | `sudo apt install ./first-aid-cat_1.0.0_amd64.deb` |
+| **Linux**, Fedora and openSUSE | `first-aid-cat-1.0.0-1.x86_64.rpm` | `sudo dnf install ./first-aid-cat-1.0.0-1.x86_64.rpm` |
+| **Linux**, any distribution | `first-aid-cat-1.0.0-linux-x86_64.AppImage` | `chmod +x` it and double-click. Needs FUSE; without it run `./first-aid-cat-1.0.0-linux-x86_64.AppImage --appimage-extract-and-run` |
+| **Windows** 10 and 11, x86-64 | `first-aid-cat-1.0.0-windows-x86_64-setup.exe` | Double-click. Installs for your user only, no administrator rights needed. The binary is not signed yet, so SmartScreen may warn about an unknown publisher |
+| **macOS** 14 Sonoma or later, Apple silicon | `first-aid-cat-1.0.0-macos-arm64.dmg` | Open it and drag the app to *Applications*. The app has an ad-hoc signature, not a Developer ID, so macOS blocks the first launch: open *System Settings → Privacy & Security* and click *Open Anyway* (on older macOS, right-click the app and choose *Open*) |
 
 Linux packages need glibc 2.35 or newer (Ubuntu 22.04+, Debian 12+, Fedora 36+) and X11 or XWayland. The package installs the `aptechka` command, a menu entry and an icon; it does not start anything at login.
 
@@ -138,16 +138,16 @@ The same programs without an installer, if you prefer that.
 **Linux**:
 
 ```sh
-tar xf first-aid-cat-0.9.2-linux-x86_64.tar.gz
-cd first-aid-cat-0.9.2-linux-x86_64
+tar xf first-aid-cat-1.0.0-linux-x86_64.tar.gz
+cd first-aid-cat-1.0.0-linux-x86_64
 ./install.sh              # installs to ~/.local/bin, adds a menu entry and starts the widget at login
 ./install.sh --no-widget  # same, without the widget at login
 ./install.sh --uninstall
 ```
 
-**Windows**: unpack `first-aid-cat-0.9.2-windows-x86_64.zip` and run `install.cmd`, or just start `aptechka.exe`.
+**Windows**: unpack `first-aid-cat-1.0.0-windows-x86_64.zip` and run `install.cmd`, or just start `aptechka.exe`.
 
-**macOS**: unpack `first-aid-cat-0.9.2-macos-arm64.zip` and move the app to *Applications*.
+**macOS**: unpack `first-aid-cat-1.0.0-macos-arm64.zip` and move the app to *Applications*.
 
 ## Command line
 
