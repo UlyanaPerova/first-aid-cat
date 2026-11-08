@@ -190,6 +190,8 @@ enum MenuAct {
     /// анимация картинки в окне / виджета: включить или выключить
     AppAnim,
     WidgetAnim,
+    /// инструкция «Свои проверки и исправления» (папка custom/)
+    CustomGuide,
     About,
     WidgetShow,
     WidgetStyle(u8),
@@ -260,7 +262,12 @@ fn menus() -> Vec<(&'static str, Vec<(String, MenuAct)>)> {
         ("Лечение", fixes_menu),
         (
             "Справка",
-            vec![("Справка от Мяудоктора".into(), MenuAct::Spravka), ("Лицензии".into(), MenuAct::Licenses), ("О программе".into(), MenuAct::About)],
+            vec![
+                ("Справка от Мяудоктора".into(), MenuAct::Spravka),
+                ("Свои проверки и исправления".into(), MenuAct::CustomGuide),
+                ("Лицензии".into(), MenuAct::Licenses),
+                ("О программе".into(), MenuAct::About),
+            ],
         ),
     ];
     // НЕ ВОЗВРАЩАТЬ меню «Виджет» на macOS (даже ради одинаковых меню на всех системах): там виджет —
@@ -1608,6 +1615,14 @@ impl Ui {
                 let on = !crate::widget_look::anim_enabled();
                 crate::prefs::update(|v| v["widget_anim"] = serde_json::json!(on));
                 self.say(if on { ANIM_ON_WIDGET } else { ANIM_OFF_WIDGET });
+                Vec::new()
+            }
+            MenuAct::CustomGuide => {
+                match crate::licenses::open_guide() {
+                    Ok((p, true)) => self.say(&format!("Открыла инструкцию: {}", p.display())),
+                    Ok((p, false)) => self.say(&format!("Инструкция лежит здесь: {}", p.display())),
+                    Err(e) => self.say(&format!("Не смогла положить инструкцию: {e}")),
+                }
                 Vec::new()
             }
             MenuAct::Licenses => {

@@ -53,6 +53,13 @@ jobs:
         run: cargo test --release --locked
       - name: Every user-visible string is translated
         run: python3 ../tools/i18n.py check
+      - name: Builds with the custom/ example (CUSTOM.md)
+        run: |
+          cp -r ../examples/custom ../custom
+          cargo clippy --release --locked -- -D warnings
+          cargo clippy --release --locked --target x86_64-pc-windows-gnu -- -D warnings
+          cargo test --release --locked custom::
+          rm -rf ../custom
 
   windows:
     name: Windows tests

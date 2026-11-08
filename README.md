@@ -231,6 +231,7 @@ Every push is checked by [CI](.github/workflows/ci.yml) on Linux, Windows and ma
 - [PRIVACY.md](PRIVACY.md) — what is read, what is sent, what is stored
 - [TESTING.md](TESTING.md) — how changes are tested
 - [AGENTS.md](AGENTS.md) — notes for AI coding agents working on this repository
+- [CUSTOM.md](CUSTOM.md) ([по-русски](CUSTOM.ru.md)) — your own checks and fixes in a local `custom/` folder
 
 ## License
 

@@ -30,6 +30,30 @@ pub fn open() -> Result<(std::path::PathBuf, bool), String> {
     Ok((dir, shown))
 }
 
+/// Инструкция «Свои проверки и исправления» (CUSTOM.md / CUSTOM.ru.md): на языке интерфейса — в папку сеанса и
+/// открыть программой для текстов. Ok — путь (открылась или нет — второе в паре).
+pub fn open_guide() -> Result<(std::path::PathBuf, bool), String> {
+    let (name, text) = if crate::i18n::lang() == crate::i18n::Lang::Ru {
+        ("CUSTOM.ru.md", include_str!(concat!(env!("OUT_DIR"), "/notices/CUSTOM.ru.md")))
+    } else {
+        ("CUSTOM.md", include_str!(concat!(env!("OUT_DIR"), "/notices/CUSTOM.md")))
+    };
+    let p = crate::store::runtime_dir().join(name);
+    crate::store::write_private(&p, text.as_bytes()).map_err(|e| e.to_string())?;
+    let opener = if cfg!(windows) {
+        "notepad"
+    } else if cfg!(target_os = "macos") {
+        "open"
+    } else {
+        "xdg-open"
+    };
+    let mut c = std::process::Command::new(opener);
+    c.arg(&p);
+    crate::cmd::scrub_env(&mut c);
+    let shown = crate::procs::spawn_detached(&mut c);
+    Ok((p, shown))
+}
+
 #[cfg(test)]
 mod tests {
     /// Все четыре файла вшиты и не пустые; лицензия — Apache 2.0.

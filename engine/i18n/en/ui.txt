@@ -903,3 +903,19 @@ en: Picture animation
 # ui.rs:288
 ru: Анимация виджета
 en: Widget animation
+
+# ui.rs
+ru: Свои проверки и исправления
+en: Your own checks and fixes
+
+# ui.rs
+ru: Открыла инструкцию: {}
+en: Opened the guide: {}
+
+# ui.rs
+ru: Инструкция лежит здесь: {}
+en: The guide is here: {}
+
+# ui.rs
+ru: Не смогла положить инструкцию: {}
+en: Couldn't write the guide: {}

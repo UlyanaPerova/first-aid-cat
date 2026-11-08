@@ -1694,7 +1694,8 @@ pub fn for_this_os(id: &str) -> bool {
     // «snapshot» — эталон тем: на Linux (GNOME), Windows и macOS свой набор ключей (diag::capture_snapshot)
     const COMMON: [&str; 8] =
         ["dupes_scan", "dupes_trash", "git_proxy_off", "npm_proxy_off", "open_url", "footprint_lock", "footprint_history", "snapshot"];
-    if COMMON.contains(&id) {
+    // свои действия (папка custom/) сами решают, на какой системе работают
+    if COMMON.contains(&id) || id.starts_with("my_") {
         true
     } else {
         os_of(id) == current_os()

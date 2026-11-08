@@ -129,7 +129,7 @@ fn notices() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
     let out = Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("notices");
     std::fs::create_dir_all(&out).expect("notices");
-    for f in ["LICENSE", "NOTICE", "LICENSE-ART.md", "THIRD_PARTY_NOTICES.md"] {
+    for f in ["LICENSE", "NOTICE", "LICENSE-ART.md", "THIRD_PARTY_NOTICES.md", "CUSTOM.md", "CUSTOM.ru.md"] {
         let src = [root.join(f), root.join("release").join(f)].into_iter().find(|p| p.is_file());
         let text = match &src {
             Some(p) => {
