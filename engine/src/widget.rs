@@ -251,7 +251,7 @@ pub struct Widget {
     #[cfg(all(unix, not(target_os = "macos")))]
     cover: Option<Option<crate::cover::Cover>>,
     covered: bool,
-    #[cfg(all(unix, not(target_os = "macos")))]
+    #[cfg(any(windows, all(unix, not(target_os = "macos"))))]
     cover_t: Instant,
     /// размер колесом мыши: ступеней клетки к обычной (ui.json widget_zoom, ZOOM_MIN..=ZOOM_MAX) и прокрутка,
     /// ещё не набравшая ступень
@@ -343,7 +343,7 @@ impl Widget {
             #[cfg(all(unix, not(target_os = "macos")))]
             cover: None,
             covered: false,
-            #[cfg(all(unix, not(target_os = "macos")))]
+            #[cfg(any(windows, all(unix, not(target_os = "macos"))))]
             cover_t: Instant::now(),
             zoom: zoom_pref(),
             wheel: 0.0,
@@ -678,16 +678,22 @@ impl Widget {
     /// Закрыт ли виджет другими окнами целиком (Linux: спрашиваем оконный менеджер раз в секунду). Пока закрыт —
     /// оживление спит: его всё равно никто не видит.
     fn check_covered(&mut self) {
-        #[cfg(all(unix, not(target_os = "macos")))]
+        #[cfg(any(windows, all(unix, not(target_os = "macos"))))]
         {
             if self.cover_t.elapsed() < Duration::from_secs(1) {
                 return;
             }
             self.cover_t = Instant::now();
             let Some(w) = self.window.as_ref() else { return };
-            let (Ok(p), s) = (w.outer_position(), w.outer_size()) else { return };
-            let cover = self.cover.get_or_insert_with(crate::cover::Cover::new);
-            let now = cover.as_ref().and_then(|c| c.covered((p.x, p.y, s.width as i32, s.height as i32))).unwrap_or(false);
+            // Linux: спрашиваем оконный менеджер (cover.rs); Windows: какое окно видно в точках виджета
+            #[cfg(all(unix, not(target_os = "macos")))]
+            let now = {
+                let (Ok(p), s) = (w.outer_position(), w.outer_size()) else { return };
+                let cover = self.cover.get_or_insert_with(crate::cover::Cover::new);
+                cover.as_ref().and_then(|c| c.covered((p.x, p.y, s.width as i32, s.height as i32))).unwrap_or(false)
+            };
+            #[cfg(windows)]
+            let now = covered_windows(w).unwrap_or(false);
             if now != self.covered {
                 self.covered = now;
                 self.dirty = true;
@@ -1490,6 +1496,55 @@ fn mac_concept_data() -> Option<TplData> {
         disk_used: Some(45.0),
         state: 0,
     })
+}
+
+/// Windows: закрыт ли виджет другими окнами целиком. В 9×9 точках его прямоугольника спрашиваем, какое окно
+/// там сверху (WindowFromPoint, верхнее окно-предок). Видна хоть одна точка самого виджета — не закрыт.
+/// Прозрачные места «слоёного» окна пропускают насквозь — такие точки просто не засчитываются.
+/// None — не узнать (нет описателя окна).
+#[cfg(windows)]
+fn covered_windows(win: &Window) -> Option<bool> {
+    use core::ffi::c_void;
+    use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    type H = *mut c_void;
+    #[repr(C)]
+    struct Rc {
+        l: i32,
+        t: i32,
+        r: i32,
+        b: i32,
+    }
+    #[repr(C)]
+    struct Pt {
+        x: i32,
+        y: i32,
+    }
+    #[link(name = "user32")]
+    extern "system" {
+        fn GetWindowRect(h: H, r: *mut Rc) -> i32;
+        fn WindowFromPoint(p: Pt) -> H;
+        fn GetAncestor(h: H, flags: u32) -> H;
+    }
+    const GA_ROOT: u32 = 2;
+    let RawWindowHandle::Win32(h) = win.window_handle().ok()?.as_raw() else { return None };
+    let me = h.hwnd.get() as H;
+    let mut r = Rc { l: 0, t: 0, r: 0, b: 0 };
+    // SAFETY: me — живое окно этого процесса, r — наша структура RECT
+    if unsafe { GetWindowRect(me, &mut r) } == 0 || r.r <= r.l || r.b <= r.t {
+        return None;
+    }
+    let (w, h) = (r.r - r.l, r.b - r.t);
+    for i in 0..9 {
+        for j in 0..9 {
+            let p = Pt { x: r.l + (w - 1) * i / 8, y: r.t + (h - 1) * j / 8 };
+            // SAFETY: обычные вызовы user32 с точкой экрана; описатели только сравниваем
+            let top = unsafe { GetAncestor(WindowFromPoint(p), GA_ROOT) };
+            if top == me {
+                return Some(false);
+            }
+        }
+    }
+    Some(true)
 }
 
 /// Windows: показать буфер (ARGB, предумноженная альфа) «слоёным» окном — прозрачные места окна

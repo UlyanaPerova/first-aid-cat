@@ -889,8 +889,8 @@ ru: Кот снова живой.
 en: The cat is alive again.
 
 # ui.rs:225
-ru: Виджет замер. Выигрыш небольшой: примерно 0,3% → 0,1% одного ядра, а на Linux закрытый окнами виджет и так спит.
-en: The widget is still now. The saving is small: about 0.3% → 0.1% of one core, and on Linux a widget covered by windows sleeps anyway.
+ru: Виджет замер. Выигрыш небольшой: примерно 0,3% → 0,1% одного ядра, а на Linux и Windows закрытый окнами виджет и так спит.
+en: The widget is still now. The saving is small: about 0.3% → 0.1% of one core, and on Linux and Windows a widget covered by windows sleeps anyway.
 
 # ui.rs:226
 ru: Виджет снова живой.

@@ -65,7 +65,7 @@ First Aid Cat is one Rust crate (`engine/`) that builds a single binary, `aptech
 | `elevate.rs` | The only way to run something as administrator |
 | `cmd.rs` | The only way to run external commands |
 | `store.rs`, `prefs.rs` | Files on disk: private settings folder, per-session runtime folder for measurement data, atomic writes, safe reads, settings |
-| `cover.rs` | Linux: whether the widget is fully covered by other windows (asks the window manager), so its animation sleeps while nobody can see it |
+| `cover.rs` | Linux: whether the widget is fully covered by other windows (asks the window manager), so its animation sleeps while nobody can see it. On Windows the same is done in `widget.rs` with `WindowFromPoint` |
 | `notify.rs` | Desktop notification when a new problem appears in a category where something is ignored |
 | `single.rs` | One instance per user; a second launch asks the first to show its window |
 | `clip.rs` | Clipboard without GTK |

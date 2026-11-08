@@ -90,7 +90,7 @@ A problem that doesn't matter to you can be ignored: **Ignore** next to the row,
 
 A small desktop widget shows the essentials: network, VPN, AI, CPU and disk. Click it to open the main window. Pick its look and size in the **Widget** menu.
 
-The cat in the widgets is alive too: he blinks, and you can pull his ear to make him blush. In **Window** the heart bubble bobs and sparks twinkle; in **Glass** steam rises from the mug and his ears twitch now and then. On Linux the animation sleeps while other windows cover the widget.
+The cat in the widgets is alive too: he blinks, and you can pull his ear to make him blush. In **Window** the heart bubble bobs and sparks twinkle; in **Glass** steam rises from the mug and his ears twitch now and then. On Linux and Windows the animation sleeps while other windows cover the widget.
 
 **Resize the widget** with the mouse wheel over it (Linux and Windows): wheel up makes it bigger, wheel down smaller, from about two thirds up to twice the usual size. The size is remembered. The steps are chosen so that the picture is only ever drawn at whole pixels from its detailed artwork, so it stays crisp and the labels stay in place.
 
