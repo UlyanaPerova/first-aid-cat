@@ -515,6 +515,10 @@ fn snapshot() -> (bool, String) {
 
 /// Нужно ли подтверждение перед запуском (и что сказать в окне). None — запускать сразу.
 pub fn confirm_text(id: &str) -> Option<&'static str> {
+    #[cfg(aptechka_custom)]
+    if id.starts_with("my_") {
+        return crate::custom::confirm(id);
+    }
     match id {
         "sound_restart" => Some("Звук пропадёт на пару секунд."),
         "footprint_history" => Some("Строки с ключами удалятся из истории команд насовсем. Сами ключи лучше потом заменить новыми."),
@@ -708,6 +712,9 @@ pub fn validate(id: &str, arg: Option<&str>) -> Result<(), String> {
                 && (8..=40).contains(&k.len())
                 && k.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
         }),
+        // своя сборка владелицы (custom/): свои действия и своя проверка параметров
+        #[cfg(aptechka_custom)]
+        m if m.starts_with("my_") => crate::custom::valid(m, a),
         _ => return Err(format!("Неизвестное действие: {id}")),
     };
     if ok {
@@ -761,6 +768,8 @@ fn apply_inner(id: &str, arg: Option<&str>) -> (bool, String) {
             Some(k) if !k.is_empty() => theme_restore(k),
             _ => (false, "Не указан ключ темы.".into()),
         },
+        #[cfg(aptechka_custom)]
+        m if m.starts_with("my_") => crate::custom::apply(m, arg),
         "snapshot" => snapshot(),
         #[cfg(windows)]
         w if w.starts_with("win_") => win_apply(w, arg),
@@ -1133,6 +1142,10 @@ mod win_proc {
 pub fn manual(id: &str, arg: Option<&str>) -> Option<String> {
     // та же проверка, что у кнопки: команду со странным параметром человеку не показываем
     validate(id, arg).ok()?;
+    #[cfg(aptechka_custom)]
+    if id.starts_with("my_") {
+        return crate::custom::manual(id, arg);
+    }
     let a = arg.unwrap_or("");
     #[cfg(target_os = "linux")]
     {
@@ -1276,6 +1289,10 @@ fn restart_by_name(proc_name: &str, desktop_id: &str) -> String {
 
 /// Что произойдёт при починке — для окна подтверждения (у действий без особых последствий).
 pub fn what_happens(id: &str) -> &'static str {
+    #[cfg(aptechka_custom)]
+    if id.starts_with("my_") {
+        return crate::custom::what(id);
+    }
     match id {
         "dns_flush" => "Забуду запомненные адреса сайтов, они узнаются заново.",
         "footprint_lock" => "Файлы с ключами и доступами станут видны только тебе (другим учётным записям — нет).",

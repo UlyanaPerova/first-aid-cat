@@ -32,6 +32,11 @@
 mod clip;
 mod cmd;
 mod cover;
+// своя сборка владелицы: папка custom/ рядом с engine/ (в git её нет), build.rs включает cfg aptechka_custom
+#[cfg(aptechka_custom)]
+mod custom {
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../custom/mod.rs"));
+}
 mod sched;
 /// Тесты, которые читают или меняют переменные окружения (HOME): переменные общие на весь процесс, а тесты
 /// идут параллельно — без общего замка один тест подменял HOME посреди другого (cursor_layout падал через раз).

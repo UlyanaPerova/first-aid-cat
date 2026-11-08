@@ -66,6 +66,7 @@ impl Cat {
     }
 }
 
+#[derive(Clone)]
 pub struct Unit {
     /// Код для настроек (не менять: по нему запоминается «выключено»).
     pub id: &'static str,
@@ -79,7 +80,7 @@ pub struct Unit {
 }
 
 #[cfg(target_os = "linux")]
-pub fn units() -> &'static [Unit] {
+fn base_units() -> &'static [Unit] {
     use crate::diag::*;
     static U: &[Unit] = &[
         Unit {
@@ -349,7 +350,7 @@ pub fn units() -> &'static [Unit] {
 }
 
 #[cfg(windows)]
-pub fn units() -> &'static [Unit] {
+fn base_units() -> &'static [Unit] {
     use crate::win::*;
     static U: &[Unit] = &[
         Unit { id: "win_os", cat: Cat::Sys, title: "Windows", about: "Версия Windows", run: check_os, default_on: true },
@@ -522,7 +523,7 @@ pub fn units() -> &'static [Unit] {
 }
 
 #[cfg(target_os = "macos")]
-pub fn units() -> &'static [Unit] {
+fn base_units() -> &'static [Unit] {
     use crate::mac::*;
     static U: &[Unit] = &[
         Unit { id: "mac_os", cat: Cat::Sys, title: "macOS", about: "Версия macOS", run: check_os, default_on: true },
@@ -706,8 +707,20 @@ pub fn units() -> &'static [Unit] {
 }
 
 #[cfg(not(any(target_os = "linux", windows, target_os = "macos")))]
-pub fn units() -> &'static [Unit] {
+fn base_units() -> &'static [Unit] {
     &[]
+}
+
+/// Все показатели этой системы. Своя сборка владелицы (папка custom/ рядом с engine/, её нет в git и в
+/// публичном репозитории — build.rs включает cfg aptechka_custom) добавляет свои в конец.
+pub fn units() -> &'static [Unit] {
+    #[cfg(aptechka_custom)]
+    {
+        static ALL: std::sync::OnceLock<Vec<Unit>> = std::sync::OnceLock::new();
+        return ALL.get_or_init(|| base_units().iter().cloned().chain(crate::custom::units()).collect());
+    }
+    #[allow(unreachable_code)]
+    base_units()
 }
 
 pub fn find(id: &str) -> Option<&'static Unit> {

@@ -72,6 +72,8 @@ First Aid Cat is one Rust crate (`engine/`) that builds a single binary, `aptech
 | `i18n.rs` | Interface language (see below) |
 | `art.rs` + `build.rs` | Pictures from `art/layers` embedded into the binary at build time |
 
+A local build can add its own checks and fixes from an optional, untracked `custom/` folder next to `engine/` (`build.rs` turns on `cfg(aptechka_custom)` when `custom/mod.rs` exists). Its checks join the catalogue, its fixes use IDs starting with `my_` and still pass through `fixes::validate`. Release builds and CI never have this folder.
+
 ## Rendering
 
 The window is drawn in software into a `softbuffer` surface. A slightly patched copy is in `engine/vendor/softbuffer`, with checked arithmetic and validated damage rectangles. Only changed regions are redrawn. The art scene is composited from PNG layers with `tiny-skia`. The widget is drawn on a small pixel canvas and scaled by whole numbers, so it stays crisp at any display scale.

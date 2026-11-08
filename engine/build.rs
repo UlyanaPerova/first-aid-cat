@@ -5,6 +5,7 @@ use std::path::Path;
 fn main() {
     i18n_tables();
     notices();
+    custom();
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../art/layers");
     let dir = dir.canonicalize().expect("нет art/layers");
     let read_json = |rel: &str| -> serde_json::Value {
@@ -138,5 +139,17 @@ fn notices() {
             None => panic!("нет файла {f} (ни в корне, ни в release/)"),
         };
         std::fs::write(out.join(f), text).expect("notice");
+    }
+}
+
+/// Своя сборка владелицы: папка custom/ рядом с engine/ (в .gitignore, в публичный репозиторий не попадает).
+/// Есть custom/mod.rs — включаем cfg aptechka_custom (её показатели и действия my_*), нет — обычная сборка.
+fn custom() {
+    println!("cargo::rustc-check-cfg=cfg(aptechka_custom)");
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../custom");
+    println!("cargo:rerun-if-changed={}", dir.display());
+    if dir.join("mod.rs").is_file() {
+        println!("cargo:rerun-if-changed={}", dir.join("mod.rs").display());
+        println!("cargo:rustc-cfg=aptechka_custom");
     }
 }

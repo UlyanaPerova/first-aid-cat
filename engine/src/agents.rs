@@ -1166,6 +1166,8 @@ mod tests {
     #[test]
     fn opencode_reads_db() {
         let _g = OC_TEST.lock().unwrap_or_else(|e| e.into_inner());
+        // папка настроек (копия базы) — общая с тестами, что подменяют HOME: без замка копия уходила в чужую временную папку
+        let _env = crate::ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let d = oc_tmp("ok");
         // ключ собираем на лету: в исходниках его нет
         let key = format!("sk-ant-api03-{}", "aB3dE5fG7hJ9kL1mN3pQ5rS7tU9vW1xY3zA5bC7d");
@@ -1211,6 +1213,8 @@ mod tests {
     #[test]
     fn opencode_old_table_and_unknown_schema() {
         let _g = OC_TEST.lock().unwrap_or_else(|e| e.into_inner());
+        // папка настроек (копия базы) — общая с тестами, что подменяют HOME: без замка копия уходила в чужую временную папку
+        let _env = crate::ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let d = oc_tmp("old");
         {
             let c = rusqlite::Connection::open(d.join("opencode.db")).unwrap();
@@ -1234,6 +1238,8 @@ mod tests {
     #[test]
     fn opencode_garbage_or_locked_is_error_not_panic() {
         let _g = OC_TEST.lock().unwrap_or_else(|e| e.into_inner());
+        // папка настроек (копия базы) — общая с тестами, что подменяют HOME: без замка копия уходила в чужую временную папку
+        let _env = crate::ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let d = oc_tmp("garbage");
         std::fs::write(d.join("opencode.db"), vec![0xA5u8; 8192]).unwrap();
         assert!(opencode_read_db(&d.join("opencode.db")).is_err());

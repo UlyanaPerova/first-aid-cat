@@ -772,7 +772,7 @@ mod shy_tests {
     /// Мордочка «смущение» вшита для обоих мониторов и маленького «Окна» и по размеру совпадает со своим местом в разметке.
     #[test]
     fn shy_faces_are_embedded_and_fit() {
-        for name in ["monitor_small", "monitor_medium", "window_small", "window_medium"] {
+        for name in ["monitor_small", "monitor_medium", "window_small", "window_medium", "glass_small"] {
             let raw = crate::art::read("", &format!("виджет/целиком/{name}.json")).expect("разметка");
             let spec: serde_json::Value = serde_json::from_slice(&raw).expect("json");
             let s = &spec["anim"]["shy"];
