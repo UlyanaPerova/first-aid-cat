@@ -492,7 +492,7 @@ fn short(p: &Path) -> String {
 
 pub(crate) fn check_dupes() -> Vec<Check> {
     let Some((groups, _, complete)) = load() else {
-        return vec![Check::new("sys", "Копии файлов", INFO, "ещё не искала")
+        return vec![Check::new("sys", "Копии файлов", INFO, "ещё не искал")
             .hint("Найду одинаковые файлы в Загрузках, Документах, Изображениях, Видео, Музыке и на Рабочем столе. Папки программных проектов не трогаю.")
             .fixes(vec![fx("dupes_scan", "Найти копии", None)])];
     };
@@ -503,8 +503,8 @@ pub(crate) fn check_dupes() -> Vec<Check> {
         out.push(if complete {
             Check::new("sys", "Копии файлов", OK, "копий нет").fixes(vec![fx("dupes_scan", "Поискать снова", None)])
         } else {
-            Check::new("sys", "Копии файлов", INFO, "просмотрела не всё")
-                .hint("Файлов много — за отведённое время просмотрела часть и копий в ней не нашла.")
+            Check::new("sys", "Копии файлов", INFO, "просмотрел не всё")
+                .hint("Файлов много — за отведённое время просмотрел часть и копий в ней не нашёл.")
                 .fixes(vec![fx("dupes_scan", "Поискать снова", None)])
         });
         return out;
@@ -518,11 +518,11 @@ pub(crate) fn check_dupes() -> Vec<Check> {
             &format!("{} · лишнее {}", crate::diag::plural(groups.len(), "группа", "группы", "групп"), human(total)),
         )
         .hint(&format!(
-            "Одинаковые по содержимому файлы. Сама ничего не удаляю: лишние копии уходят в Корзину только по кнопке, оттуда можно вернуть.{}",
+            "Одинаковые по содержимому файлы. Сам ничего не удаляю: лишние копии уходят в Корзину только по кнопке, оттуда можно вернуть.{}",
             if complete {
                 ""
             } else {
-                " Искала не до конца (много файлов): часть файлов не просмотрена. «Поискать снова» начнёт поиск сначала."
+                " Искал не до конца (много файлов): часть файлов не просмотрена. «Поискать снова» начнёт поиск сначала."
             }
         ))
         .fixes(vec![
@@ -559,20 +559,20 @@ pub fn fix_scan() -> (bool, String) {
     let r = roots();
     if r.is_empty() {
         // без папок «копий нет» было бы неправдой
-        return (false, "Не нашла твоих папок (Документы, Загрузки…) — искать негде.".into());
+        return (false, "Не нашёл твоих папок (Документы, Загрузки…) — искать негде.".into());
     }
     let (groups, complete) = scan(&r, Duration::from_secs(180));
     if crate::fixes::dry_run() {
-        crate::fixes::log_dry("записала бы найденные копии в кэш");
+        crate::fixes::log_dry("записал бы найденные копии в кэш");
     } else {
         save(&groups, complete);
     }
     let total: u64 = groups.iter().map(Group::waste).sum();
     let msg = if groups.is_empty() {
-        format!("Копий не нашла (искала {:.0} с{}).", t.elapsed().as_secs_f64(), if complete { "" } else { ", успела посмотреть не всё" })
+        format!("Копий не нашёл (искал {:.0} с{}).", t.elapsed().as_secs_f64(), if complete { "" } else { ", успел посмотреть не всё" })
     } else {
         format!(
-            "Нашла {} копий, лишнее — {}. Смотри вкладку «Система».",
+            "Нашёл {} копий, лишнее — {}. Смотри вкладку «Система».",
             crate::diag::plural(groups.len(), "группу", "группы", "групп"),
             human(total)
         )
@@ -597,7 +597,7 @@ fn set_id(groups: &[Group]) -> String {
 pub fn fix_trash_all(expect: &str) -> (bool, String) {
     let Some((groups, _, complete)) = load() else { return (false, "Сначала найди копии.".into()) };
     if set_id(&groups) != expect {
-        return (false, "Список копий изменился — посмотри его ещё раз, я ничего не трогала.".into());
+        return (false, "Список копий изменился — посмотри его ещё раз, я ничего не трогал.".into());
     }
     let (mut moved, mut want, mut freed, mut skipped) = (0, 0, 0u64, 0usize);
     let mut rest = Vec::new();
@@ -636,8 +636,8 @@ pub fn fix_trash_all(expect: &str) -> (bool, String) {
     // изменившиеся после поиска файлы не трогаем — это не ошибка, а осторожность; скажем об этом
     let note = match skipped_all {
         0 => String::new(),
-        1 => " 1 файл изменился после поиска — его не тронула.".to_string(),
-        n => format!(" {} изменились после поиска — их не тронула.", crate::diag::plural(n, "файл", "файла", "файлов")),
+        1 => " 1 файл изменился после поиска — его не тронул.".to_string(),
+        n => format!(" {} изменились после поиска — их не тронул.", crate::diag::plural(n, "файл", "файла", "файлов")),
     };
     (
         all,
@@ -743,7 +743,7 @@ pub fn fix_trash(id: &str) -> (bool, String) {
     let Some((groups, _, complete)) = load() else { return (false, "Сначала найди копии.".into()) };
     // группу ищем по её коду (не по номеру строки); не нашли — список поменялся, ничего не трогаем
     let Some(i) = groups.iter().position(|g| g.id() == id) else {
-        return (false, "Список копий изменился — найди копии заново, я ничего не трогала.".into());
+        return (false, "Список копий изменился — найди копии заново, я ничего не трогал.".into());
     };
     let g = &groups[i];
     let mut moved = 0;

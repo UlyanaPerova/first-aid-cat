@@ -25,6 +25,48 @@ const TOOL_ICONS: [&str; N_TABS + 3] = ["check", "net", "ai", "gpu", "dev", "the
 const TOOL_LOG: u8 = N_TABS as u8 + 1;
 const TOOL_HEAL: u8 = N_TABS as u8 + 2;
 const LOG_MAX: usize = 400;
+
+/// Журнал окна в файле (папка настроек, только для владельца): переживает перезапуск окна, а при запуске
+/// последние строки возвращаются в окно. Не больше 512 КБ: при переполнении остаётся вторая половина.
+fn journal_path() -> std::path::PathBuf {
+    crate::store::private_dir().join("журнал.txt")
+}
+
+fn journal_append(line: &str) {
+    use std::io::Write;
+    if cfg!(test) || std::env::var_os("UI_SHOT").is_some() {
+        return;
+    }
+    let p = journal_path();
+    let date = {
+        let t = localtime(now_secs());
+        format!("{:04}-{:02}-{:02} ", t.year, t.mon, t.mday)
+    };
+    if std::fs::metadata(&p).is_ok_and(|m| m.len() > 512 * 1024) {
+        if let Ok(old) = crate::store::read_text_lossy(&p) {
+            let keep = &old[old.len() / 2..];
+            let keep = keep.find('\n').map_or(keep, |i| &keep[i + 1..]);
+            let _ = crate::store::write_private(&p, keep.as_bytes());
+        }
+    }
+    let mut o = std::fs::OpenOptions::new();
+    o.create(true).append(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        o.mode(0o600).custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    if let Ok(mut f) = o.open(&p) {
+        let _ = writeln!(f, "{date}{line}");
+    }
+}
+
+/// Последние n строк журнала из файла (без даты — как в окне), для показа при запуске.
+fn journal_tail(n: usize) -> Vec<String> {
+    let Ok(t) = crate::store::read_text_lossy(journal_path()) else { return Vec::new() };
+    let lines: Vec<&str> = t.lines().collect();
+    lines[lines.len().saturating_sub(n)..].iter().map(|l| l.get(11..).unwrap_or(l).to_string()).collect()
+}
 const COL_OK: u32 = 0x007A00;
 const COL_WARN: u32 = 0xB36B00;
 const COL_BAD: u32 = 0xD40000;
@@ -185,6 +227,16 @@ enum MenuAct {
     ToggleLog,
     Fix(u8),
     Spravka,
+    /// «Медкарта расхода ИИ»: лимиты и токены по дням и моделям
+    Analytics,
+    /// значок с лимитами ИИ в верхней панели: включить или выключить
+    Tray,
+    /// следить ли за агентом (номер в tray::AGENTS)
+    TrayAgent(u8),
+    /// число в панели: true — у каждого агента, false — самый занятый лимит
+    TrayLabel(bool),
+    /// уведомления о лимитах
+    LimitsNotify,
     /// лицензии и уведомления (licenses.rs): положить в папку сеанса и открыть
     Licenses,
     /// анимация картинки в окне / виджета: включить или выключить
@@ -260,6 +312,7 @@ fn menus() -> Vec<(&'static str, Vec<(String, MenuAct)>)> {
         ),
         ("Вид", view),
         ("Виджет", widget_menu()),
+        ("Лимиты ИИ", limits_menu()),
         ("Лечение", fixes_menu),
         (
             "Справка",
@@ -298,6 +351,25 @@ fn widget_menu() -> Vec<(String, MenuAct)> {
     v
 }
 
+/// Меню «Лимиты ИИ»: значок в панели (и его вид — только когда он включён), за какими агентами следить,
+/// «Медкарта расхода». Всё про лимиты — в одном месте.
+fn limits_menu() -> Vec<(String, MenuAct)> {
+    let mut v = Vec::new();
+    if crate::tray::SUPPORTED {
+        v.push(("Значок в панели".to_string(), MenuAct::Tray));
+        if crate::tray::enabled() {
+            v.push(("Число в панели: самый занятый лимит".to_string(), MenuAct::TrayLabel(false)));
+            v.push(("Число в панели: у каждого агента".to_string(), MenuAct::TrayLabel(true)));
+        }
+        v.push(("Уведомлять: 80 %, 95 % и сброс".to_string(), MenuAct::LimitsNotify));
+    }
+    for (i, a) in crate::tray::AGENTS.iter().enumerate() {
+        v.push((format!("Следить за: {a}"), MenuAct::TrayAgent(i as u8)));
+    }
+    v.push(("Медкарта расхода ИИ".to_string(), MenuAct::Analytics));
+    v
+}
+
 /// Что окно просит сделать у программы (то, что не касается самого рисования).
 #[derive(Clone, Debug)]
 pub enum Cmd {
@@ -306,7 +378,10 @@ pub enum Cmd {
     /// развернуть / вернуть размер (картинка крупнее до размера экрана)
     Maximize,
     DragWindow,
+    /// «Проверить всё» по кнопке: все проверки и замер скорости
     RunChecks,
+    /// проверить без замера скорости (включили показатель)
+    Recheck,
     RunSpeed,
     RunFix {
         id: String,
@@ -319,6 +394,10 @@ pub enum Cmd {
     ArtClick(i32, i32),
     /// Сохранить открытую справку картинкой (рисует и пишет файл программа, см. `Ui::spravka_png`).
     SaveSpravka,
+    /// Прочитать журналы агентов для «Медкарты расхода» (в фоне; ответ — `Ui::analytics_ready`).
+    LoadAnalytics,
+    /// Значок в панели включили или выключили: привести автозапуск и сам значок в порядок.
+    TrayChanged,
     /// Открыть виджет на рабочем столе (если ещё не открыт).
     ShowWidget,
     /// Сменили вид или размер виджета (macOS: перерисовать картинки для WidgetKit).
@@ -335,6 +414,8 @@ pub enum Cmd {
 struct SpravkaState {
     doc: spravka::Doc,
     page: spravka::Page,
+    /// Some — это не справка, а «Медкарта расхода ИИ» (тот же лист, прокрутка и кнопки)
+    analytics: Option<spravka::Analytics>,
 }
 
 /// Всплывающая подсказка: текст и где стояла мышь.
@@ -687,7 +768,14 @@ impl Ui {
             balloon: "Проверяю…".into(),
             balloon_closed: None,
             avatar: None,
-            log: Vec::new(),
+            // журнал прошлых запусков — сверху, чтобы действия не терялись при перезапуске (например, после обновления)
+            log: {
+                let mut v = if std::env::var_os("UI_SHOT").is_some() { Vec::new() } else { journal_tail(40) };
+                if !v.is_empty() {
+                    v.push("──── новый запуск ────".into());
+                }
+                v
+            },
             log_vis: ui_file().get("log").and_then(|v| v.as_bool()).unwrap_or(true),
             hover: None,
             pressed: None,
@@ -814,9 +902,21 @@ impl Ui {
         self.invalidate(r);
     }
 
+    /// Каждое нажатие кнопки и пункта меню — в журнал (название — то же, что читает экранный диктор).
+    /// Не пишем: прокрутку, вкладки, строки таблицы, открытие меню, кота; починки пишет сама починка.
+    fn log_action(&mut self, h: Hit) {
+        if matches!(h, Hit::ScrollUp(_) | Hit::ScrollDown(_) | Hit::Tab(_) | Hit::Row(_) | Hit::Menu(_) | Hit::Art | Hit::Fix(_)) {
+            return;
+        }
+        if let Some((A11yRole::Button | A11yRole::MenuItem, name)) = self.a11y_label(h) {
+            self.log(&format!("Нажато: «{}»", crate::i18n::tr(&name)));
+        }
+    }
+
     pub fn log(&mut self, text: &str) {
         let t = localtime(now_secs());
         let line = format!("[{:02}:{:02}:{:02}] {}", t.hour, t.min, t.sec, text);
+        journal_append(&line);
         let at_end = self.st.scroll[1] >= self.st.scroll_max(1);
         eprintln!("[окно] {text}");
         self.st.log.push(line);
@@ -892,13 +992,10 @@ impl Ui {
     /// Пришёл новый прогон проверок. full_log — записать каждую проверку в журнал.
     pub fn set_checks(&mut self, checks: Vec<Check>, full_log: bool) {
         if full_log {
-            for r in &checks {
-                let mark = match r.status.as_str() {
-                    "ok" => "OK",
-                    "warn" => "внимание:",
-                    "bad" => "ОШИБКА:",
-                    _ => "",
-                };
+            // в журнал — только то, что требует внимания: 70 строк «… OK» уносили вверх действия человека
+            // (удаление копий, починки), и казалось, что их в журнале нет
+            for r in checks.iter().filter(|r| matches!(r.status.as_str(), "warn" | "bad")) {
+                let mark = if r.status == "bad" { "ОШИБКА:" } else { "внимание:" };
                 // части — переводом по отдельности (i18n.rs): склеенную строку журнала в таблице не найти
                 self.log(&format!("{}... {} {}", crate::i18n::tr(&r.title), mark, crate::i18n::tr(&r.value)).replace("  ", " "));
             }
@@ -906,7 +1003,16 @@ impl Ui {
             let changes: Vec<String> = checks
                 .iter()
                 .filter(|n| self.st.checks.iter().find(|o| o.title == n.title).is_some_and(|o| o.status != n.status))
-                .map(|n| format!("{} теперь {}: {}", n.title, n.status, n.value))
+                .filter(|n| n.status != "checking")
+                .map(|n| {
+                    let word = match n.status.as_str() {
+                        "ok" => "в порядке",
+                        "warn" => "внимание",
+                        "bad" => "беда",
+                        _ => "для сведения",
+                    };
+                    format!("{} — {}: {}", n.title, word, n.value)
+                })
                 .collect();
             for ch in changes {
                 self.log(&ch);
@@ -1405,6 +1511,7 @@ impl Ui {
     }
 
     fn activate(&mut self, h: Hit) -> Vec<Cmd> {
+        self.log_action(h);
         let mut cmds = Vec::new();
         match h {
             Hit::TitleBtn(0) => cmds.push(Cmd::Minimize),
@@ -1459,11 +1566,11 @@ impl Ui {
                                 if on {
                                     "снова проверяю"
                                 } else {
-                                    "больше не проверяю (с компьютером ничего не делала)"
+                                    "больше не проверяю (с компьютером ничего не делал)"
                                 }
                             ));
                             if on {
-                                cmds.push(Cmd::RunChecks);
+                                cmds.push(Cmd::Recheck);
                             }
                             self.rebuild_rows();
                             self.invalidate_right();
@@ -1523,7 +1630,7 @@ impl Ui {
             }
             Hit::DlgCopy => {
                 if let Some(c) = self.st.dialog.as_ref().and_then(|d| d.cmd.clone()) {
-                    self.say("Скопировала команду — вставь её в терминал (Ctrl+Shift+V).");
+                    self.say("Скопировал команду — вставь её в терминал (Ctrl+Shift+V).");
                     cmds.push(Cmd::CopyText(c));
                 }
             }
@@ -1569,6 +1676,31 @@ impl Ui {
             },
             MenuAct::Spravka => {
                 self.open_spravka();
+                Vec::new()
+            }
+            MenuAct::Analytics => self.open_analytics(),
+            MenuAct::Tray => {
+                let on = !crate::tray::enabled();
+                crate::prefs::update(|v| v["tray"] = serde_json::json!(on));
+                self.say(if on {
+                    "Значок с лимитами ИИ — в панели."
+                } else {
+                    "Значок с лимитами ИИ убран из панели."
+                });
+                vec![Cmd::TrayChanged]
+            }
+            MenuAct::TrayLabel(each) => {
+                crate::tray::set_label_each(each);
+                Vec::new()
+            }
+            MenuAct::LimitsNotify => {
+                crate::tray::set_notify(!crate::tray::notify_on());
+                Vec::new()
+            }
+            MenuAct::TrayAgent(i) => {
+                if let Some(a) = crate::tray::AGENTS.get(i as usize) {
+                    crate::tray::toggle_shown(a);
+                }
                 Vec::new()
             }
             MenuAct::WidgetShow => vec![Cmd::ShowWidget],
@@ -1620,24 +1752,24 @@ impl Ui {
             }
             MenuAct::CustomGuide => {
                 match crate::licenses::open_guide() {
-                    Ok((p, true)) => self.say(&format!("Открыла инструкцию: {}", p.display())),
+                    Ok((p, true)) => self.say(&format!("Открыл инструкцию: {}", p.display())),
                     Ok((p, false)) => self.say(&format!("Инструкция лежит здесь: {}", p.display())),
-                    Err(e) => self.say(&format!("Не смогла положить инструкцию: {e}")),
+                    Err(e) => self.say(&format!("Не смог положить инструкцию: {e}")),
                 }
                 Vec::new()
             }
             MenuAct::Licenses => {
                 match crate::licenses::open() {
-                    Ok((dir, true)) => self.say(&format!("Открыла папку с лицензиями: {}", dir.display())),
+                    Ok((dir, true)) => self.say(&format!("Открыл папку с лицензиями: {}", dir.display())),
                     Ok((dir, false)) => self.say(&format!("Лицензии лежат здесь: {}", dir.display())),
-                    Err(e) => self.say(&format!("Не смогла положить лицензии: {e}")),
+                    Err(e) => self.say(&format!("Не смог положить лицензии: {e}")),
                 }
                 Vec::new()
             }
             MenuAct::About => {
                 self.info_dialog(
                     &format!("Аптечка {}", env!("CARGO_PKG_VERSION")),
-                    "Диагностика компьютера с котом-доктором: сеть, VPN и прокси, ИИ-помощники, диски, темы и система. Без учётных записей и слежки: найденное не уходит с компьютера. Лицензия Apache 2.0, github.com/UlyanaPerova/first-aid-cat. Текстовый режим: aptechka --diag",
+                    "Диагностика компьютера с котом-доктором: сеть, VPN и прокси, ИИ-помощники с их лимитами и расходом токенов, диски, темы и система. Без учётных записей и слежки: найденное не уходит с компьютера. Лицензия Apache 2.0, github.com/UlyanaPerova/first-aid-cat. Текстовый режим: aptechka --diag",
                 );
                 Vec::new()
             }
@@ -1757,9 +1889,36 @@ impl Ui {
         let pw = self.st.sp_geo().view.w;
         let page = spravka::layout(&mut self.g.fonts, &doc, pw);
         let n = doc.number.clone();
-        self.st.spravka = Some(SpravkaState { doc, page });
+        self.st.spravka = Some(SpravkaState { doc, page, analytics: None });
         self.st.scroll[2] = 0;
         self.log(&format!("Выдана справка № {n}."));
+        self.invalidate_all();
+    }
+
+    /// Открыть «Медкарту расхода ИИ»: сразу лист «Считаю…», цифры — когда фон прочтёт журналы.
+    pub fn open_analytics(&mut self) -> Vec<Cmd> {
+        self.hide_tip();
+        self.close_popup();
+        self.st.dialog = None;
+        let a = spravka::Analytics { now: now_secs(), ..Default::default() };
+        let pw = self.st.sp_geo().view.w;
+        let page = spravka::analytics_layout(&mut self.g.fonts, &a, pw);
+        let doc = spravka::build(&[], &[]);
+        self.st.spravka = Some(SpravkaState { doc, page, analytics: Some(a) });
+        self.st.scroll[2] = 0;
+        self.invalidate_all();
+        vec![Cmd::LoadAnalytics]
+    }
+
+    /// Цифры для «Медкарты расхода» готовы (лист ещё открыт — разложить заново).
+    pub fn analytics_ready(&mut self, a: spravka::Analytics) {
+        let pw = self.st.sp_geo().view.w;
+        let Some(sp) = self.st.spravka.as_mut() else { return };
+        if sp.analytics.is_none() {
+            return;
+        }
+        sp.page = spravka::analytics_layout(&mut self.g.fonts, &a, pw);
+        sp.analytics = Some(a);
         self.invalidate_all();
     }
 
@@ -1775,6 +1934,13 @@ impl Ui {
         let sp = self.st.spravka.as_ref()?;
         let home = crate::store::home_dir()?.to_string_lossy().into_owned();
         let dir = ["Изображения", "Pictures"].iter().map(|d| format!("{home}/{d}")).find(|d| std::path::Path::new(d).is_dir()).unwrap_or(home);
+        if let Some(a) = &sp.analytics {
+            let t = localtime(a.now);
+            let path = format!("{dir}/Расход_ИИ_{}-{:02}-{:02}.png", t.year, t.mon, t.mday);
+            let page = spravka::analytics_layout(&mut self.g.fonts, a, spravka::W * 2);
+            let (w, h, rgb) = spravka::page_rgb(&mut self.g.fonts, &page);
+            return Some((path, w, h, rgb));
+        }
         let path = format!("{dir}/Справка_{}.png", sp.doc.number);
         let (w, h, rgb) = spravka::render_rgb(&mut self.g.fonts, &sp.doc, spravka::W * 2);
         Some((path, w, h, rgb))
@@ -2030,6 +2196,10 @@ impl Ui {
             cmds.extend(self.activate(Hit::DlgYes));
         } else if what == "spravka" {
             self.open_spravka();
+        } else if what == "analytics" {
+            // в снимке — сразу с цифрами (читаем журналы здесь же)
+            let _ = self.open_analytics();
+            self.analytics_ready(spravka::Analytics::load());
         } else if let Some(n) = what.strip_prefix("spscroll") {
             // spscroll<N> — прокрутить справку на N логических пикселей
             let d: i32 = n.parse().unwrap_or(0);
@@ -2057,11 +2227,11 @@ impl Ui {
 
 pub const OK_CLAUDE_ON: [&str; 2] = ["Сеть в порядке, Клод на связи. Мур~", "Клод думает рядом, а я сторожу сеть."];
 pub const OK_CLAUDE_OFF: [&str; 2] =
-    ["Сеть в порядке. Клод сейчас отдыхает, но до него можно дозвониться.", "Всё хорошо. Клод выключен — открой терминал, если соскучилась."];
+    ["Сеть в порядке. Клод сейчас отдыхает, но до него можно дозвониться.", "Всё хорошо. Клод выключен — открой терминал, если без него скучно."];
 const OK_PHRASES: [&str; 5] = [
     "Всё хорошо, мур! Можно спокойно работать.",
     "Пульс ровный, сеть дышит. Я рядом!",
-    "Проверил всё-всё. Ты молодец, что заглянула :3",
+    "Проверил всё-всё. Хорошо, что ты заглядываешь :3",
     "Всё здорово! Не забудь попить водички.",
     "Сеть в порядке. Мур~",
 ];
@@ -2931,7 +3101,11 @@ impl P<'_, '_> {
             self.c.fill(Rect::new(g.win.x + 3 * k, g.win.y + 3 * k, g.win.w, g.win.h), 0x707070);
             self.c.raised(g.win, FACE);
             self.c.gradient_h(g.title, &[(0.0, 0x0A246A), (1.0, 0xA6CAF0)]);
-            let ttl = format!("Справка № {} — {}", sp.doc.number, spravka::DOCTOR);
+            let ttl = if sp.analytics.is_some() {
+                "Медкарта расхода ИИ".to_string()
+            } else {
+                format!("Справка № {} — {}", sp.doc.number, spravka::DOCTOR)
+            };
             self.text_l(Rect::new(g.title.x, g.title.y, g.title.w - 24 * k, g.title.h), 6 * k, &ttl, WHITE, self.fs(13), true);
             self.c.sunken(g.frame, 0x9C9A94);
             let old = self.c.clip;
@@ -3054,6 +3228,10 @@ impl P<'_, '_> {
                         || matches!(act, MenuAct::Freq(i) if *i == freq_now())
                         || matches!(act, MenuAct::AppAnim) && crate::prefs::app_anim()
                         || matches!(act, MenuAct::WidgetAnim) && crate::widget_look::anim_enabled()
+                        || matches!(act, MenuAct::Tray) && crate::tray::enabled()
+                        || matches!(act, MenuAct::TrayLabel(e) if *e == crate::tray::label_each())
+                        || matches!(act, MenuAct::LimitsNotify) && crate::tray::notify_on()
+                        || matches!(act, MenuAct::TrayAgent(i) if crate::tray::AGENTS.get(*i as usize).is_some_and(|a| crate::tray::shown(a)))
                         || matches!(act, MenuAct::Lang(i) if *i == lang_now());
                     let col = if hov { WHITE } else { BLACK };
                     if mark {
@@ -3133,7 +3311,7 @@ impl P<'_, '_> {
         if let Some(c) = cmd {
             // «вручную»: подпись и команда (строки команды помечены в начале символом \u{1})
             bl.push(String::new());
-            bl.push("Или сама, в терминале:".into());
+            bl.push("Или вручную, в терминале:".into());
             for l in self.g.fonts.wrap(&c, tw - 12 * k, self.fs(13), false, 4) {
                 bl.push(format!("\u{1}{l}"));
             }

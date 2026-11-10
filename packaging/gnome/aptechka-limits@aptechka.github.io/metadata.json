@@ -1,0 +1,7 @@
+{
+  "uuid": "aptechka-limits@aptechka.github.io",
+  "name": "First Aid Cat — AI limits",
+  "description": "Shows the First Aid Cat AI limits icon in the top bar; hover or click it for the limits panel. Installed and updated by First Aid Cat itself.",
+  "shell-version": ["45", "46", "47", "48", "49"],
+  "url": "https://github.com/UlyanaPerova/first-aid-cat"
+}

@@ -759,7 +759,7 @@ mod cache_tests {
     fn state() -> ScreenState {
         let rows = |s: &str| vec![(s.to_string(), "Имя".to_string(), "значение".to_string()), ("ok".into(), "Б".into(), "1".into())];
         ScreenState {
-            message: "Всё хорошо, мур, проверила".into(),
+            message: "Всё хорошо, мур, проверил".into(),
             message_t: 1.0,
             mood: "warn".into(),
             vpn: ("bad".into(), "выкл".into()),

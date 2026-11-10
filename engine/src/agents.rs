@@ -1009,7 +1009,7 @@ pub fn check(a: &Agent) -> Vec<Check> {
     } else if a.id == "opencode" && opencode_unreadable() {
         unreadable = true;
         // база есть, но прочесть её не вышло (повреждена, занята, схема незнакомая) — не «сессий нет»
-        "не смогла прочитать".into()
+        "не смог прочитать".into()
     } else {
         "сессий нет".into()
     };

@@ -179,7 +179,7 @@ ru: Туннель поднят, но маршрут в интернет идё�
 en: The tunnel is up, but the route to the internet doesn't go through it. Check the mode (TUN/proxy) and the routing rules in the client.
 
 # diag.rs:711
-ru: Выход — в твоей же стране. Это нормально, если сервер VPN там же; если ждала другую страну — проверь сервер и режим в клиенте.
+ru: Выход — в твоей же стране. Это нормально, если сервер VPN там же; если нужна другая страна — проверь сервер и режим в клиенте.
 en: The exit is in your own country. That's normal if the VPN server is there too; if you expected another country, check the server and mode in the client.
 
 # diag.rs:713
@@ -655,7 +655,7 @@ ru: Обновления системы и программ скачиваютс
 en: System and app updates can be downloaded.
 
 # diag.rs:1774
-ru:  (проверяла через прокси apt {})
+ru:  (проверял через прокси apt {})
 en:  (checked via apt proxy {})
 
 # diag.rs:1777
@@ -859,11 +859,11 @@ ru: Медленно. Попробуй другой VPN-сервер или пр
 en: Slow. Try another VPN server or check whether something is downloading in the background.
 
 # diag.rs:2856
-ru: Сеть лимитная — мерила понемногу, чтобы не тратить трафик.
+ru: Сеть лимитная — мерил понемногу, чтобы не тратить трафик.
 en: Metered network — I measured a little at a time to save data.
 
 # diag.rs:2856
-ru: {}{}Сеть лимитная — мерила понемногу, чтобы не тратить трафик.
+ru: {}{}Сеть лимитная — мерил понемногу, чтобы не тратить трафик.
 en: {}{}Metered network — I measured a little at a time to save data.
 
 # diag.rs:3005

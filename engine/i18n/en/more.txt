@@ -275,7 +275,7 @@ ru: Удалённые файлы всё ещё занимают место{}. �
 en: Deleted files still take up space{}. Emptying will delete them for good{}.
 
 # more.rs:373
-ru:  (считала 2 секунды, на деле больше)
+ru:  (считал 2 секунды, на деле больше)
 en:  (counted for 2 seconds, there is more)
 
 # more.rs:375

@@ -97,6 +97,14 @@ Name: "{autodesktop}\{cm:AppName}"; Filename: "{app}\aptechka.exe"; Tasks: deskt
 [Run]
 Filename: "{app}\aptechka.exe"; Description: "{cm:LaunchApp}"; Flags: nowait postinstall skipifsilent
 
+; Claude Code status line: restore the user's own (or remove ours) while the program is still there
+[UninstallRun]
+Filename: "{app}\aptechka.exe"; Parameters: "--claude-limits off"; Flags: runhidden waituntilterminated; RunOnceId: "ClaudeLimitsOff"
+
+; the AI limits tray icon writes its own autostart entry: remove it
+[Registry]
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "AptechkaTray"; Flags: uninsdeletevalue dontcreatekey
+
 [Code]
 // Stops aptechka.exe started from {app} — and only that one: other programs and a copy
 // from another folder (for example a portable one) are not touched.

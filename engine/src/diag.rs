@@ -717,7 +717,7 @@ pub(crate) fn vpn_summary_full(up: &[String], installed: bool, apps: &[String], 
             .hint("Туннель поднят, но маршрут в интернет идёт не через него. Проверь режим (TUN/прокси) и правила маршрутизации в клиенте.")
             .fixes(fixes),
         (Some(e), Some(_)) if !up.is_empty() => Check::new("net", t, INFO, &format!("включён: {} · выход {e}", up.join(", ")))
-            .hint("Выход — в твоей же стране. Это нормально, если сервер VPN там же; если ждала другую страну — проверь сервер и режим в клиенте."),
+            .hint("Выход — в твоей же стране. Это нормально, если сервер VPN там же; если нужна другая страна — проверь сервер и режим в клиенте."),
         (None, _) if !up.is_empty() => Check::new("net", t, OK, &format!("включён: {}", up.join(", ")))
             .hint("Страну выхода проверить не удалось (сервисы не ответили), но туннель поднят."),
         // на компьютере VPN нет, а выход — в другой стране: VPN на роутере или в сети
@@ -1793,7 +1793,7 @@ pub(crate) fn check_repos() -> Vec<Check> {
     }
     let st = if good == 0 { BAD } else { WARN };
     let via = match &proxy.0 {
-        Some(p) => format!(" (проверяла через прокси apt {})", crate::proxyaddr::ProxyAddr::parse(p).map(|x| x.shown()).unwrap_or_default()),
+        Some(p) => format!(" (проверял через прокси apt {})", crate::proxyaddr::ProxyAddr::parse(p).map(|x| x.shown()).unwrap_or_default()),
         None => String::new(),
     };
     vec![Check::new("sys", "Доступ к репозиториям", st, &format!("доступно {n}")).hint(&format!(
@@ -2290,7 +2290,7 @@ fn walk_find(home: &str, name: &str) -> Vec<String> {
     let mut stack = vec![(std::path::PathBuf::from(home), 0usize)];
     while let Some((root, depth)) = stack.pop() {
         if Instant::now() > deadline {
-            log(&format!("поиск папки «{name}»: не уложилась в 3 с, искала не везде"));
+            log(&format!("поиск папки «{name}»: не уложился в 3 с, искал не везде"));
             break;
         }
         let Ok(rd) = std::fs::read_dir(&root) else { continue };
@@ -3030,7 +3030,7 @@ pub fn speed_test(mut progress: impl FnMut(SpeedProgress)) -> Vec<Check> {
                 }
                 if metered {
                     c.detail = format!(
-                        "{}{}Сеть лимитная — мерила понемногу, чтобы не тратить трафик.",
+                        "{}{}Сеть лимитная — мерил понемногу, чтобы не тратить трафик.",
                         c.detail,
                         if c.detail.is_empty() { "" } else { " " }
                     );

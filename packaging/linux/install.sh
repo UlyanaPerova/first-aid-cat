@@ -65,6 +65,14 @@ if [ $DO_UNINSTALL = 1 ]; then
         rm -f "$DESKTOP_DIR/Аптечка.desktop"; log "убрала ярлык с рабочего стола" "removed the desktop shortcut"
     fi
     if [ -f "$DESK.bak" ]; then mv -f "$DESK.bak" "$DESK"; log "вернула прежний ярлык" "restored the previous menu entry"; else rm -f "$DESK"; fi
+    # строка состояния Claude Code: вернуть прежнюю (или убрать нашу), пока программа ещё на месте
+    [ -x "$BIN_DIR/aptechka" ] && "$BIN_DIR/aptechka" --claude-limits off >/dev/null 2>&1 || true
+    # значок с лимитами ИИ: закрыть и убрать его автозапуск (программа пишет его сама)
+    pkill -f "$BIN_DIR/aptechka --tray" 2>/dev/null || true
+    rm -f "$AUTO/io.github.aptechka-tray.desktop"
+    # расширение GNOME для значка (программа ставит его сама)
+    gnome-extensions disable aptechka-limits@aptechka.github.io >/dev/null 2>&1 || true
+    rm -rf "$HOME/.local/share/gnome-shell/extensions/aptechka-limits@aptechka.github.io"
     rm -f "$BIN_DIR/aptechka"
     gtk-update-icon-cache -q -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
     update-desktop-database "$APPS" >/dev/null 2>&1 || true

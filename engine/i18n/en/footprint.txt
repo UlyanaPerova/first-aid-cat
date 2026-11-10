@@ -47,7 +47,7 @@ ru: Эти ключи были в переписке с ИИ: их видела 
 en: These keys were in conversations with an AI: the model saw them, and they sit as plain text in session files (for example, {}). Replace the keys with new ones at the provider; old sessions that contain them can be deleted.{}
 
 # footprint.rs:436
-ru:  Проверила не все чаты — продолжу в следующий раз.
+ru:  Проверил не все чаты — продолжу в следующий раз.
 en:  I haven't checked all chats — I'll continue next time.
 
 # footprint.rs:459
@@ -55,7 +55,7 @@ ru: След: входы программ
 en: Footprint: program logins
 
 # footprint.rs:460
-ru: Токены входа этих программ лежат файлами в домашней папке — так они устроены. Программа под твоим именем может их прочитать; если вышла из учётной записи на сайте — «выйди» и в программе, токен перестанет работать.
+ru: Токены входа этих программ лежат файлами в домашней папке — так они устроены. Программа под твоим именем может их прочитать; после выхода из учётной записи на сайте «выйди» и в программе, токен перестанет работать.
 en: These programs keep their login tokens as files in your home folder — that's how they work. A program running as you can read them. If you signed out on the website, sign out in the program too, and the token will stop working.
 
 # footprint.rs:481
@@ -135,7 +135,7 @@ ru: Закрыть от других
 en: Lock from others
 
 # footprint.rs:563
-ru: часть чатов не успела просмотреть (продолжу в следующий раз)
+ru: часть чатов не успел просмотреть (продолжу в следующий раз)
 en: didn't get through some chats (I'll continue next time)
 
 # footprint.rs:566
@@ -147,11 +147,11 @@ ru: Цифровой след: охват
 en: Digital footprint: coverage
 
 # footprint.rs:569
-ru: проверила не всё
+ru: проверил не всё
 en: didn't check everything
 
 # footprint.rs:570
-ru: {}. Если ключей не нашла — это не значит, что их там нет.
+ru: {}. Если ключей не нашёл — это не значит, что их там нет.
 en: {}. If I found no keys, that doesn't mean there are none.
 
 # footprint.rs:575
@@ -159,7 +159,7 @@ ru: в просмотренном ключей на виду нет
 en: no exposed keys in what I checked
 
 # footprint.rs:576
-ru: Просмотрела историю команд, файлы оболочки и чаты ИИ-агентов. Это не доказательство, что ключей нет нигде.
+ru: Просмотрел историю команд, файлы оболочки и чаты ИИ-агентов. Это не доказательство, что ключей нет нигде.
 en: I checked command history, shell files and AI agent chats. That doesn't prove there are no keys anywhere.
 
 # footprint.rs:715
@@ -167,7 +167,7 @@ ru: права изменены: {}
 en: permissions changed: {}
 
 # footprint.rs:717
-ru: Закрыла от других пользователей: {}.
+ru: Закрыл от других пользователей: {}.
 en: Locked from other users: {}.
 
 # footprint.rs:721
@@ -183,11 +183,11 @@ ru: Не удалось переписать {}: {}
 en: Couldn't rewrite {}: {}
 
 # footprint.rs:791
-ru: В истории команд не нашла записей с ключами.
+ru: В истории команд не нашёл записей с ключами.
 en: I found no entries with keys in the command history.
 
 # footprint.rs:796
-ru: Убрала из истории {}. Открытые терминалы помнят историю и могут записать её снова — закрой их. Удаление строки не отзывает ключ: замени его у поставщика.
+ru: Убрал из истории {}. Открытые терминалы помнят историю и могут записать её снова — закрой их. Удаление строки не отзывает ключ: замени его у поставщика.
 en: Removed {} from the history. Open terminals remember the history and may write it back — close them. Deleting a line doesn't revoke the key: replace it at the provider.
 
 # footprint.rs:798
@@ -197,13 +197,13 @@ en: entry|entries
 ru: в папках чатов файлов больше, чем я просматриваю (самые свежие, до 3000 в каждой папке)
 en: some chat folders hold more files than I scan (the newest, up to 3000 per folder)
 
-ru: не смогла прочитать до конца: {}
+ru: не смог прочитать до конца: {}
 en: couldn't read to the end: {}
 
-ru: Не смогла закрыть ({}): {} — это ссылка, чужой файл или нет прав.
+ru: Не смог закрыть ({}): {} — это ссылка, чужой файл или нет прав.
 en: Couldn't lock ({}): {} — a symlink, someone else's file or no permission.
 
-ru: Не смогла обработать: {} — записи с ключами там могли остаться. Убрано из остальных: {}. Проверь эти файлы вручную.
+ru: Не смог обработать: {} — записи с ключами там могли остаться. Убрано из остальных: {}. Проверь эти файлы вручную.
 en: Couldn't process: {} — entries with keys may remain there. Removed from the others: {}. Check these files by hand.
 
 ru: ссылка ведёт за пределы домашней папки

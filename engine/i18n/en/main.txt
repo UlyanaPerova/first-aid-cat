@@ -7,7 +7,7 @@ ru: Terminal не запустился
 en: Terminal failed to start
 
 # main.rs:150
-ru: не нашла программу-терминал (gnome-terminal, konsole, xterm…)
+ru: не нашёл программу-терминал (gnome-terminal, konsole, xterm…)
 en: I couldn't find a terminal app (gnome-terminal, konsole, xterm…)
 
 # main.rs:274
@@ -83,7 +83,7 @@ ru: Не открылся терминал: {}
 en: Couldn't open a terminal: {}
 
 # main.rs:713
-ru: DRY_RUN: сохранила бы справку в {}
+ru: DRY_RUN: сохранил бы справку в {}
 en: DRY_RUN: would save the medical note to {}
 
 # main.rs:722
@@ -95,7 +95,7 @@ ru: Не удалось сохранить справку: {}
 en: Couldn't save the medical note: {}
 
 # main.rs:787
-ru: Аптечку обновили! Как только закончу дела — перезапущусь сама.
+ru: Аптечку обновили! Как только закончу дела — перезапущусь сам.
 en: First Aid Cat was updated! As soon as I'm done, I'll restart myself.
 
 # main.rs:1708
@@ -111,7 +111,7 @@ ru: НЕ ВЫШЛО:
 en: FAILED:
 
 # main.rs:1884
-ru: Аптечке нужен экран: не нашла графическую сессию.\nЗапусти её из рабочего стола. Проверка без окна: aptechka --diag
+ru: Аптечке нужен экран: не нашёл графическую сессию.\nЗапусти её из рабочего стола. Проверка без окна: aptechka --diag
 en: First Aid Cat needs a screen: I couldn't find a graphical session.\nLaunch it from the desktop. Check without a window: aptechka --diag
 
 # main.rs:1897
@@ -119,8 +119,8 @@ ru: Окно Аптечки закрылось с ошибкой: {}
 en: The First Aid Cat window closed with an error: {}
 
 # main.rs: --help
-ru: Аптечка — проверка компьютера с котом-доктором.\n\naptechka                 открыть окно\naptechka --diag          все проверки таблицей в терминале\naptechka --sessions      сессии ИИ-агентов и как их продолжить\naptechka --speed         замер скорости в терминале\naptechka --widget        только виджет на рабочем столе (Linux, Windows)\naptechka --fix ID [ARG]  одна починка; DRY_RUN=1 — только показать, что было бы\n\nЯзык: APTECHKA_LANG=ru|en
-en: First Aid Cat — a computer health check with a doctor cat.\n\naptechka                 open the window\naptechka --diag          all checks as a table in the terminal\naptechka --sessions      AI agent sessions and how to resume them\naptechka --speed         speed test in the terminal\naptechka --widget        only the desktop widget (Linux, Windows)\naptechka --fix ID [ARG]  run one fix; DRY_RUN=1 shows what would happen\n\nLanguage: APTECHKA_LANG=ru|en
+ru: Аптечка — проверка компьютера с котом-доктором.\n\naptechka                 открыть окно\naptechka --diag          все проверки таблицей в терминале\naptechka --sessions      сессии ИИ-агентов и как их продолжить\naptechka --speed         замер скорости в терминале\naptechka --widget        только виджет на рабочем столе (Linux, Windows)\naptechka --tray          только значок с лимитами ИИ в панели (Linux, Windows)\naptechka --fix ID [ARG]  одна починка; DRY_RUN=1 — только показать, что было бы\naptechka --claude-limits on|off  лимиты Claude Code через его строку состояния (off — вернуть прежнюю)\n\nЯзык: APTECHKA_LANG=ru|en
+en: First Aid Cat — a computer health check with a doctor cat.\n\naptechka                 open the window\naptechka --diag          all checks as a table in the terminal\naptechka --sessions      AI agent sessions and how to resume them\naptechka --speed         speed test in the terminal\naptechka --widget        only the desktop widget (Linux, Windows)\naptechka --tray          only the AI limits icon in the panel (Linux, Windows)\naptechka --fix ID [ARG]  run one fix; DRY_RUN=1 shows what would happen\naptechka --claude-limits on|off  Claude Code limits through its status line (off restores your own)\n\nLanguage: APTECHKA_LANG=ru|en
 
 # main.rs
 ru: Проблем не вижу, но не всё получилось проверить: {}
@@ -137,3 +137,6 @@ en: picture animation off
 # main.rs:117
 ru: PowerShell не запустился
 en: PowerShell did not start
+
+ru: Сеть лимитная — скорость не мерю (замер качает около 60 МБ). Измерить: кнопка «Скорость».
+en: The network is metered, so I'm not measuring speed (the test downloads about 60 MB). To measure: the “Speed” button.

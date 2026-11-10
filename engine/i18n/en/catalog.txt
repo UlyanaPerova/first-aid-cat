@@ -371,3 +371,9 @@ en: Whether the theme, accent color, wallpaper or taskbar changed
 
 ru: Не сбились ли оформление, цвета и Dock
 en: Whether the appearance, colors or Dock changed
+
+ru: Лимиты и расход ИИ
+en: AI limits and usage
+
+ru: Сколько занято лимитов подписки Claude Code и Codex, когда сброс, сколько токенов ушло
+en: How much of the Claude Code and Codex subscription limits is used, when they reset, how many tokens were spent

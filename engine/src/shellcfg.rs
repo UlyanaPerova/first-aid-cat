@@ -327,7 +327,7 @@ pub fn comment_out_tagged(path: &Path, n: usize, tag: Option<&str>, dry: bool) -
     if let Some(t) = tag {
         if text.lines().nth(n.saturating_sub(1)).map(line_tag).as_deref() != Some(t) {
             return Err(format!(
-                "Файл {} изменился с прошлой проверки (строка {n} уже другая) — проверь ещё раз, я ничего не трогала.",
+                "Файл {} изменился с прошлой проверки (строка {n} уже другая) — проверь ещё раз, я ничего не трогал.",
                 path.display()
             ));
         }
@@ -337,7 +337,7 @@ pub fn comment_out_tagged(path: &Path, n: usize, tag: Option<&str>, dry: bool) -
         Some(l) if l.top_level && l.only_proxy => {}
         Some(l) if !l.only_proxy => return Err(format!("В строке {n} кроме прокси есть другие настройки (например, PATH): если закомментировать её, пропадут и они. Убери из неё только прокси вручную.")),
         Some(_) => return Err("Строка внутри условия или функции — закомментировать её одну небезопасно, поправь файл вручную.".into()),
-        None => return Err(format!("Файл {} изменился с прошлой проверки — проверь ещё раз, я ничего не трогала.", path.display())),
+        None => return Err(format!("Файл {} изменился с прошлой проверки — проверь ещё раз, я ничего не трогал.", path.display())),
     }
     // копия — в папке Аптечки, с датой и временем: вторая правка не затирает первую копию; только для владельца
     // (в строке прокси бывает пароль)
@@ -366,7 +366,7 @@ pub fn comment_out_tagged(path: &Path, n: usize, tag: Option<&str>, dry: bool) -
     crate::store::write_private(&bak, crate::footprint::redact_for_backup(&text).as_bytes())
         .map_err(|_| "Не удалось сделать копию файла — ничего не меняю.".to_string())?;
     if identity(path) != before {
-        return Err("Файл изменился, пока я его правила — проверь ещё раз, я ничего не трогала.".into());
+        return Err("Файл изменился, пока я его правил — проверь ещё раз, я ничего не трогал.".into());
     }
     write_atomic(path, &new)?;
     Ok(bak)

@@ -1,0 +1,20 @@
+# пути, журнал, ожидания
+../assets/значок_кот_спит.png
+../assets/значок_кот_идёт.png
+../assets/значок_кот.png
+правильный путь
+значок в панели: нет StatusNotifierWatcher (в GNOME нужно расширение AppIndicator)
+[значок] уже запущен
+[значок] нет экрана
+значок: нажатие
+плашка: закрыта повторным нажатием
+плашка: закрыта — фокус ушёл
+плашка: закрыта — мышь ушла
+значок в панели: расширение GNOME установлено (заработает после перезапуска оболочки или входа)
+../../packaging/gnome/aptechka-limits@aptechka.github.io/metadata.json
+../../packaging/gnome/aptechka-limits@aptechka.github.io/extension.js
+значок в панели: рисует расширение GNOME — значок AppIndicator убран
+шаблон готов
+../assets/сценка_спит.png
+../assets/сценка_работает.png
+../assets/сценка_закончил.png

@@ -296,7 +296,7 @@ pub fn restore(id: &str) -> (bool, String) {
     let title = key(id).map_or("", |k| k.title);
     if crate::fixes::dry_run() {
         crate::fixes::log_dry(&cmd);
-        return (true, format!("Вернула как в эталоне: {title} — {}.", shown(id, &val)));
+        return (true, format!("Вернул как в эталоне: {title} — {}.", shown(id, &val)));
     }
     #[cfg(windows)]
     let r = crate::cmd::exec(
@@ -310,9 +310,9 @@ pub fn restore(id: &str) -> (bool, String) {
         let later = cfg!(target_os = "macos") && !id.contains("com.apple.dock") && !id.ends_with("AppleInterfaceStyle");
         let v = shown(id, &val);
         if later {
-            (true, format!("Вернула как в эталоне: {title} — {v}. Открытые программы подхватят это после перезапуска."))
+            (true, format!("Вернул как в эталоне: {title} — {v}. Открытые программы подхватят это после перезапуска."))
         } else {
-            (true, format!("Вернула как в эталоне: {title} — {v}."))
+            (true, format!("Вернул как в эталоне: {title} — {v}."))
         }
     } else {
         (false, format!("Не вышло: {}", r.text().trim()))

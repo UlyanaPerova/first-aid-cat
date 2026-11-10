@@ -118,8 +118,8 @@ en: The wallpaper file is gone, so Windows shows a solid color. Pick the wallpap
 ru: Странное значение в эталоне — не трогаю.
 en: The baseline has a strange value, so I won't touch it.
 
-ru: Вернула как в эталоне: {} — {}.
+ru: Вернул как в эталоне: {} — {}.
 en: Restored from the baseline: {} — {}.
 
-ru: Вернула как в эталоне: {} — {}. Открытые программы подхватят это после перезапуска.
+ru: Вернул как в эталоне: {} — {}. Открытые программы подхватят это после перезапуска.
 en: Restored from the baseline: {} — {}. Open apps pick it up after a restart.

@@ -28,6 +28,7 @@ It is a single native binary written in Rust. There is no Electron and no GTK. I
 - [What it checks](#what-it-checks)
 - [Fixes](#fixes)
 - [Widgets](#widgets)
+- [AI limits in the panel](#ai-limits-in-the-panel)
 - [Install](#install)
 - [Command line](#command-line)
 - [Languages](#languages)
@@ -58,7 +59,7 @@ The checks are grouped into tabs. Each one can be switched off in the **Metrics*
 | Tab | What it looks at |
 |---|---|
 | **Network** | Internet and DNS, including a live DNS query; a system proxy left behind by a VPN that is off; proxies in browsers, extensions, the terminal, git, npm, pip and apt; VPN tunnels and the address the world sees; network latency and jitter; captive portals (cafe and hotel sign-in pages); Wi-Fi signal |
-| **AI** | Whether Claude, Codex, Gemini CLI, Qwen Code, Kimi Code, Cursor, OpenCode and Antigravity can reach their servers; the status pages of those services; which agent sessions are alive in your terminals, and the command to resume one |
+| **AI** | Whether Claude, Codex, Gemini CLI, Qwen Code, Kimi Code, Cursor, OpenCode and Antigravity can reach their servers; the status pages of those services; which agent sessions are alive in your terminals, and the command to resume one; how much of the Claude Code and Codex subscription limits is used and when they reset, and how many tokens went out today and this week |
 | **Graphics** | What draws the screen, the NVIDIA driver and Secure Boot, GPU temperature and load |
 | **Devices** | Sound and microphone, Bluetooth, printing (paused printers, stuck queues), keyboard layouts, battery wear, disk health (S.M.A.R.T.) |
 | **Themes** | Broken themes and icons, GNOME extensions, a dock that vanished after a full-screen window |
@@ -117,6 +118,27 @@ On **macOS** the widget is a native WidgetKit widget (small and medium). Add it 
 
 **Help → Medical Note from Dr. Meow** turns the current state into a (joking) clinic certificate that you can save as an image.
 
+
+## AI limits in the panel
+
+<p align="center">
+  <img src="docs/screenshots/limits_panel.png" alt="AI limits panel: ring charts of the 5-hour and weekly limits, tokens per day, the cat at the desk" width="373">
+</p>
+
+If you use Claude Code or Codex, a small white cat appears in the top panel with the fullest subscription limit next to it, for example **42%**. The cat shows what your agents are doing: it **walks** while an agent is working, **sits** when the work is done and the session waits for you, and **sleeps** when no agent is open.
+
+One click on it opens the panel, the next click closes it. For each agent the panel shows rings for the 5-hour and weekly limits with their reset times, and bars of tokens per day for two weeks. At the bottom the same cat sits at his desk: asleep, writing with his leek, or done. When the pace so far would use up a limit before it resets, the ring says when it runs out.
+
+**Usage chart…** opens the usage chart in the app (also **AI limits → AI usage chart**): limit bars with "resets in 1 h 56 min", tokens per day and per model for 30 days, and which projects used the most.
+
+The app tells you when a limit reaches 80 % and 95 % (once per window) and when it is free again after a reset.
+
+- **Linux, GNOME:** the app installs its own small GNOME Shell extension, so the panel opens like any other top-bar menu. After the first install, restart GNOME Shell once (on X11: Alt+F2, `r`, Enter; on Wayland: log out and in). Without it, the icon is shown through AppIndicator (on by default in Ubuntu), where the panel opens on a double click. KDE shows the icon without the number.
+- **Windows:** the number is drawn on the icon itself in the notification area. Windows 11 hides new icons under **^** at first: drag it out to keep it in sight.
+- **macOS:** coming next.
+
+Codex writes its limit percentages into its own logs. Claude Code tells them only to its status line, so the app connects one for you (see [Privacy](PRIVACY.md#what-it-changes)). Everything about it is in the **AI limits** menu: switch the icon on or off, show the fullest limit or each agent's number ("Cl 42% Co 73%"), choose which agents to track (for example only Claude Code), turn the notifications on or off, and open the usage chart.
+
 ## Install
 
 Download the installer for your system from [Releases](../../releases). Every file is listed in `SHA256SUMS.txt`.
@@ -158,6 +180,8 @@ aptechka --sessions      AI agent sessions and how to resume them
 aptechka --speed         speed test in the terminal
 aptechka --widget        only the desktop widget (Linux, Windows)
 aptechka --fix ID [ARG]  run one fix; DRY_RUN=1 shows what would happen
+aptechka --tray          only the AI limits icon in the panel (Linux, Windows)
+aptechka --claude-limits on|off  Claude Code limits through its status line (off restores your own)
 ```
 
 ## Languages

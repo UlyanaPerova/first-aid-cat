@@ -1,0 +1,73 @@
+# limits.rs — лимиты и расход ИИ
+
+ru: {} млрд
+en: {}B
+
+ru: {} млн
+en: {}M
+
+ru: {} тыс.
+en: {}K
+
+ru: в {}
+en: at {}
+
+ru: завтра в {}
+en: tomorrow at {}
+
+ru: {}.{} в {}
+en: {}.{} at {}
+
+ru: 0% · уже сброшен
+en: 0% · already reset
+
+ru: {}% · сброс {}
+en: {}% · resets {}
+
+ru:  · данные {} назад
+en:  · data from {} ago
+
+ru: данные {} назад
+en: data from {} ago
+
+ru: данные {} дн. назад
+en: data from {} d ago
+
+ru: Лимит исчерпан: агент ответит после сброса.
+en: Limit used up: the agent will answer after the reset.
+
+ru: Лимит почти исчерпан.
+en: The limit is almost used up.
+
+ru: {}: лимит {}
+en: {}: limit {}
+
+ru: {} ч
+en: {} h
+
+ru: {} дн.
+en: {} d
+
+ru: на неделю
+en: per week
+
+ru: на 5 ч
+en: per 5 h
+
+ru: сегодня {} · за 7 дней {}
+en: today {} · last 7 days {}
+
+ru: За 7 дней: новые на входе {}, ответы {}, чтение из кэша {}, запись в кэш {}.
+en: Last 7 days: new input {}, output {}, cache reads {}, cache writes {}.
+
+ru: {}: расход токенов
+en: {}: token usage
+
+ru: через {} дн {} ч
+en: in {} d {} h
+
+ru: через {} ч {} мин
+en: in {} h {} min
+
+ru: через {} мин
+en: in {} min

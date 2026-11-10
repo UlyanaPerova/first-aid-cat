@@ -7,7 +7,7 @@ ru: Не прочитать {}: {}
 en: Can't read {}: {}
 
 # shellcfg.rs:330
-ru: Файл {} изменился с прошлой проверки (строка {} уже другая) — проверь ещё раз, я ничего не трогала.
+ru: Файл {} изменился с прошлой проверки (строка {} уже другая) — проверь ещё раз, я ничего не трогал.
 en: File {} changed since the last check (line {} is different now) — check again, I touched nothing.
 
 # shellcfg.rs:338
@@ -19,7 +19,7 @@ ru: Строка внутри условия или функции — зако�
 en: The line is inside a condition or function — commenting it out alone is unsafe, so fix the file by hand.
 
 # shellcfg.rs:340
-ru: Файл {} изменился с прошлой проверки — проверь ещё раз, я ничего не трогала.
+ru: Файл {} изменился с прошлой проверки — проверь ещё раз, я ничего не трогал.
 en: File {} changed since the last check — check again, I touched nothing.
 
 # shellcfg.rs:364
@@ -31,7 +31,7 @@ ru: Не удалось сделать копию файла — ничего н
 en: Couldn't make a backup of the file — I'm changing nothing.
 
 # shellcfg.rs:368
-ru: Файл изменился, пока я его правила — проверь ещё раз, я ничего не трогала.
+ru: Файл изменился, пока я его правил — проверь ещё раз, я ничего не трогал.
 en: The file changed while I was editing it — check again, I touched nothing.
 
 # shellcfg.rs:359 (written into the user file; not shown in UI)

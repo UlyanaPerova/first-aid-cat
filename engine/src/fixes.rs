@@ -34,7 +34,7 @@ fn sh_app(cmd: &[&str], timeout_s: u64) -> (bool, String) {
 
 fn sh_opts(cmd: &[&str], timeout_s: u64, o: crate::cmd::Opts) -> (bool, String) {
     if dry_run() {
-        log(&format!("DRY_RUN: выполнила бы: {}", cmd.join(" ")));
+        log(&format!("DRY_RUN: выполнил бы: {}", cmd.join(" ")));
         return (true, String::new());
     }
     log(&format!("запускаю: {}", cmd.join(" ")));
@@ -115,7 +115,7 @@ fn outcome_msg(cmd: &[&str], r: crate::cmd::Outcome) -> (bool, String) {
 
 /// Понятная причина неудачи вместо сырого вывода команды.
 fn explain(cmd: &[&str], code: Option<i32>, out: &str) -> String {
-    let Some(code) = code else { return "Команда не ответила вовремя, я её остановила.".into() };
+    let Some(code) = code else { return "Команда не ответила вовремя, я её остановил.".into() };
     if cmd.first().is_some_and(|c| c.ends_with("pkexec")) {
         // для подсказки — сама команда, без обёртки песочницы
         let rest = match cmd.iter().position(|a| *a == "--") {
@@ -176,14 +176,14 @@ fn restart_app(procs: &[&str], desktop_id: &str) -> (bool, String) {
         .any(|d| d.join("applications").join(format!("{desktop_id}.desktop")).is_file());
     let launcher = crate::procs::which("gtk-launch").is_some() && desktop_file;
     if relaunch.is_none() && !launcher {
-        return (false, "Не знаю, чем открыть клиент заново (нет gtk-launch), поэтому закрывать не стала. Перезапусти его сама.".into());
+        return (false, "Не знаю, чем открыть клиент заново (нет gtk-launch), поэтому закрывать не стал. Перезапусти его вручную.".into());
     }
     let old: Vec<i64> = running.iter().map(|p| p.pid).collect();
     for n in procs {
         sh(&["pkill", "-x", n], 30);
     }
     if dry_run() {
-        return (true, "Открыла заново.".into());
+        return (true, "Открыл заново.".into());
     }
     // дождаться, что прежние процессы правда закрылись (до 5 с); не закрылись — второй копии не запускаем
     let mut gone = false;
@@ -195,7 +195,7 @@ fn restart_app(procs: &[&str], desktop_id: &str) -> (bool, String) {
         }
     }
     if !gone {
-        return (false, "Клиент не закрылся — второй его копии запускать не стала. Закрой его вручную.".into());
+        return (false, "Клиент не закрылся — второй его копии запускать не стал. Закрой его вручную.".into());
     }
     let started = match &relaunch {
         Some(cmd) => {
@@ -212,15 +212,15 @@ fn restart_app(procs: &[&str], desktop_id: &str) -> (bool, String) {
         pause(500);
         // появился именно новый процесс (номер не из прежних)
         if crate::procs::list_fresh().iter().any(|p| procs.iter().any(|n| p.name == *n) && !old.contains(&p.pid)) {
-            return (true, "Открыла заново, подключись в окне клиента. Связь через VPN вернётся после подключения.".into());
+            return (true, "Открыл заново, подключись в окне клиента. Связь через VPN вернётся после подключения.".into());
         }
     }
     (
         false,
         if started {
-            "Запустила, но клиент так и не появился — открой его сама.".into()
+            "Запустил, но клиент так и не появился — открой его вручную.".into()
         } else {
-            "Не удалось открыть клиент заново — открой его сама.".into()
+            "Не удалось открыть клиент заново — открой его вручную.".into()
         },
     )
 }
@@ -252,7 +252,7 @@ fn net_reconnect() -> (bool, String) {
         all_ok &= ok;
         msgs.push(format!("{d}: {}", if ok { "ок".to_string() } else { m }));
     }
-    let msg = if msgs.is_empty() { "не нашла сетевых устройств".to_string() } else { msgs.join("; ") };
+    let msg = if msgs.is_empty() { "не нашёл сетевых устройств".to_string() } else { msgs.join("; ") };
     // успех — только если переподключились все, кого трогали (раньше «успех» был, раз устройства нашлись)
     (all_ok, msg)
 }
@@ -452,7 +452,7 @@ fn dock_repair(uuid: Option<&str>) -> (bool, String) {
     // какой док — говорит проверка (включённое расширение дока); без него не угадываем
     let found = uuid.filter(|u| u.contains('@')).map(String::from).or_else(crate::diag::current_dock);
     let Some(uuid) = found else {
-        return (false, "Не нашла расширение дока (Dash to Dock, Ubuntu Dock, Dash2Dock Lite).".into());
+        return (false, "Не нашёл расширение дока (Dash to Dock, Ubuntu Dock, Dash2Dock Lite).".into());
     };
     let uuid = uuid.as_str();
     let mut steps: Vec<String> = Vec::new();
@@ -498,17 +498,17 @@ fn theme_restore(key: &str) -> (bool, String) {
     } else {
         dset(a, val)
     };
-    (ok, if ok { format!("Вернула как в эталоне: {b} = {val}.") } else { m })
+    (ok, if ok { format!("Вернул как в эталоне: {b} = {val}.") } else { m })
 }
 
 /// Запомнить текущие темы и расширения как норму (пишет файл эталона).
 fn snapshot() -> (bool, String) {
     if dry_run() {
-        log(&format!("DRY_RUN: записала бы эталон тем в {}", crate::diag::snapshot_path()));
-        return (true, "Запомнила текущие темы и расширения как норму.".into());
+        log(&format!("DRY_RUN: записал бы эталон тем в {}", crate::diag::snapshot_path()));
+        return (true, "Запомнил текущие темы и расширения как норму.".into());
     }
     match crate::diag::take_snapshot() {
-        Ok(_) => (true, "Запомнила текущие темы и расширения как норму.".into()),
+        Ok(_) => (true, "Запомнил текущие темы и расширения как норму.".into()),
         Err(e) => (false, format!("Не удалось записать эталон: {e}")),
     }
 }
@@ -968,11 +968,11 @@ fn win_apply(id: &str, arg: Option<&str>) -> (bool, String) {
         "win_cleanmgr" => {
             if dry_run() {
                 log_dry("открыть «Очистку диска» (cleanmgr)");
-                return (true, "Открыла «Очистку диска».".into());
+                return (true, "Открыл «Очистку диска».".into());
             }
             // окно «Очистки диска» живёт своей жизнью — не ждём его
             let ok = crate::procs::spawn_detached(crate::diag::quiet(&mut std::process::Command::new("cleanmgr")));
-            (ok, if ok { "Открыла «Очистку диска».".into() } else { "Не удалось открыть «Очистку диска».".into() })
+            (ok, if ok { "Открыл «Очистку диска».".into() } else { "Не удалось открыть «Очистку диска».".into() })
         }
         other => (false, format!("Неизвестное действие: {other}")),
     }
@@ -1318,7 +1318,7 @@ pub fn what_happens(id: &str) -> &'static str {
         "env_proxy_off" => "Закомментирую эту строку (рядом сохраню копию файла). Подействует в новых окнах терминала.",
         "git_proxy_off" => "Уберу прокси из настроек git.",
         "npm_proxy_off" => "Уберу прокси из настроек npm.",
-        _ => "Сделаю это сама.",
+        _ => "Сделаю это сам.",
     }
 }
 
@@ -1335,7 +1335,7 @@ fn thumbs_clear() -> (bool, String) {
         .ok()
         .filter(|p| p.starts_with('/'))
         .or_else(|| std::env::var("HOME").ok().filter(|h| h.starts_with('/')).map(|h| format!("{h}/.cache")));
-    let Some(cache) = cache else { return (false, "Не нашла домашнюю папку.".into()) };
+    let Some(cache) = cache else { return (false, "Не нашёл домашнюю папку.".into()) };
     let dir = std::path::PathBuf::from(cache).join("thumbnails");
     // сама папка миниатюр — ссылка (на другой диск или подменили) или не папка: не трогаем — иначе стёрлось бы
     // то, на что она ведёт, и без Корзины
@@ -1347,7 +1347,7 @@ fn thumbs_clear() -> (bool, String) {
         _ => {}
     }
     if dry_run() {
-        log(&format!("DRY_RUN: очистила бы {}", dir.display()));
+        log(&format!("DRY_RUN: очистил бы {}", dir.display()));
         return (true, "Кэш миниатюр очищен.".into());
     }
     let mut n = 0;
@@ -1371,12 +1371,12 @@ fn thumbs_clear() -> (bool, String) {
     // ошибка чтения — не «пусто»
     let left = match std::fs::read_dir(&dir) {
         Ok(rd) => rd.count(),
-        Err(e) => return (false, format!("Удалила {n}, а проверить, что осталось, не вышло: {e}")),
+        Err(e) => return (false, format!("Удалил {n}, а проверить, что осталось, не вышло: {e}")),
     };
     if left == 0 {
         (true, "Кэш миниатюр очищен.".into())
     } else {
-        (false, format!("Удалила {n}, а {left} не удалось (нет прав или заняты) — посмотри папку {}.", dir.display()))
+        (false, format!("Удалил {n}, а {left} не удалось (нет прав или заняты) — посмотри папку {}.", dir.display()))
     }
 }
 
@@ -1393,7 +1393,7 @@ fn open_url(url: &str) -> (bool, String) {
     } else {
         sh_app(&["xdg-open", url], 10)
     };
-    done(r, "Открыла страницу входа в браузере.")
+    done(r, "Открыл страницу входа в браузере.")
 }
 
 /// Пакеты старых ядер, которые можно удалить (исправление «apt_autoremove» — имя историческое: сам
@@ -1517,7 +1517,7 @@ fn remove_old_kernels() -> (bool, String) {
     let n = pk.iter().filter(|p| p.starts_with("linux-image-")).count();
     done(
         sh_admin("apt-get", &args, 1800, crate::elevate::Profile::Packages),
-        &format!("Убрала старые ядра ({n}): работающее и по два новых каждого вида остались."),
+        &format!("Убрал старые ядра ({n}): работающее и по два новых каждого вида остались."),
     )
 }
 
@@ -1685,7 +1685,7 @@ fn look_known(a: &str) -> bool {
 
 /// Строка в журнал пробного режима (для модулей, которые сами выполняют действия).
 pub fn log_dry(what: &str) {
-    log(&format!("DRY_RUN: выполнила бы: {what}"));
+    log(&format!("DRY_RUN: выполнил бы: {what}"));
 }
 
 /// Подходит ли действие этой системе: win_* — Windows, mac_* — macOS, общие — везде, остальные — Linux.

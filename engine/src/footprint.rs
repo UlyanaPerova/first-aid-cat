@@ -211,7 +211,7 @@ fn scan_file(p: &Path, until: Instant) -> Option<Vec<&'static str>> {
 
 /// Низкий приоритет текущему потоку: Linux — nice 19 и диск «лучшее усилие, последний» (не IDLE: тот может
 /// не дождаться диска вовсе); Windows — фоновый режим потока (и процессор, и диск). macOS — как есть.
-fn background_priority() {
+pub(crate) fn background_priority() {
     #[cfg(target_os = "linux")]
     // SAFETY: обычные системные вызовы для своего потока (tid), без указателей
     unsafe {
@@ -237,13 +237,13 @@ fn background_priority() {
 
 /// Linux: просмотр файла — подряд (система читает вперёд), а по окончании его страницы выбрасываются из
 /// кэша: они чистые, ничего не теряется, просто не вытесняют чужое.
-struct CacheDrop {
+pub(crate) struct CacheDrop {
     #[cfg(target_os = "linux")]
     fd: i32,
 }
 
 impl CacheDrop {
-    fn new(f: &std::fs::File) -> CacheDrop {
+    pub(crate) fn new(f: &std::fs::File) -> CacheDrop {
         #[cfg(target_os = "linux")]
         {
             use std::os::unix::io::AsRawFd;
@@ -557,7 +557,7 @@ pub fn check() -> Vec<Check> {
                 "Эти ключи были в переписке с ИИ: их видела модель, и они лежат открытым текстом в файлах сессий (например, {}). \
                 Замени ключи новыми у поставщика; старые сессии с ними можно удалить.{}",
                 chats_with.first().map(|x| x.0.as_str()).unwrap_or(""),
-                if partial { " Проверила не все чаты — продолжу в следующий раз." } else { "" }
+                if partial { " Проверил не все чаты — продолжу в следующий раз." } else { "" }
             )),
         );
     }
@@ -591,7 +591,7 @@ pub fn check() -> Vec<Check> {
     if !creds.is_empty() {
         out.push(Check::new("sys", "След: входы программ", INFO, &creds.join(", ")).hint(
             "Токены входа этих программ лежат файлами в домашней папке — так они устроены. Программа под твоим именем может их прочитать; \
-                если вышла из учётной записи на сайте — «выйди» и в программе, токен перестанет работать.",
+                после выхода из учётной записи на сайте «выйди» и в программе, токен перестанет работать.",
         ));
     }
 
@@ -693,27 +693,27 @@ pub fn check() -> Vec<Check> {
     if partial || capped || !skipped.is_empty() || !unsupported.is_empty() {
         let mut what = Vec::new();
         if partial {
-            what.push("часть чатов не успела просмотреть (продолжу в следующий раз)".to_string());
+            what.push("часть чатов не успел просмотреть (продолжу в следующий раз)".to_string());
         }
         if capped {
             what.push("в папках чатов файлов больше, чем я просматриваю (самые свежие, до 3000 в каждой папке)".to_string());
         }
         if !skipped.is_empty() {
-            what.push(format!("не смогла прочитать до конца: {}", skipped.join(", ")));
+            what.push(format!("не смог прочитать до конца: {}", skipped.join(", ")));
         }
         if !unsupported.is_empty() {
             what.push(format!("не умею читать чаты: {}", unsupported.join(", ")));
         }
         out.push(
-            Check::new("sys", "Цифровой след: охват", INFO, "проверила не всё")
+            Check::new("sys", "Цифровой след: охват", INFO, "проверил не всё")
                 .unknown()
-                .hint(&format!("{}. Если ключей не нашла — это не значит, что их там нет.", what.join("; "))),
+                .hint(&format!("{}. Если ключей не нашёл — это не значит, что их там нет.", what.join("; "))),
         );
     } else if out.iter().all(|c| c.status == INFO || c.status == OK) && hist.is_empty() && chats_with.is_empty() {
         out.insert(
             0,
             Check::new("sys", "Цифровой след", OK, "в просмотренном ключей на виду нет")
-                .hint("Просмотрела историю команд, файлы оболочки и чаты ИИ-агентов. Это не доказательство, что ключей нет нигде."),
+                .hint("Просмотрел историю команд, файлы оболочки и чаты ИИ-агентов. Это не доказательство, что ключей нет нигде."),
         );
     }
     out
@@ -862,12 +862,12 @@ pub fn fix_lock() -> (bool, String) {
             // что поменяли — в журнал: права можно вернуть вручную (chmod старое значение)
             crate::fixes::log(&format!("права изменены: {}", changed.join("; ")));
         }
-        let done = format!("Закрыла от других пользователей: {}.", crate::diag::plural(n, "файл", "файла", "файлов"));
+        let done = format!("Закрыл от других пользователей: {}.", crate::diag::plural(n, "файл", "файла", "файлов"));
         if skipped.is_empty() {
             (true, done)
         } else {
             // файл из списка проверки остался открытым — не «всё хорошо»
-            let rest = format!("Не смогла закрыть ({}): {} — это ссылка, чужой файл или нет прав.", skipped.len(), skipped.join(", "));
+            let rest = format!("Не смог закрыть ({}): {} — это ссылка, чужой файл или нет прав.", skipped.len(), skipped.join(", "));
             (false, format!("{done} {rest}"))
         }
     }
@@ -908,7 +908,7 @@ fn exposed_files(until: Instant) -> Vec<PathBuf> {
 /// Кнопка «Убрать ключи из истории»: строки с ключами удаляются из файлов истории команд.
 /// Копию не делаем — она хранила бы те же ключи.
 pub fn fix_history() -> (bool, String) {
-    let Some(h) = crate::store::home_dir() else { return (false, "Не нашла домашнюю папку.".into()) };
+    let Some(h) = crate::store::home_dir() else { return (false, "Не нашёл домашнюю папку.".into()) };
     let mut removed = 0;
     let mut failed: Vec<String> = Vec::new(); // файлы истории, которые не удалось обработать
     for f in HISTORIES {
@@ -963,18 +963,18 @@ pub fn fix_history() -> (bool, String) {
         return (
             false,
             format!(
-                "Не смогла обработать: {} — записи с ключами там могли остаться. Убрано из остальных: {removed}. Проверь эти файлы вручную.",
+                "Не смог обработать: {} — записи с ключами там могли остаться. Убрано из остальных: {removed}. Проверь эти файлы вручную.",
                 failed.join(", ")
             ),
         );
     }
     if removed == 0 {
-        return (true, "В истории команд не нашла записей с ключами.".into());
+        return (true, "В истории команд не нашёл записей с ключами.".into());
     }
     (
         true,
         format!(
-            "Убрала из истории {}. Открытые терминалы помнят историю и могут записать её снова — закрой их. \
+            "Убрал из истории {}. Открытые терминалы помнят историю и могут записать её снова — закрой их. \
         Удаление строки не отзывает ключ: замени его у поставщика.",
             crate::diag::plural(removed, "запись", "записи", "записей")
         ),
@@ -1146,7 +1146,7 @@ mod tests {
             std::os::unix::fs::symlink(h.join("dot/hist"), h.join(".bash_history")).unwrap();
             let (ok, msg) = fix_history();
             assert!(ok, "{msg}");
-            assert!(msg.starts_with("Убрала"), "{msg}");
+            assert!(msg.starts_with("Убрал"), "{msg}");
             let after = std::fs::read(h.join("dot/hist")).unwrap();
             assert_eq!(after, b"ls \xef\xf0\xe8\xe2\xe5\xf2\npwd\n");
             assert!(std::fs::symlink_metadata(h.join(".bash_history")).unwrap().file_type().is_symlink());
@@ -1184,7 +1184,7 @@ mod tests {
             std::os::unix::fs::symlink(&out, h.join(".bash_history")).unwrap();
             let (ok, msg) = fix_history();
             assert!(!ok, "{msg}");
-            assert!(msg.contains("Не смогла обработать"), "{msg}");
+            assert!(msg.contains("Не смог обработать"), "{msg}");
             // каталог вместо файла — тоже не «чисто»
             std::fs::remove_file(h.join(".bash_history")).unwrap();
             std::fs::create_dir(h.join(".bash_history")).unwrap();

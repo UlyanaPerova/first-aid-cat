@@ -183,11 +183,11 @@ ru: снова проверяю
 en: checking again
 
 # ui.rs:1385
-ru: больше не проверяю (с компьютером ничего не делала)
+ru: больше не проверяю (с компьютером ничего не делал)
 en: not checking anymore (I haven't touched your computer)
 
 # ui.rs:1425
-ru: Скопировала команду — вставь её в терминал (Ctrl+Shift+V).
+ru: Скопировал команду — вставь её в терминал (Ctrl+Shift+V).
 en: Copied the command — paste it into the terminal (Ctrl+Shift+V).
 
 # ui.rs:1440
@@ -219,8 +219,8 @@ ru: Проверяю как обычно.
 en: Checking as usual.
 
 # ui.rs:1507
-ru: Диагностика компьютера с котом-доктором: сеть, VPN и прокси, ИИ-помощники, диски, темы и система. Без учётных записей и слежки: найденное не уходит с компьютера. Лицензия Apache 2.0, github.com/UlyanaPerova/first-aid-cat. Текстовый режим: aptechka --diag
-en: A desktop health checker with a doctor cat: network, VPN and proxies, AI assistants, disks, themes and the system. No accounts and no tracking: what it finds stays on your computer. Apache 2.0 license, github.com/UlyanaPerova/first-aid-cat. Text mode: aptechka --diag
+ru: Диагностика компьютера с котом-доктором: сеть, VPN и прокси, ИИ-помощники с их лимитами и расходом токенов, диски, темы и система. Без учётных записей и слежки: найденное не уходит с компьютера. Лицензия Apache 2.0, github.com/UlyanaPerova/first-aid-cat. Текстовый режим: aptechka --diag
+en: A desktop health checker with a doctor cat: network, VPN and proxies, AI assistants with their limits and token usage, disks, themes and the system. No accounts and no tracking: what it finds stays on your computer. Apache 2.0 license, github.com/UlyanaPerova/first-aid-cat. Text mode: aptechka --diag
 
 # ui.rs:1627
 ru: Выдана справка № {}.
@@ -363,7 +363,7 @@ ru: Сеть в порядке. Клод сейчас отдыхает, но д�
 en: Network is fine. Claude is resting right now, but can still be reached.
 
 # ui.rs:1901
-ru: Всё хорошо. Клод выключен — открой терминал, если соскучилась.
+ru: Всё хорошо. Клод выключен — открой терминал, если без него скучно.
 en: All good. Claude is off — open a terminal if you miss it.
 
 # ui.rs:1903
@@ -375,7 +375,7 @@ ru: Пульс ровный, сеть дышит. Я рядом!
 en: Steady pulse, the network is breathing. I'm right here!
 
 # ui.rs:1905
-ru: Проверил всё-всё. Ты молодец, что заглянула :3
+ru: Проверил всё-всё. Хорошо, что ты заглядываешь :3
 en: I checked everything. Good job stopping by :3
 
 # ui.rs:1906
@@ -491,7 +491,7 @@ ru:  · ждёт
 en:  · waiting
 
 # ui.rs:2924
-ru: Или сама, в терминале:
+ru: Или вручную, в терминале:
 en: Or do it yourself, in a terminal:
 
 # ui.rs:2989
@@ -759,7 +759,7 @@ en: ERROR
 ru: снова проверяю.
 en: checking again.
 
-ru: больше не проверяю (с компьютером ничего не делала).
+ru: больше не проверяю (с компьютером ничего не делал).
 en: not checking anymore (I haven't touched your computer).
 
 ru: Мур! Беда: {} — {}.
@@ -865,7 +865,7 @@ ru: Лицензии
 en: Licenses
 
 # ui.rs:1585
-ru: Открыла папку с лицензиями: {}
+ru: Открыл папку с лицензиями: {}
 en: Opened the folder with the licenses: {}
 
 # ui.rs:1586
@@ -873,7 +873,7 @@ ru: Лицензии лежат здесь: {}
 en: The licenses are here: {}
 
 # ui.rs:1587
-ru: Не смогла положить лицензии: {}
+ru: Не смог положить лицензии: {}
 en: Couldn't write the licenses: {}
 
 # ui.rs:1562
@@ -909,7 +909,7 @@ ru: Свои проверки и исправления
 en: Your own checks and fixes
 
 # ui.rs
-ru: Открыла инструкцию: {}
+ru: Открыл инструкцию: {}
 en: Opened the guide: {}
 
 # ui.rs
@@ -917,5 +917,41 @@ ru: Инструкция лежит здесь: {}
 en: The guide is here: {}
 
 # ui.rs
-ru: Не смогла положить инструкцию: {}
+ru: Не смог положить инструкцию: {}
 en: Couldn't write the guide: {}
+
+ru: Медкарта расхода ИИ
+en: AI usage chart
+
+ru: Значок в панели
+en: Panel icon
+
+ru: Следить за: {}
+en: Track: {}
+
+ru: Лимиты ИИ
+en: AI limits
+
+ru: Значок с лимитами ИИ — в панели.
+en: The AI limits icon is in the panel.
+
+ru: Значок с лимитами ИИ убран из панели.
+en: The AI limits icon is removed from the panel.
+
+ru: кот
+en: cat
+
+ru: Число в панели: самый занятый лимит
+en: Panel number: the fullest limit
+
+ru: Число в панели: у каждого агента
+en: Panel number: each agent
+
+ru: Уведомлять: 80 %, 95 % и сброс
+en: Notify: 80 %, 95 % and reset
+
+ru: ──── новый запуск ────
+en: ──── new start ────
+
+ru: Нажато: «{}»
+en: Pressed: “{}”

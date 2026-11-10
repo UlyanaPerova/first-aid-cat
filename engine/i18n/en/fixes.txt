@@ -19,7 +19,7 @@ ru: Команда не ответила вовремя и не останови
 en: The command didn't respond in time and didn't stop (it runs as administrator). If a password window is open, close it; otherwise wait for the command to finish on its own.
 
 # fixes.rs:99
-ru: Команда не ответила вовремя, я её остановила.
+ru: Команда не ответила вовремя, я её остановил.
 en: The command didn't respond in time, so I stopped it.
 
 # fixes.rs:108
@@ -39,27 +39,27 @@ ru: Команда завершилась с ошибкой (код {}).
 en: The command failed (code {}).
 
 # fixes.rs:160
-ru: Не знаю, чем открыть клиент заново (нет gtk-launch), поэтому закрывать не стала. Перезапусти его сама.
+ru: Не знаю, чем открыть клиент заново (нет gtk-launch), поэтому закрывать не стал. Перезапусти его вручную.
 en: I don't know how to reopen the client (no gtk-launch), so I didn't close it. Please restart it yourself.
 
 # fixes.rs:167
-ru: Открыла заново.
+ru: Открыл заново.
 en: Reopened.
 
 # fixes.rs:179
-ru: Клиент не закрылся — второй его копии запускать не стала. Закрой его вручную.
+ru: Клиент не закрылся — второй его копии запускать не стал. Закрой его вручную.
 en: The client didn't close, so I didn't start a second copy. Please close it manually.
 
 # fixes.rs:196
-ru: Открыла заново, подключись в окне клиента. Связь через VPN вернётся после подключения.
+ru: Открыл заново, подключись в окне клиента. Связь через VPN вернётся после подключения.
 en: Reopened. Connect in the client window; the VPN link will come back once it's connected.
 
 # fixes.rs:202
-ru: Запустила, но клиент так и не появился — открой его сама.
+ru: Запустил, но клиент так и не появился — открой его вручную.
 en: I started it, but the client never appeared. Please open it yourself.
 
 # fixes.rs:204
-ru: Не удалось открыть клиент заново — открой его сама.
+ru: Не удалось открыть клиент заново — открой его вручную.
 en: I couldn't reopen the client. Please open it yourself.
 
 # fixes.rs:227
@@ -71,7 +71,7 @@ ru: ок
 en: OK
 
 # fixes.rs:236
-ru: не нашла сетевых устройств
+ru: не нашёл сетевых устройств
 en: I found no network devices
 
 # fixes.rs:243
@@ -155,7 +155,7 @@ ru: Раскладка снова переключается по Super+Проб
 en: The layout switches with Super+Space again.
 
 # fixes.rs:436
-ru: Не нашла расширение дока (Dash to Dock, Ubuntu Dock, Dash2Dock Lite).
+ru: Не нашёл расширение дока (Dash to Dock, Ubuntu Dock, Dash2Dock Lite).
 en: I couldn't find the dock extension (Dash to Dock, Ubuntu Dock, Dash2Dock Lite).
 
 # fixes.rs:443
@@ -191,11 +191,11 @@ ru: Непонятный ключ: {}
 en: Unclear key: {}
 
 # fixes.rs:482
-ru: Вернула как в эталоне: {} = {}.
+ru: Вернул как в эталоне: {} = {}.
 en: Restored to the baseline: {} = {}.
 
 # fixes.rs:489
-ru: Запомнила текущие темы и расширения как норму.
+ru: Запомнил текущие темы и расширения как норму.
 en: I saved the current themes and extensions as the norm.
 
 # fixes.rs:493
@@ -511,7 +511,7 @@ ru: открыть «Очистку диска» (cleanmgr)
 en: open Disk Cleanup (cleanmgr)
 
 # fixes.rs:906
-ru: Открыла «Очистку диска».
+ru: Открыл «Очистку диска».
 en: Opened Disk Cleanup.
 
 # fixes.rs:910
@@ -679,11 +679,11 @@ ru: Уберу прокси из настроек npm.
 en: I'll remove the proxy from the npm settings.
 
 # fixes.rs:1212
-ru: Сделаю это сама.
+ru: Сделаю это сам.
 en: I'll do this myself.
 
 # fixes.rs:1229
-ru: Не нашла домашнюю папку.
+ru: Не нашёл домашнюю папку.
 en: I couldn't find the home folder.
 
 # fixes.rs:1235
@@ -703,11 +703,11 @@ ru: Не открыть папку миниатюр: {}
 en: Couldn't open the thumbnails folder: {}
 
 # fixes.rs:1265
-ru: Удалила {}, а проверить, что осталось, не вышло: {}
+ru: Удалил {}, а проверить, что осталось, не вышло: {}
 en: I deleted {}, but couldn't check what's left: {}
 
 # fixes.rs:1270
-ru: Удалила {}, а {} не удалось (нет прав или заняты) — посмотри папку {}.
+ru: Удалил {}, а {} не удалось (нет прав или заняты) — посмотри папку {}.
 en: I deleted {}, but {} couldn't be deleted (no permission or in use) — check the folder {}.
 
 # fixes.rs:1278
@@ -715,7 +715,7 @@ ru: Странный адрес — открывать не буду.
 en: Odd address — I won't open it.
 
 # fixes.rs:1287
-ru: Открыла страницу входа в браузере.
+ru: Открыл страницу входа в браузере.
 en: Opened the sign-in page in the browser.
 
 # fixes.rs:1376
@@ -735,7 +735,7 @@ ru: Странные имена пакетов — ничего не удаля�
 en: Odd package names — I'm not removing anything.
 
 # fixes.rs:1412
-ru: Убрала старые ядра ({}): работающее и по два новых каждого вида остались.
+ru: Убрал старые ядра ({}): работающее и по два новых каждого вида остались.
 en: Removed the old kernels ({}): the running one and the two newest of each kind stay.
 
 # fixes.rs:1448

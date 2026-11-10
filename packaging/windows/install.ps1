@@ -46,6 +46,11 @@ if ($Uninstall) {
         Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $Start "$n — виджет.lnk"), (Join-Path $Start "$n — widget.lnk"), (Join-Path $Desk "$n.lnk")
         Remove-Item -Recurse -Force -ErrorAction SilentlyContinue (Join-Path ([Environment]::GetFolderPath('Programs')) $n)
     }
+    # строка состояния Claude Code: вернуть прежнюю (или убрать нашу), пока программа ещё на месте
+    $exe = Join-Path $Dir 'aptechka.exe'
+    if (Test-Path $exe) { Start-Process -FilePath $exe -ArgumentList '--claude-limits', 'off' -WindowStyle Hidden -Wait -ErrorAction SilentlyContinue }
+    # значок с лимитами ИИ: убрать его автозапуск (программа пишет его сама)
+    Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'AptechkaTray' -ErrorAction SilentlyContinue
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $Dir, $Reg
     Say (L 'Аптечка убрана (настройки в %APPDATA%\aptechka остались)' 'First Aid Cat removed (settings in %APPDATA%\aptechka are kept)')
     exit 0

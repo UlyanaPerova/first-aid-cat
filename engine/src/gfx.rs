@@ -694,6 +694,41 @@ fn draw_status(code: u8, lamp: bool, size: u32) -> Option<Pixmap> {
     box_scale(&pm, size)
 }
 
+/// Кольцо-диаграмма: дорожка и дуга от верха по часовой на долю frac; сглаживание 4×4 точки на пиксель.
+#[allow(clippy::too_many_arguments)]
+pub fn ring(c: &mut Canvas, cx: i32, cy: i32, ro: f32, ri: f32, frac: f64, col: u32, track: u32) {
+    let r = ro.ceil() as i32 + 1;
+    let full = std::f32::consts::TAU * frac.clamp(0.0, 1.0) as f32;
+    for dy in -r..=r {
+        for dx in -r..=r {
+            let (mut on_ring, mut on_arc) = (0u32, 0u32);
+            for sy in 0..4 {
+                for sx in 0..4 {
+                    let x = dx as f32 + (sx as f32 + 0.5) / 4.0 - 0.5;
+                    let y = dy as f32 + (sy as f32 + 0.5) / 4.0 - 0.5;
+                    let d = (x * x + y * y).sqrt();
+                    if d <= ro && d >= ri {
+                        on_ring += 1;
+                        let mut a = x.atan2(-y);
+                        if a < 0.0 {
+                            a += std::f32::consts::TAU;
+                        }
+                        if a <= full {
+                            on_arc += 1;
+                        }
+                    }
+                }
+            }
+            if on_ring > 0 {
+                c.blend(cx + dx, cy + dy, track, on_ring * 255 / 16);
+            }
+            if on_arc > 0 {
+                c.blend(cx + dx, cy + dy, col, on_arc * 255 / 16);
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod font_tests {
     use super::*;

@@ -374,3 +374,70 @@ en: The patient was examined only in part: no problems in the checks that ran, b
 # spravka.rs
 ru: Не удалось проверить: {}
 en: Could not check: {}
+
+# медкарта расхода ИИ
+ru: МЕДКАРТА РАСХОДА ИИ
+en: AI USAGE CHART
+
+ru: за 30 дней · по журналам агентов на этом компьютере
+en: last 30 days · from the agents' logs on this computer
+
+ru: Считаю… (читаю журналы агентов)
+en: Counting… (reading the agents' logs)
+
+ru: Нет данных: Claude Code и Codex на этом компьютере ещё не работали.
+en: No data: Claude Code and Codex have not run on this computer yet.
+
+ru: Лимит на 5 ч
+en: 5-hour limit
+
+ru: Лимит на неделю
+en: Weekly limit
+
+ru: , сброс {}
+en: , resets {}
+
+ru: сброс {}
+en: resets {}
+
+ru: , уже сброшен
+en: , already reset
+
+ru: уже сброшен
+en: already reset
+
+ru: Сегодня
+en: Today
+
+ru: За 7 дней
+en: Last 7 days
+
+ru: За 30 дней
+en: Last 30 days
+
+ru: в день, токенов (макс. {})
+en: tokens per day (max {})
+
+ru: Модель
+en: Model
+
+ru: 7 дней
+en: 7 days
+
+ru: 30 дней
+en: 30 days
+
+ru: из них ответы
+en: of which output
+
+ru: Почти весь объём — чтение из кэша: на каждом ответе агент заново читает начало разговора, и это считается токенами, хотя стоит намного дешевле новых. Сколько написала сама модель — колонка «из них ответы».
+en: Almost all of it is cache reads: with every answer the agent rereads the start of the conversation, and that counts as tokens, though it costs much less than new ones. What the model itself wrote is in the “of which output” column.
+
+ru: Проект
+en: Project
+
+ru: доля
+en: share
+
+ru: остальные
+en: others

@@ -32,6 +32,7 @@ mod custom {
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../custom/mod.rs"));
 }
 mod sched;
+mod tray;
 /// Тесты, которые читают или меняют переменные окружения (HOME): переменные общие на весь процесс, а тесты
 /// идут параллельно — без общего замка один тест подменял HOME посреди другого (cursor_layout падал через раз).
 #[cfg(test)]
@@ -50,6 +51,7 @@ mod gfx;
 mod i18n;
 mod licenses;
 mod life;
+mod limits;
 mod looksnap;
 #[cfg(target_os = "macos")]
 mod mac;
@@ -153,7 +155,7 @@ fn open_terminal_with(script: &str) -> Result<&'static str, String> {
                 return Ok(t);
             }
         }
-        Err("не нашла программу-терминал (gnome-terminal, konsole, xterm…)".into())
+        Err("не нашёл программу-терминал (gnome-terminal, konsole, xterm…)".into())
     }
 }
 
@@ -182,6 +184,9 @@ enum Bg {
     Speed(diag::SpeedProgress),
     SpeedDone(Vec<diag::Check>),
     FixDone(bool, String),
+    Analytics(spravka::Analytics),
+    /// «Проверить всё»: можно ли мерить скорость (false — сеть лимитная)
+    SpeedAuto(bool),
 }
 
 struct App {
@@ -205,6 +210,8 @@ struct App {
     focused: bool,
     /// файл программы при запуске (время изменения) и сказали ли уже, что её обновили
     exe_stamp: Option<std::time::SystemTime>,
+    /// секунда последней проверки «программу обновили» (раз в 5 с)
+    update_sec: i64,
     told_update: bool,
     /// сколько починок идёт сейчас (пока идут — не перезапускаемся новой версией)
     fixes_running: u32,
@@ -578,6 +585,18 @@ impl App {
                         u.speed_progress(p);
                     }
                 }
+                Bg::SpeedAuto(ok) => {
+                    if ok {
+                        self.start_speed();
+                    } else if let Some(u) = self.ui.as_mut() {
+                        u.log("Сеть лимитная — скорость не мерю (замер качает около 60 МБ). Измерить: кнопка «Скорость».");
+                    }
+                }
+                Bg::Analytics(a) => {
+                    if let Some(u) = self.ui.as_mut() {
+                        u.analytics_ready(a);
+                    }
+                }
                 Bg::SpeedDone(res) => {
                     self.sstate.speed_live = None;
                     crate::sched::save_speed(&res);
@@ -598,11 +617,12 @@ impl App {
         }
         if self.recheck_at.is_some_and(|r| Instant::now() >= r) {
             self.recheck_at = None;
-            self.start_checks();
+            self.start_checks(false);
         }
     }
 
-    fn start_checks(&mut self) {
+    /// Прогон проверок. speed — и замер скорости («Проверить всё» по кнопке; перепроверка после починки — без него).
+    fn start_checks(&mut self, speed: bool) {
         if self.checks_running {
             return;
         }
@@ -610,6 +630,13 @@ impl App {
         if let Some(u) = self.ui.as_mut() {
             u.log("Проверка начата…");
             u.set_checking(true);
+        }
+        // «Проверить всё» мерит и скорость (качает ~60 МБ) — кроме лимитной сети (мобильный интернет)
+        if speed {
+            let tx = self.bg_tx.clone();
+            std::thread::spawn(move || {
+                let _ = tx.send(Bg::SpeedAuto(!diag::is_metered()));
+            });
         }
         if self.diag_rx.is_some() {
             // «Проверить всё» — расписанию (у себя или у процесса, который проверяет); итог придёт как обычно
@@ -658,11 +685,11 @@ impl App {
     /// Открыть терминал с командой (кнопка ▶ у сессии и «Текстовый режим»). В DRY_RUN только пишет в журнал.
     fn open_terminal(&mut self, script: String) {
         if fixes::dry_run() {
-            log(&format!("DRY_RUN: открыла бы терминал: {script}"));
+            log(&format!("DRY_RUN: открыл бы терминал: {script}"));
             return;
         }
         match open_terminal_with(&script) {
-            Ok(t) => log(&format!("открыла терминал ({t})")),
+            Ok(t) => log(&format!("открыл терминал ({t})")),
             Err(e) => {
                 log(&format!("терминал не открылся: {e}"));
                 if let Some(u) = self.ui.as_mut() {
@@ -691,7 +718,8 @@ impl App {
                         let _ = w.drag_window();
                     }
                 }
-                Cmd::RunChecks => self.start_checks(),
+                Cmd::RunChecks => self.start_checks(true),
+                Cmd::Recheck => self.start_checks(false),
                 Cmd::AnimChanged => {
                     self.anim = crate::prefs::app_anim();
                     wlog(if self.anim {
@@ -718,6 +746,16 @@ impl App {
                     self.open_terminal(run);
                 }
                 Cmd::SaveSpravka => self.save_spravka(),
+                Cmd::TrayChanged => {
+                    std::thread::spawn(crate::tray::ensure);
+                }
+                Cmd::LoadAnalytics => {
+                    let tx = self.bg_tx.clone();
+                    std::thread::spawn(move || {
+                        crate::footprint::background_priority();
+                        let _ = tx.send(Bg::Analytics(spravka::Analytics::load()));
+                    });
+                }
                 Cmd::ShowWidget => {
                     // уже открыт — второй не нужен
                     let open = procs::list().iter().any(|p| p.is_our("--widget"));
@@ -727,7 +765,7 @@ impl App {
                         wlog("виджет уже открыт — показываю его поверх окон");
                     } else if let Some(exe) = procs::self_exe() {
                         crate::procs::spawn_detached(std::process::Command::new(exe).arg("--widget"));
-                        wlog("открыла виджет на рабочем столе");
+                        wlog("открыл виджет на рабочем столе");
                     }
                 }
                 Cmd::LangChanged => {
@@ -756,11 +794,22 @@ impl App {
     }
 
     /// «Сохранить как картинку…» в справке. В DRY_RUN только пишет, куда сохранила бы.
+    /// Значок в панели просил открыть «Медкарту расхода» (файл analytics.req в папке сеанса).
+    fn analytics_request(&mut self) {
+        let p = crate::store::runtime_dir().join("analytics.req");
+        if std::fs::symlink_metadata(&p).is_err() {
+            return;
+        }
+        crate::store::remove_file_nofollow(&p);
+        let cmds = self.ui.as_mut().map(|u| u.open_analytics()).unwrap_or_default();
+        self.handle_cmds(cmds, None);
+    }
+
     fn save_spravka(&mut self) {
         let Some(u) = self.ui.as_mut() else { return };
         let Some((path, w, h, rgb)) = u.spravka_png() else { return };
         if fixes::dry_run() {
-            u.log(&format!("DRY_RUN: сохранила бы справку в {path}"));
+            u.log(&format!("DRY_RUN: сохранил бы справку в {path}"));
             return;
         }
         // такой файл уже есть — «Справка_…(2).png», а не поверх
@@ -834,22 +883,6 @@ impl App {
         let sec = ui::now_secs();
         if sec != self.last_sec {
             self.last_sec = sec;
-            // программу обновили, пока это окно открыто: оно работает старой версией — подскажем
-            // программу обновили, пока окно открыто: как только ничего не происходит (не идёт починка и замер,
-            // не открыт диалог или меню) — перезапуск новой версией, само. Раньше была одна реплика кота
-            // «закрой и открой» — её легко пропустить, и окно часами показывало старое
-            if sec % 5 == 0 && self.exe_stamp.is_some() && procs::self_stamp() != self.exe_stamp {
-                let idle = self.fixes_running == 0 && self.ui.as_ref().is_none_or(|u| u.is_idle());
-                if idle && !fixes::dry_run() {
-                    log("файл программы обновлён — перезапускаюсь новой версией");
-                    self.restart_now = true;
-                } else if !self.told_update {
-                    self.told_update = true;
-                    if let Some(u) = self.ui.as_mut() {
-                        u.say("Аптечку обновили! Как только закончу дела — перезапущусь сама.");
-                    }
-                }
-            }
             if let Some(u) = self.ui.as_mut() {
                 u.tick_second();
             }
@@ -918,7 +951,32 @@ impl App {
         self.covered = now;
     }
 
+    /// Программу обновили, пока окно открыто: как только ничего не происходит (не идёт починка и замер,
+    /// не открыт диалог или меню) — перезапуск новой версией, само. Проверяется и когда окно свёрнуто или
+    /// закрыто другими (тогда оно не рисуется), иначе старая версия жила бы, пока на неё не посмотрят.
+    fn check_update(&mut self) {
+        let sec = ui::now_secs();
+        if sec == self.update_sec || sec % 5 != 0 {
+            return;
+        }
+        self.update_sec = sec;
+        if self.exe_stamp.is_none() || procs::self_stamp() == self.exe_stamp {
+            return;
+        }
+        let idle = self.fixes_running == 0 && self.ui.as_ref().is_none_or(|u| u.is_idle());
+        if idle && !fixes::dry_run() {
+            log("файл программы обновлён — перезапускаюсь новой версией");
+            self.restart_now = true;
+        } else if !self.told_update {
+            self.told_update = true;
+            if let Some(u) = self.ui.as_mut() {
+                u.say("Аптечку обновили! Как только закончу дела — перезапущусь сам.");
+            }
+        }
+    }
+
     fn tick(&mut self) {
+        self.check_update();
         self.a11y_refresh(false);
         self.check_covered();
         let quiet = self.hidden || self.minimized() || self.covered;
@@ -1233,7 +1291,7 @@ impl App {
         self.base_scale = if maxed { Some(self.scale) } else { None };
         win.set_maximized(maxed);
         self.need_full = true;
-        wlog(if maxed { "развернула на весь экран" } else { "вернула размер" });
+        wlog(if maxed { "развернул на весь экран" } else { "вернул размер" });
     }
 
     /// Самый мелкий масштаб клетки: картинка во всю высоту середины окна.
@@ -1395,6 +1453,8 @@ impl ApplicationHandler<AppEvent> for App {
         self.surface = Some(surface);
         self.set_min_size();
         wlog(&format!("{w}×{h}, интерфейс ×{k}, клетка картинки ×{}", self.scale));
+        // окно открыли из значка в панели кнопкой «Аналитика расхода»
+        self.analytics_request();
     }
 
     fn window_event(&mut self, el: &ActiveEventLoop, _id: WindowId, ev: WindowEvent) {
@@ -1575,6 +1635,7 @@ impl ApplicationHandler<AppEvent> for App {
                     w.focus_window();
                     log("вторая копия: показываю окно");
                 }
+                self.analytics_request();
             }
             AppEvent::A11y(e) => match e.window_event {
                 accesskit_winit::WindowEvent::InitialTreeRequested => {
@@ -1838,10 +1899,18 @@ aptechka --diag          все проверки таблицей в терми�
 aptechka --sessions      сессии ИИ-агентов и как их продолжить\n\
 aptechka --speed         замер скорости в терминале\n\
 aptechka --widget        только виджет на рабочем столе (Linux, Windows)\n\
-aptechka --fix ID [ARG]  одна починка; DRY_RUN=1 — только показать, что было бы\n\n\
+aptechka --tray          только значок с лимитами ИИ в панели (Linux, Windows)\n\
+aptechka --fix ID [ARG]  одна починка; DRY_RUN=1 — только показать, что было бы\n\
+aptechka --claude-limits on|off  лимиты Claude Code через его строку состояния (off — вернуть прежнюю)\n\n\
 Язык: APTECHKA_LANG=ru|en";
 
 fn main() {
+    // строка состояния Claude Code: зовётся часто, поэтому — первым делом, без подготовки остального
+    // (и до подключения к консоли на Windows: вход и выход — каналы от Claude Code)
+    if cli_args().get(1).is_some_and(|a| a == "--statusline") {
+        limits::statusline_main();
+        return;
+    }
     #[cfg(windows)]
     if cli_args().iter().skip(1).any(|a| a.starts_with("--")) || std::env::var_os("UI_SHOT").is_some() {
         attach_console();
@@ -1849,6 +1918,19 @@ fn main() {
     if cli_args().iter().any(|a| a == "--help" || a == "-h") {
         println!("{} {}\n", i18n::t("Аптечка"), env!("CARGO_PKG_VERSION"));
         println!("{}", i18n::tr(HELP));
+        return;
+    }
+    if let Some(i) = cli_args().iter().position(|a| a == "--claude-limits") {
+        let want = cli_args().get(i + 1).map(|v| v != "off").unwrap_or(true);
+        limits::sync_with(Some(want));
+        return;
+    }
+    if let Ok(path) = std::env::var("TRAY_SHOT") {
+        tray::shot(&path);
+        return;
+    }
+    if cli_args().iter().any(|a| a == "--tray") {
+        tray::run();
         return;
     }
     if cli_args().iter().any(|a| a == "--diag") {
@@ -1919,7 +2001,7 @@ fn main() {
                 return;
             }
             Err(e) => {
-                log(&format!("не смогла проверить вторую копию ({e}), запускаюсь так"));
+                log(&format!("не смог проверить вторую копию ({e}), запускаюсь так"));
                 None
             }
         }
@@ -1968,6 +2050,7 @@ fn main() {
         focused: true,
         last_present: Instant::now(),
         exe_stamp: procs::self_stamp(),
+        update_sec: 0,
         told_update: false,
         fixes_running: 0,
         restart_now: false,
@@ -2072,7 +2155,7 @@ fn main() {
             log(&format!("нет экрана: {e}"));
             eprintln!(
                 "{}",
-                i18n::tr("Аптечке нужен экран: не нашла графическую сессию.\nЗапусти её из рабочего стола. Проверка без окна: aptechka --diag")
+                i18n::tr("Аптечке нужен экран: не нашёл графическую сессию.\nЗапусти её из рабочего стола. Проверка без окна: aptechka --diag")
             );
             std::process::exit(2);
         }

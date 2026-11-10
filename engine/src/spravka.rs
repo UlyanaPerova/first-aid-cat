@@ -6,6 +6,8 @@
 //! Отличие от Python: нет шрифтов Liberation Serif / Marck Script (в программе вшит только DejaVu
 //! Sans Condensed), поэтому курсива нет; подпись врача — картинка от руки (assets/подпись_*.png).
 
+use std::collections::BTreeMap;
+
 use crate::diag::{Check, Session};
 use crate::gfx::{Canvas, Fonts, Rect};
 use crate::ui::{localtime, now_secs};
@@ -352,6 +354,14 @@ pub enum Item {
         h: i32,
         en: bool,
     },
+    /// Закрашенный прямоугольник (столбики аналитики).
+    Box {
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+        col: u32,
+    },
 }
 
 pub struct Page {
@@ -457,7 +467,8 @@ impl B<'_> {
     }
 
     fn field(&mut self, label: &str, value: &str) {
-        self.flow(&[sp(&format!("{label}:  "), INK, false), sp(value, BLUE_INK, true)], M, W - 2 * M, 15, Align::Left, 4);
+        // подпись переводится до двоеточия: «Сегодня» есть в таблице, а «Сегодня:  » — нет
+        self.flow(&[sp(&format!("{}:  ", crate::i18n::t(label)), INK, false), sp(value, BLUE_INK, true)], M, W - 2 * M, 15, Align::Left, 4);
     }
 
     fn detail(&mut self, label: &str, text: &str, col: u32) {
@@ -617,6 +628,201 @@ pub fn layout(fonts: &mut Fonts, doc: &Doc, pw: i32) -> Page {
     Page { items, w: pw, h, scale: s }
 }
 
+// ───────────────────────────── медкарта расхода ИИ ─────────────────────────────
+
+/// Данные для «Аналитики расхода»: по агенту — лимиты и расход по дням и моделям.
+#[derive(Clone, Debug, Default)]
+pub struct Analytics {
+    pub agents: Vec<(&'static str, Option<crate::limits::Limits>, crate::limits::Usage, crate::limits::Projects)>,
+    pub now: i64,
+    /// false — ещё считаем (журналы читаются в фоне)
+    pub ready: bool,
+}
+
+impl Analytics {
+    /// Прочитать журналы (первый раз — около секунды: звать не из потока окна).
+    pub fn load() -> Analytics {
+        use crate::limits::*;
+        let agents =
+            vec![("Claude Code", claude_limits(), claude_usage(), claude_projects()), ("Codex", codex_limits(), codex_usage(), codex_projects())]
+                .into_iter()
+                .filter(|(n, l, u, _)| crate::tray::shown(n) && (l.is_some() || !u.is_empty()))
+                .collect();
+        Analytics { agents, now: crate::ui::now_secs(), ready: true }
+    }
+}
+
+/// Цвет столбиков агента.
+fn agent_col(i: usize) -> u32 {
+    [0xC2652A, 0x2A6FC2, 0x3C9D5D, 0x8A4FBF][i % 4]
+}
+
+/// Раскладка «Медкарты расхода ИИ» шириной pw.
+pub fn analytics_layout(fonts: &mut Fonts, a: &Analytics, pw: i32) -> Page {
+    use crate::limits::{fmt_tokens, local_day, Tok};
+    let s = pw as f32 / W as f32;
+    let mut b = B { fonts, items: Vec::new(), y: (M as f32 * s).round() as i32, s };
+    let (c, left) = (Align::Center, Align::Left);
+    b.text("Министерство уюта и котиков · Ветеринарно-компьютерная служба", 13, false, INK, c, 2);
+    b.text("МЕДКАРТА РАСХОДА ИИ", 24, true, INK, c, 2);
+    b.text("за 30 дней · по журналам агентов на этом компьютере", 13, false, GREY, c, 8);
+    b.rule(2, 4);
+    b.rule(1, 18);
+    if !a.ready {
+        b.text("Считаю… (читаю журналы агентов)", 15, false, GREY, left, 10);
+    } else if a.agents.is_empty() {
+        b.text("Нет данных: Claude Code и Codex на этом компьютере ещё не работали.", 15, false, GREY, left, 10);
+    }
+    // дни: 30 последних, по местному времени
+    let days: Vec<i32> = (0..crate::limits::DAYS).rev().map(|i| local_day(a.now - i * 86_400)).collect();
+    let (today, week0) = (local_day(a.now), local_day(a.now - 6 * 86_400));
+    for (ai, (name, lim, us, projects)) in a.agents.iter().enumerate() {
+        b.text(name, 19, true, agent_col(ai), left, 6);
+        // лимиты — полосками: слева что за лимит, справа процент и через сколько сброс, под ними полоса
+        if let Some(l) = lim.filter(|l| l.five.is_some() || l.week.is_some()) {
+            for (what, w) in [("Лимит на 5 ч", l.five), ("Лимит на неделю", l.week)] {
+                let Some(w) = w else { continue };
+                let pct = w.now_pct(a.now);
+                let col = if pct >= 90.0 {
+                    0xD03B3B
+                } else if pct >= 70.0 {
+                    0xEDA100
+                } else {
+                    0x0CA30C
+                };
+                let (x0, x1) = (b.l(M), b.l(W - M));
+                let y0 = b.y;
+                let p14 = b.l(14).max(1) as u16;
+                let base = b.fonts.center_base(y0, b.l(20), p14);
+                b.items.push(Item::Text { x: x0, base, s: crate::i18n::t(what), col: INK, px: p14, bold: false });
+                let reset = if w.resets_at > a.now {
+                    crate::i18n::t(&format!("сброс {}", crate::limits::until(w.resets_at, a.now)))
+                } else if w.resets_at > 0 {
+                    crate::i18n::t("уже сброшен")
+                } else {
+                    String::new()
+                };
+                let p12 = b.l(12).max(1) as u16;
+                let rw = b.fonts.width(&reset, p12, false);
+                b.items.push(Item::Text { x: x1 - rw, base, s: reset, col: GREY, px: p12, bold: false });
+                let t = format!("{pct:.0}%");
+                let p16 = b.l(16).max(1) as u16;
+                let tw = b.fonts.width(&t, p16, true);
+                b.items.push(Item::Text { x: x1 - rw - b.l(12) - tw, base, s: t, col: INK, px: p16, bold: true });
+                let by = y0 + b.l(26);
+                let bh = b.l(8).max(2);
+                b.items.push(Item::Box { x: x0, y: by, w: x1 - x0, h: bh, col: 0xE6E3DA });
+                let fw = ((x1 - x0) as f64 * pct / 100.0).round() as i32;
+                if fw > 0 {
+                    b.items.push(Item::Box { x: x0, y: by, w: fw, h: bh, col });
+                }
+                b.y = by + bh + b.l(16);
+            }
+            b.y += b.l(4);
+        }
+        let mut per_day: BTreeMap<i32, Tok> = BTreeMap::new();
+        let mut per_model: BTreeMap<&str, (Tok, Tok)> = BTreeMap::new();
+        for ((d, m), t) in us {
+            per_day.entry(*d).or_default().add(t);
+            let e = per_model.entry(m.as_str()).or_default();
+            e.1.add(t);
+            if *d >= week0 {
+                e.0.add(t);
+            }
+        }
+        let sum = |from: i32| per_day.range(from..).fold(0u64, |acc, (_, t)| acc + t.total());
+        b.field("Сегодня", &fmt_tokens(sum(today)));
+        b.field("За 7 дней", &fmt_tokens(sum(week0)));
+        b.field("За 30 дней", &fmt_tokens(sum(days[0])));
+        b.y += b.l(10);
+        // столбики по дням
+        let max = days.iter().map(|d| per_day.get(d).map_or(0, |t| t.total())).max().unwrap_or(0).max(1);
+        let (cx, cw, ch) = (b.l(M), b.l(W - 2 * M), b.l(110));
+        let step = cw as f32 / days.len() as f32;
+        b.text(&format!("в день, токенов (макс. {})", fmt_tokens(max)), 12, false, GREY, left, 4);
+        let top = b.y;
+        b.items.push(Item::Rule { x: cx, y: top + ch, w: cw, thick: b.l(1).max(1) });
+        for (i, d) in days.iter().enumerate() {
+            let v = per_day.get(d).map_or(0, |t| t.total());
+            let h = ((v as f64 / max as f64) * ch as f64).round() as i32;
+            if h > 0 {
+                let x = cx + (i as f32 * step).round() as i32;
+                let w = (step * 0.72).round().max(1.0) as i32;
+                b.items.push(Item::Box { x, y: top + ch - h, w, h, col: agent_col(ai) });
+            }
+        }
+        b.y = top + ch + b.l(4);
+        // подписи дат: первая, середина, последняя
+        let lpx = b.l(11).max(1) as u16;
+        let base = b.fonts.center_base(b.y, b.l(14), lpx);
+        for i in [0, days.len() / 2, days.len() - 1] {
+            let d = days[i];
+            let t = format!("{:02}.{:02}", d % 100, d / 100 % 100);
+            let tw = b.fonts.width(&t, lpx, false);
+            let x = (cx + (i as f32 * step + step * 0.36).round() as i32 - tw / 2).clamp(cx, cx + cw - tw);
+            b.items.push(Item::Text { x, base, s: t, col: GREY, px: lpx, bold: false });
+        }
+        b.y += b.l(26);
+        // по моделям
+        let cols = [(M, 300), (M + 300, 150), (M + 450, 150), (M + 600, W - 2 * M - 600)];
+        let row = |b: &mut B, cells: [String; 4], col: u32| {
+            let y0 = b.y;
+            let mut hmax = 0;
+            for (i, t) in cells.iter().enumerate() {
+                b.y = y0;
+                b.flow(&[sp(t, col, false)], cols[i].0, cols[i].1, 13, Align::Left, 0);
+                hmax = hmax.max(b.y - y0);
+            }
+            b.y = y0 + hmax + b.l(4);
+        };
+        row(&mut b, ["Модель".into(), "7 дней".into(), "30 дней".into(), "из них ответы".into()], GREY);
+        let mut models: Vec<_> = per_model.into_iter().collect();
+        models.sort_by_key(|(_, (_, m))| std::cmp::Reverse(m.total()));
+        for (m, (w7, m30)) in models {
+            row(&mut b, [m.to_string(), fmt_tokens(w7.total()), fmt_tokens(m30.total()), fmt_tokens(m30.output)], INK);
+        }
+        // по проектам (папкам, где работал агент): самые затратные за 30 дней
+        let mut pr: BTreeMap<&str, (u64, u64)> = BTreeMap::new();
+        for ((d, p), n) in projects {
+            let e = pr.entry(p.as_str()).or_default();
+            e.1 += n;
+            if *d >= week0 {
+                e.0 += n;
+            }
+        }
+        if !pr.is_empty() {
+            b.y += b.l(10);
+            row(&mut b, ["Проект".into(), "7 дней".into(), "30 дней".into(), "доля".into()], GREY);
+            let total: u64 = pr.values().map(|v| v.1).sum::<u64>().max(1);
+            let mut list: Vec<_> = pr.into_iter().collect();
+            list.sort_by_key(|(_, (_, m))| std::cmp::Reverse(*m));
+            let rest: u64 = list.iter().skip(8).map(|(_, (_, m))| m).sum();
+            for (p, (w7, m30)) in list.into_iter().take(8) {
+                row(&mut b, [p.to_string(), fmt_tokens(w7), fmt_tokens(m30), format!("{:.0}%", m30 as f64 * 100.0 / total as f64)], INK);
+            }
+            if rest > 0 {
+                row(&mut b, ["остальные".into(), String::new(), fmt_tokens(rest), format!("{:.0}%", rest as f64 * 100.0 / total as f64)], GREY);
+            }
+        }
+        b.y += b.l(8);
+        b.rule(1, 16);
+    }
+    if a.ready && !a.agents.is_empty() {
+        b.text(
+            "Почти весь объём — чтение из кэша: на каждом ответе агент заново читает начало разговора, и это считается \
+             токенами, хотя стоит намного дешевле новых. Сколько написала сама модель — колонка «из них ответы».",
+            13,
+            false,
+            GREY,
+            left,
+            6,
+        );
+    }
+    let h = b.y + b.l(M / 2);
+    let items = std::mem::take(&mut b.items);
+    Page { items, w: pw, h, scale: s }
+}
+
 // ───────────────────────────── рисование ─────────────────────────────
 
 struct Lcg(u32);
@@ -700,6 +906,7 @@ pub fn draw(page: &Page, c: &mut Canvas, fonts: &mut Fonts, ox: i32, oy: i32) {
             Item::Rule { x, y, w, thick } => c.fill(Rect::new(ox + x, oy + y, *w, *thick), INK),
             Item::Paw { x, y, size } => paw(c, ox + x, oy + y, *size),
             Item::Sign { x, y, h, en } => sign(c, ox + x, oy + y, *h, *en),
+            Item::Box { x, y, w, h, col } => c.fill(Rect::new(ox + x, oy + y, *w, *h), *col),
         }
     }
 }
@@ -747,11 +954,16 @@ fn sign(c: &mut Canvas, x: i32, y: i32, h: i32, en: bool) {
 /// Лист целиком в RGB (для «Сохранить как картинку»).
 pub fn render_rgb(fonts: &mut Fonts, doc: &Doc, pw: i32) -> (usize, usize, Vec<u8>) {
     let page = layout(fonts, doc, pw);
+    page_rgb(fonts, &page)
+}
+
+/// Готовый лист в RGB.
+pub fn page_rgb(fonts: &mut Fonts, page: &Page) -> (usize, usize, Vec<u8>) {
     let (w, h) = (page.w.max(1) as usize, page.h.max(1) as usize);
     let mut buf = vec![0u32; w * h];
     {
         let mut c = Canvas::new(&mut buf, w, w as i32, h as i32);
-        draw(&page, &mut c, fonts, 0, 0);
+        draw(page, &mut c, fonts, 0, 0);
     }
     let mut rgb = Vec::with_capacity(w * h * 3);
     for p in buf {

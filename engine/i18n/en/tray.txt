@@ -1,0 +1,64 @@
+# tray.rs — значок в панели и окошко лимитов
+
+ru: Лимиты ИИ: пока нет данных
+en: AI limits: no data yet
+
+ru: 5 ч {}%
+en: 5 h {}%
+
+ru: неделя {}%
+en: week {}%
+
+ru: сегодня {}
+en: today {}
+
+ru: Лимиты ИИ
+en: AI limits
+
+ru: Пока нет данных: ни Claude Code, ни Codex ещё не отвечали.
+en: No data yet: neither Claude Code nor Codex has answered.
+
+ru: 5 ч
+en: 5 h
+
+ru: неделя
+en: week
+
+ru: Аналитика расхода…
+en: Usage analytics…
+
+ru: Аптечка — лимиты ИИ
+en: First Aid Cat — AI limits
+
+ru: обновлено в {}:{}
+en: updated at {}:{}
+
+ru: 5 часов
+en: 5 hours
+
+ru: токены за {} дней
+en: tokens, last {} days
+
+ru: сегодня {} · 7 дней {}
+en: today {} · 7 days {}
+
+ru: сегодня
+en: today
+
+ru: Медкарта расхода…
+en: Usage chart…
+
+ru: {}: лимит {} снова свободен
+en: {}: the limit {} is free again
+
+ru: Можно работать дальше.
+en: You can carry on.
+
+ru: Сброс {}.
+en: Resets {}.
+
+ru: {}: занято {}% лимита {}
+en: {}: {}% of the limit {} used
+
+ru: кончится ≈ {}
+en: runs out ≈ {}

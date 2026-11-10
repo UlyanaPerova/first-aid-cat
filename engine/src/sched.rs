@@ -324,6 +324,9 @@ fn produce(tx: &Sender<Vec<Check>>, mut lock: Option<crate::store::lock::Held>) 
     let mut req_seen = crate::store::read_capped(&req_path(), 64).unwrap_or_default();
     let mut factor = freq_factor();
     let mut factor_t = Instant::now();
+    // лимиты Claude: строка состояния подключается при запуске и снимается, если проверку выключили
+    let mut limits_on: Option<bool> = None;
+    let mut tray_t = Instant::now();
     loop {
         let now = Instant::now();
         // отметка «жив» раз в 5 с; без замка — следим, не ожил ли прежний проверяющий
@@ -395,6 +398,21 @@ fn produce(tx: &Sender<Vec<Check>>, mut lock: Option<crate::store::lock::Held>) 
         if factor_t.elapsed() > Duration::from_secs(10) {
             factor_t = Instant::now();
             factor = freq_factor();
+            let on = crate::prefs::unit_enabled("ai_limits", true);
+            // значок в панели должен работать, а его нет (упал, закрыли) — запустить снова, раз в минуту
+            if tray_t.elapsed() > Duration::from_secs(60) {
+                tray_t = Instant::now();
+                if crate::tray::SUPPORTED && crate::tray::enabled() && crate::store::lock::free(&crate::store::runtime_dir().join("tray.lock")) {
+                    std::thread::spawn(crate::tray::ensure);
+                }
+            }
+            if limits_on != Some(on) {
+                limits_on = Some(on);
+                std::thread::spawn(|| {
+                    crate::limits::sync_claude_statusline();
+                    crate::tray::ensure();
+                });
+            }
         }
         // какие показатели включены (могли включить/выключить в «Показателях»)
         // выбор человека читаем один раз за круг (было — по чтению настроек на каждый показатель)

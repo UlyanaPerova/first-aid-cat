@@ -69,6 +69,8 @@ First Aid Cat is one Rust crate (`engine/`) that builds a single binary, `aptech
 | `cover.rs` | Linux: whether the widget is fully covered by other windows (asks the window manager), so its animation sleeps while nobody can see it. On Windows the same is done in `widget.rs` with `WindowFromPoint` |
 | `notify.rs` | Desktop notification when a new problem appears in a category where something is ignored |
 | `single.rs` | One instance per user; a second launch asks the first to show its window (the widget has its own lock, `widget.lock`) |
+| `limits.rs` | AI subscription limits and token usage: Codex limits and tokens from its session logs, Claude Code limits from its status line (`--statusline`, connected in `~/.claude/settings.json`), Claude tokens from its logs; logs are read incrementally |
+| `tray.rs` | The AI limits icon in the panel (`--tray`): StatusNotifierItem over D-Bus on Linux, a notification-area icon with the number drawn on it on Windows; the popup with limits; its own autostart entry |
 | `clip.rs` | Clipboard without GTK |
 | `i18n.rs` | Interface language (see below) |
 | `quips.rs` | What the cat says in the balloon and the widget |

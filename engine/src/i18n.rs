@@ -440,7 +440,7 @@ mod tests {
     fn exact_template_plural_and_parts() {
         let t = tb("ru: Проверить всё\nen: Check all\n\
                     ru: Скорость {} Мбит/с\nen: Speed {} Mbit/s\n\
-                    ru: Нашла {} в {}\nen: Found {0} in {1}\n\
+                    ru: Нашёл {} в {}\nen: Found {0} in {1}\n\
                     ru: ключ|ключа|ключей\nen: key|keys\n\
                     ru: файл|файла|файлов\nen: file|files\n\
                     ru: в норме\nen: fine\n\
@@ -448,8 +448,8 @@ mod tests {
                     ru: Не переведено\nen: \n");
         assert_eq!(translate(&t, "Проверить всё", 0), "Check all");
         assert_eq!(translate(&t, "Скорость 12,5 Мбит/с", 0), "Speed 12,5 Mbit/s");
-        assert_eq!(translate(&t, "Нашла 5 ключей в 1 файл", 0), "Found 5 keys in 1 file");
-        assert_eq!(translate(&t, "Нашла 21 ключ в 3 файла", 0), "Found 21 keys in 3 files");
+        assert_eq!(translate(&t, "Нашёл 5 ключей в 1 файл", 0), "Found 5 keys in 1 file");
+        assert_eq!(translate(&t, "Нашёл 21 ключ в 3 файла", 0), "Found 21 keys in 3 files");
         assert_eq!(translate(&t, "в норме · Проверить всё", 0), "fine · Check all");
         assert_eq!(translate(&t, "  в норме ", 0), "  fine ");
         assert_eq!(translate(&t, "Пусто {x}", 0), "Empty {x}");

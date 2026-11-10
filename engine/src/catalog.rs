@@ -183,6 +183,14 @@ fn base_units() -> &'static [Unit] {
             default_on: true,
         },
         Unit {
+            id: "ai_limits",
+            cat: Cat::Ai,
+            title: "Лимиты и расход ИИ",
+            about: "Сколько занято лимитов подписки Claude Code и Codex, когда сброс, сколько токенов ушло",
+            run: crate::limits::check,
+            default_on: true,
+        },
+        Unit {
             id: "qwen",
             cat: Cat::Ai,
             title: "Qwen Code",
@@ -438,6 +446,14 @@ fn base_units() -> &'static [Unit] {
             default_on: true,
         },
         Unit {
+            id: "ai_limits",
+            cat: Cat::Ai,
+            title: "Лимиты и расход ИИ",
+            about: "Сколько занято лимитов подписки Claude Code и Codex, когда сброс, сколько токенов ушло",
+            run: crate::limits::check,
+            default_on: true,
+        },
+        Unit {
             id: "qwen",
             cat: Cat::Ai,
             title: "Qwen Code",
@@ -616,6 +632,14 @@ fn base_units() -> &'static [Unit] {
             title: "Codex",
             about: "OpenAI Codex CLI: связь, статус OpenAI, сессии",
             run: crate::agents::check_codex,
+            default_on: true,
+        },
+        Unit {
+            id: "ai_limits",
+            cat: Cat::Ai,
+            title: "Лимиты и расход ИИ",
+            about: "Сколько занято лимитов подписки Claude Code и Codex, когда сброс, сколько токенов ушло",
+            run: crate::limits::check,
             default_on: true,
         },
         Unit {

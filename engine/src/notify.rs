@@ -46,7 +46,7 @@ pub fn watch(all: &[Check]) {
 }
 
 /// Показать уведомление (в фоне: окно и проверки не ждут).
-fn send(title: String, body: String) {
+pub(crate) fn send(title: String, body: String) {
     if cfg!(test) || ["UI_SHOT", "UI_FAKE", "FRAMES", "WIDGET_SHOT"].iter().any(|v| std::env::var_os(v).is_some()) {
         return;
     }

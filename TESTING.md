@@ -59,6 +59,7 @@ These are for development and for producing screenshots. Normal use needs none o
 | `UI_K=2` | Interface scale (default: the monitor's scale) |
 | `UI_SHOT=file.png` | Draw the whole window into a PNG without opening it. With `UI_H` (window height), `T` (moment of the animation, seconds), `UI_FAKE=ok\|fix` (sample data instead of real checks), `UI_DO="fix0;speed;menu2;sessions;heal;about;tab1"` (open things before the shot) |
 | `WIDGET_SHOT=file.png` | The same for the widget. `WIDGET_HOVER=1` draws it as if the mouse were over it |
+| `TRAY_SHOT=file.png` | Draw the AI limits popup into a PNG with the real numbers, without the panel |
 | `WIDGET_MAC=dir` | Write the `widget.json` the macOS widget reads, on any system |
 | `WIDGET_CONCEPT=1\|warn\|bad` | Fixed sample data for comparing the widget with its concept art |
 | `WIDGET_ANIM_LOG=1` | The widget logs which animation frames it draws |
