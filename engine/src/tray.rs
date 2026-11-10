@@ -1155,8 +1155,8 @@ pub struct Tpl {
     s: f32,
     /// аватарка в заголовке: (ширина, высота, ARGB с прозрачностью)
     avatar: Img,
-    /// сценки: 0 — агенты закрыты (спит), 1 — работают (пишет луком), 2 — закончили
-    scenes: [Img; 3],
+    /// сценки: 0 — агенты закрыты (спит), 1 — основная (агенты открыты: работают или ждут)
+    scenes: [Img; 2],
     /// значки агентов 16×16 (пиксель-арт): 0 — Claude, 1 — Codex (ChatGPT); каждая точка k×k
     logos: [Img; 2],
 }
@@ -1174,11 +1174,7 @@ impl Tpl {
             k,
             s,
             avatar: avatar(d(52)),
-            scenes: [
-                scene(include_bytes!("../assets/сценка_спит.png")),
-                scene(include_bytes!("../assets/сценка_работает.png")),
-                scene(include_bytes!("../assets/сценка_закончил.png")),
-            ],
+            scenes: [scene(include_bytes!("../assets/сценка_спит.png")), scene(include_bytes!("../assets/сценка_закончил.png"))],
             logos: [
                 resample_nearest(&decode_alpha(include_bytes!("../assets/лого_claude.png")), k as f32),
                 resample_nearest(&decode_alpha(include_bytes!("../assets/лого_codex.png")), k as f32),
@@ -1434,7 +1430,7 @@ fn paint(f: &mut Fonts, agents: &[Agent], watch: &Watch, data_t: i64, t: &Tpl, c
     }
     // низ: сценка с котом (что делают агенты), «обновлено в…», кнопка «Медкарта расхода…» (она — в шаблоне)
     let fy = hh + gh * n as i32;
-    blit(c, &t.scenes[(icon_choice() as usize).min(2)], d(11), fy + d(92));
+    blit(c, &t.scenes[usize::from(icon_choice() != 0)], d(11), fy + d(92));
     if data_t > 0 {
         let tm = crate::ui::localtime(data_t);
         f.draw(c, d(36), fy + d(55), &format!("обновлено в {:02}:{:02}", tm.hour, tm.min), GREY, t.font(22), false);
@@ -1773,7 +1769,7 @@ pub fn shot(path: &str) {
     } else {
         crate::limits::snapshot().into_iter().filter(|a| shown(a.name)).collect()
     };
-    // TRAY_SCENE=0/1/2 — какую сценку показать (спит / работает / закончил)
+    // TRAY_SCENE=0/1/2 — состояние агентов для снимка (0 — спит, 1 и 2 — основная сценка)
     if let Some(st) = std::env::var("TRAY_SCENE").ok().and_then(|v| v.parse::<u8>().ok()) {
         STATE.store(st.min(2), std::sync::atomic::Ordering::Relaxed);
     }

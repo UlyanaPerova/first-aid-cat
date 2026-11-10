@@ -16,7 +16,6 @@
 значок в панели: рисует расширение GNOME — значок AppIndicator убран
 шаблон готов
 ../assets/сценка_спит.png
-../assets/сценка_работает.png
 ../assets/сценка_закончил.png
 ../assets/лого_claude.png
 ../assets/лого_codex.png
