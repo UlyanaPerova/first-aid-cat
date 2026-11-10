@@ -48,7 +48,8 @@ impl Window {
 }
 
 impl Limits {
-    /// Самый заполненный лимит сейчас (для значка в панели).
+    /// Самый заполненный лимит сейчас (для значка в панели; на macOS значка пока нет).
+    #[cfg_attr(target_os = "macos", allow(dead_code))]
     pub fn top(&self, now: i64) -> Option<f64> {
         [self.five, self.week].iter().flatten().map(|w| w.now_pct(now)).reduce(f64::max)
     }
@@ -444,7 +445,8 @@ pub fn snapshot() -> Vec<Agent> {
         .collect()
 }
 
-/// Самый заполненный лимит из всех агентов, %.
+/// Самый заполненный лимит из всех агентов, % (для значка в панели; на macOS значка пока нет).
+#[cfg_attr(target_os = "macos", allow(dead_code))]
 pub fn top(agents: &[Agent], now: i64) -> Option<f64> {
     agents.iter().filter_map(|a| a.limits?.top(now)).reduce(f64::max)
 }

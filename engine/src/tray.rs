@@ -5,6 +5,8 @@
 //! раз в 30 секунд и читают журналы по кусочку. Один на пользователя (замок tray.lock).
 //! Linux — StatusNotifierItem по D-Bus (в GNOME его показывает расширение AppIndicator, текст рядом со
 //! значком — свойство XAyatanaLabel; в KDE текста нет, только значок и подсказка).
+// macOS: значка в строке меню пока нет (следующий шаг) — общие части модуля там пока не используются
+#![cfg_attr(target_os = "macos", allow(dead_code))]
 
 use std::num::NonZeroU32;
 use std::rc::Rc;
