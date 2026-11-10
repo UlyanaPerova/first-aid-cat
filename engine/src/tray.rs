@@ -1067,6 +1067,18 @@ fn decode(bytes: &[u8]) -> Img {
     }
 }
 
+/// PNG с прозрачностью (ARGB, предумноженный, как у аватарки) — для значков агентов.
+fn decode_alpha(bytes: &[u8]) -> Img {
+    match crate::gfx::decode_png(bytes) {
+        Some(pm) => (
+            pm.width() as i32,
+            pm.height() as i32,
+            pm.data().chunks(4).map(|p| (p[3] as u32) << 24 | (p[0] as u32) << 16 | (p[1] as u32) << 8 | p[2] as u32).collect(),
+        ),
+        None => (1, 1, vec![0]),
+    }
+}
+
 /// Уменьшение ближайшей точкой — для пиксельных сценок: каждая точка рисунка остаётся цельной (усреднение
 /// размывало контуры в «мыло»).
 fn resample_nearest(src: &Img, s: f32) -> Img {
@@ -1092,6 +1104,8 @@ pub struct Tpl {
     avatar: Img,
     /// сценки: 0 — агенты закрыты (спит), 1 — работают (пишет луком), 2 — закончили
     scenes: [Img; 3],
+    /// значки агентов 16×16 (пиксель-арт): 0 — Claude, 1 — Codex (ChatGPT); каждая точка k×k
+    logos: [Img; 2],
 }
 
 impl Tpl {
@@ -1111,6 +1125,10 @@ impl Tpl {
                 scene(include_bytes!("../assets/сценка_спит.png")),
                 scene(include_bytes!("../assets/сценка_работает.png")),
                 scene(include_bytes!("../assets/сценка_закончил.png")),
+            ],
+            logos: [
+                resample_nearest(&decode_alpha(include_bytes!("../assets/лого_claude.png")), k as f32),
+                resample_nearest(&decode_alpha(include_bytes!("../assets/лого_codex.png")), k as f32),
             ],
         }
     }
@@ -1308,8 +1326,9 @@ fn paint(f: &mut Fonts, agents: &[Agent], watch: &Watch, data_t: i64, t: &Tpl, c
         };
         // заголовок группы: значок и название — по центру полосы между верхней рамкой и панелью
         let (band_y, band_h) = (gy + d(7), d(47));
-        let mark = d(26);
-        c.fill(Rect::new(d(55), band_y + (band_h - mark) / 2, mark, mark), agent_col(a.name));
+        let logo = &t.logos[usize::from(!a.name.starts_with("Claude"))];
+        let mark = logo.0;
+        blit_alpha(c, logo, d(55), band_y + (band_h - logo.1) / 2);
         f.draw(c, d(55) + mark + d(15), f.center_base(band_y, band_h, t.font(30)), a.name, INK, t.font(30), true);
         // кольца лимитов: белый ободок, дорожка, дуга, белая серединка с процентом; подпись и сброс — под ним
         if let Some(lim) = a.limits.filter(|_| has_rings(a)) {
