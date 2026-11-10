@@ -264,3 +264,5 @@ Every push is checked by [CI](.github/workflows/ci.yml) on Linux, Windows and ma
 The **source code** is licensed under the [Apache License 2.0](LICENSE).
 
 The **images** are not covered by that licence. This includes the cat character, the background art, the widget art, the icons and every other picture in the program and in this repository. Using them outside this program is **not permitted**. See [LICENSE-ART.md](LICENSE-ART.md), [NOTICE](NOTICE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+First Aid Cat is an independent project, not affiliated with, endorsed or sponsored by Anthropic, OpenAI, Google or any other AI company. The names and logos of AI tools (Claude Code, Codex, Gemini and others) are trademarks of their owners; the panel shows pixel-art redrawings of the public logos, generated with image generation, only to label whose limits are shown. See [LICENSE-ART.md](LICENSE-ART.md#ai-tool-logos-and-trademarks).

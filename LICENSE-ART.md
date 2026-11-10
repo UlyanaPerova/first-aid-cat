@@ -21,3 +21,9 @@ You may build and run this program, including the images embedded in its binary,
 - **Character:** integrated into the art with the help of image generation in ChatGPT.
 - **Icons** (`assets/xp/`, the program icon): generated with an image-generation model for this project.
 - **Doctor's signature** (`engine/assets/подпись_*.png`): generated with an image-generation model for this project.
+
+## AI tool logos and trademarks
+
+First Aid Cat is an independent project. It is **not affiliated with, endorsed by or sponsored by** Anthropic, OpenAI, Google, Alibaba Cloud, Moonshot AI, Anysphere or any other AI company.
+
+Claude and Claude Code (Anthropic), ChatGPT and Codex (OpenAI), Gemini and Antigravity (Google), Qwen (Alibaba Cloud), Kimi (Moonshot AI), Cursor (Anysphere), OpenCode (its authors) and their logos are trademarks of their respective owners. The small logos next to the tool names in the AI limits panel are pixel-art redrawings of these publicly available logos, made with image generation. They are used only to show which tool the numbers belong to. This project claims no rights to them: they are not covered by the Apache License or by this artwork licence, and all rights remain with their owners.

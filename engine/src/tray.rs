@@ -1300,8 +1300,11 @@ fn paint(f: &mut Fonts, agents: &[Agent], watch: &Watch, data_t: i64, t: &Tpl, c
             f.draw(c, d(60), gy + d(250), "Пока нет данных: ни Claude Code, ни Codex ещё не отвечали.", GREY, t.font(24), false);
             continue;
         };
-        c.fill(Rect::new(d(55), gy + d(22), d(28), d(26)), agent_col(a.name));
-        f.draw(c, d(98), gy + d(47), a.name, INK, t.font(30), true);
+        // заголовок группы: значок и название — по центру полосы между верхней рамкой и панелью
+        let (band_y, band_h) = (gy + d(7), d(47));
+        let mark = d(26);
+        c.fill(Rect::new(d(55), band_y + (band_h - mark) / 2, mark, mark), agent_col(a.name));
+        f.draw(c, d(55) + mark + d(15), f.center_base(band_y, band_h, t.font(30)), a.name, INK, t.font(30), true);
         // кольца лимитов: белый ободок, дорожка, дуга, белая серединка с процентом; подпись и сброс — под ним
         if let Some(lim) = a.limits.filter(|_| has_rings(a)) {
             let wins: Vec<(u8, &str, crate::limits::Window)> =

@@ -16,3 +16,14 @@ integrated into the art with the help of image generation in ChatGPT.
 
 This product includes third-party software and fonts under their own licences;
 see THIRD_PARTY_NOTICES.md.
+
+TRADEMARKS AND AI TOOL LOGOS
+First Aid Cat is an independent project. It is not affiliated with, endorsed by or
+sponsored by Anthropic, OpenAI, Google, Alibaba Cloud, Moonshot AI, Anysphere or any
+other AI company. Claude and Claude Code (Anthropic), ChatGPT and Codex (OpenAI),
+Gemini and Antigravity (Google), Qwen (Alibaba Cloud), Kimi (Moonshot AI), Cursor
+(Anysphere), OpenCode (its authors) and their logos are trademarks of their respective
+owners. The small logos next to the tool names in the AI limits panel are pixel-art
+redrawings of these publicly available logos, made with image generation. They are used
+only to show which tool the numbers belong to. They are not covered by the Apache License
+or by LICENSE-ART.md, and all rights to them remain with their owners.
