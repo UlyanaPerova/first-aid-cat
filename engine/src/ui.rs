@@ -233,12 +233,8 @@ enum MenuAct {
     Tray,
     /// следить ли за агентом (номер в tray::AGENTS)
     TrayAgent(u8),
-    /// число в панели у всех агентов: true — у каждого своё, false — самое большое
-    TrayLabel(bool),
-    /// число в панели только у одного агента (номер в tray::AGENTS)
-    TrayFor(u8),
-    /// какой лимит в панели: 0 — самый занятый, 1 — 5 часов, 2 — неделя
-    TrayWin(u8),
+    /// что показывать числом в панели (tray::number_choice)
+    TrayNum(u8),
     /// уведомления о лимитах
     LimitsNotify,
     /// лицензии и уведомления (licenses.rs): положить в папку сеанса и открыть
@@ -361,17 +357,23 @@ fn limits_menu() -> Vec<(String, MenuAct)> {
     let mut v = Vec::new();
     if crate::tray::SUPPORTED {
         v.push(("Значок в панели".to_string(), MenuAct::Tray));
+        // число и уведомления — дело значка: без него их некому показывать
         if crate::tray::enabled() {
-            v.push(("Число в панели: все агенты, самое большое".to_string(), MenuAct::TrayLabel(false)));
-            v.push(("Число в панели: все агенты, у каждого своё".to_string(), MenuAct::TrayLabel(true)));
-            for (i, a) in crate::tray::AGENTS.iter().enumerate() {
-                v.push((format!("Число в панели: только {a}"), MenuAct::TrayFor(i as u8)));
+            // один выбор: галочка всегда ровно у одного пункта
+            v.push(("Число в панели: самый заполненный лимит".to_string(), MenuAct::TrayNum(0)));
+            v.push(("Число в панели: у каждого агента своё".to_string(), MenuAct::TrayNum(1)));
+            for n in 2..2 + crate::tray::AGENTS.len() as u8 * 2 {
+                if let Some((a, week)) = crate::tray::number_target(n) {
+                    let label = if week {
+                        format!("Число в панели: {a}, неделя")
+                    } else {
+                        format!("Число в панели: {a}, 5 часов")
+                    };
+                    v.push((label, MenuAct::TrayNum(n)));
+                }
             }
-            v.push(("Лимит в панели: самый занятый".to_string(), MenuAct::TrayWin(0)));
-            v.push(("Лимит в панели: 5 часов".to_string(), MenuAct::TrayWin(1)));
-            v.push(("Лимит в панели: неделя".to_string(), MenuAct::TrayWin(2)));
+            v.push(("Уведомлять: 80 %, 95 % и сброс".to_string(), MenuAct::LimitsNotify));
         }
-        v.push(("Уведомлять: 80 %, 95 % и сброс".to_string(), MenuAct::LimitsNotify));
     }
     for (i, a) in crate::tray::AGENTS.iter().enumerate() {
         v.push((format!("Следить за: {a}"), MenuAct::TrayAgent(i as u8)));
@@ -1699,23 +1701,14 @@ impl Ui {
                 });
                 vec![Cmd::TrayChanged]
             }
-            MenuAct::TrayLabel(each) => {
-                crate::tray::set_label_each(each);
-                crate::tray::set_label_agent(None);
-                Vec::new()
-            }
-            MenuAct::TrayFor(i) => {
-                if let Some(a) = crate::tray::AGENTS.get(i as usize) {
-                    crate::tray::set_label_agent(Some(a));
-                    // число агента, за которым не следим, взять неоткуда — включить слежение
+            MenuAct::TrayNum(n) => {
+                crate::tray::set_number_choice(n);
+                // число агента, за которым не следим, взять неоткуда — включить слежение
+                if let Some((a, _)) = crate::tray::number_target(n) {
                     if !crate::tray::shown(a) {
                         crate::tray::toggle_shown(a);
                     }
                 }
-                Vec::new()
-            }
-            MenuAct::TrayWin(w) => {
-                crate::tray::set_label_window(w);
                 Vec::new()
             }
             MenuAct::LimitsNotify => {
@@ -1725,6 +1718,11 @@ impl Ui {
             MenuAct::TrayAgent(i) => {
                 if let Some(a) = crate::tray::AGENTS.get(i as usize) {
                     crate::tray::toggle_shown(a);
+                    // перестали следить за агентом, чьё число в панели, — в панели снова самый заполненный лимит
+                    if !crate::tray::shown(a) && crate::tray::number_target(crate::tray::number_choice()).is_some_and(|(n, _)| n == *a) {
+                        crate::tray::set_number_choice(0);
+                        self.say("В панели теперь самый заполненный лимит: за этим агентом больше не следим.");
+                    }
                 }
                 Vec::new()
             }
@@ -3254,9 +3252,7 @@ impl P<'_, '_> {
                         || matches!(act, MenuAct::AppAnim) && crate::prefs::app_anim()
                         || matches!(act, MenuAct::WidgetAnim) && crate::widget_look::anim_enabled()
                         || matches!(act, MenuAct::Tray) && crate::tray::enabled()
-                        || matches!(act, MenuAct::TrayLabel(e) if crate::tray::label_agent().is_none() && *e == crate::tray::label_each())
-                        || matches!(act, MenuAct::TrayFor(i) if crate::tray::label_agent().is_some_and(|a| crate::tray::AGENTS.get(*i as usize) == Some(&a)))
-                        || matches!(act, MenuAct::TrayWin(w) if *w == crate::tray::label_window())
+                        || matches!(act, MenuAct::TrayNum(n) if *n == crate::tray::number_choice())
                         || matches!(act, MenuAct::LimitsNotify) && crate::tray::notify_on()
                         || matches!(act, MenuAct::TrayAgent(i) if crate::tray::AGENTS.get(*i as usize).is_some_and(|a| crate::tray::shown(a)))
                         || matches!(act, MenuAct::Lang(i) if *i == lang_now());

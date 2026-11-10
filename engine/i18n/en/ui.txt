@@ -941,23 +941,20 @@ en: The AI limits icon is removed from the panel.
 ru: кот
 en: cat
 
-ru: Число в панели: все агенты, самое большое
-en: Panel number: all agents, the highest
+ru: Число в панели: самый заполненный лимит
+en: Panel number: the fullest limit
 
-ru: Число в панели: все агенты, у каждого своё
-en: Panel number: all agents, each its own
+ru: Число в панели: у каждого агента своё
+en: Panel number: each agent its own
 
-ru: Число в панели: только {}
-en: Panel number: only {}
+ru: Число в панели: {}, 5 часов
+en: Panel number: {}, 5 hours
 
-ru: Лимит в панели: самый занятый
-en: Panel limit: the fullest
+ru: Число в панели: {}, неделя
+en: Panel number: {}, week
 
-ru: Лимит в панели: 5 часов
-en: Panel limit: 5 hours
-
-ru: Лимит в панели: неделя
-en: Panel limit: week
+ru: В панели теперь самый заполненный лимит: за этим агентом больше не следим.
+en: The panel now shows the fullest limit: this agent is no longer watched.
 
 ru: Уведомлять: 80 %, 95 % и сброс
 en: Notify: 80 %, 95 % and reset
