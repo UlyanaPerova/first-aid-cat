@@ -66,6 +66,9 @@ pub fn toggle_shown(name: &str) {
 fn shown_sig() -> Vec<bool> {
     let mut v: Vec<bool> = AGENTS.iter().map(|a| shown(a)).collect();
     v.push(label_each());
+    v.push(label_agent().is_some_and(|a| a.starts_with("Claude")));
+    v.push(label_agent().is_some_and(|a| !a.starts_with("Claude")));
+    v.extend([label_window() == 1, label_window() == 2]);
     v
 }
 
@@ -104,14 +107,64 @@ pub enum Ev {
 /// Текст рядом со значком: «64%», или пусто, если лимиты неизвестны (на Windows — число на самом значке).
 #[cfg_attr(windows, allow(dead_code))]
 pub fn label(agents: &[Agent], now: i64) -> String {
+    label_with(agents, now, label_each(), label_agent(), label_window())
+}
+
+/// То же по явным настройкам: у каждого своё / чьё число / какой лимит (0 — самый занятый, 1 — 5 часов, 2 — неделя).
+#[cfg_attr(windows, allow(dead_code))]
+fn label_with(agents: &[Agent], now: i64, each: bool, only: Option<&str>, win: u8) -> String {
     // перед числом — широкий пробел: панель ставит текст вплотную к значку, а у соседних показателей
     // (температура, загрузка) между значком и числом есть воздух
-    if label_each() {
+    if each && only.is_none() {
         // у каждого агента своё: «Cl 10%  Co 13%»
-        let parts: Vec<String> = agents.iter().filter_map(|a| Some(format!("{} {:.0}%", short(a.name), a.limits?.top(now)?))).collect();
+        let parts: Vec<String> = agents.iter().filter_map(|a| Some(format!("{} {:.0}%", short(a.name), pick(a, now, win)?))).collect();
         return if parts.is_empty() { String::new() } else { format!("\u{2002}{}", parts.join("\u{2002}")) };
     }
-    crate::limits::top(agents, now).map(|p| format!("\u{2002}{p:.0}%")).unwrap_or_default()
+    pct_with(agents, now, only, win).map(|p| format!("\u{2002}{p:.0}%")).unwrap_or_default()
+}
+
+/// Процент агента по лимиту: самый занятый из двух, только 5 часов или только неделя.
+fn pick(a: &Agent, now: i64, win: u8) -> Option<f64> {
+    let l = a.limits?;
+    match win {
+        1 => l.five.map(|w| w.now_pct(now)),
+        2 => l.week.map(|w| w.now_pct(now)),
+        _ => l.top(now),
+    }
+}
+
+/// Одно число для панели (и значка на Windows): выбранный агент (или самый занятый из всех) по выбранному лимиту.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn panel_pct(agents: &[Agent], now: i64) -> Option<f64> {
+    pct_with(agents, now, label_agent(), label_window())
+}
+
+fn pct_with(agents: &[Agent], now: i64, only: Option<&str>, win: u8) -> Option<f64> {
+    agents.iter().filter(|a| only.is_none_or(|n| a.name == n)).filter_map(|a| pick(a, now, win)).reduce(f64::max)
+}
+
+/// Чьё число в панели: None — всех агентов, иначе — только этого (имя из AGENTS).
+pub fn label_agent() -> Option<&'static str> {
+    let v = crate::prefs::load();
+    let name = v.get("tray_agent").and_then(|x| x.as_str()).map(String::from)?;
+    AGENTS.iter().copied().find(|a| *a == name)
+}
+
+pub fn set_label_agent(name: Option<&str>) {
+    crate::prefs::update(|v| v["tray_agent"] = serde_json::json!(name.unwrap_or("all")));
+}
+
+/// Какой лимит в панели: 0 — самый занятый, 1 — 5 часов, 2 — неделя.
+pub fn label_window() -> u8 {
+    match crate::prefs::load().get("tray_window").and_then(|v| v.as_str()) {
+        Some("five") => 1,
+        Some("week") => 2,
+        _ => 0,
+    }
+}
+
+pub fn set_label_window(w: u8) {
+    crate::prefs::update(|v| v["tray_window"] = serde_json::json!(["top", "five", "week"][w.min(2) as usize]));
 }
 
 /// Короткое имя агента для панели.
@@ -1599,7 +1652,7 @@ impl App {
         #[cfg(windows)]
         if let Some(t) = &self.tray {
             let n = win::icon_side();
-            let argb = number_icon(&mut self.fonts, n, crate::limits::top(&self.agents, now))
+            let argb = number_icon(&mut self.fonts, n, panel_pct(&self.agents, now))
                 // данных нет — кот; белый силуэт на тёмном квадрате (на светлой панели задач иначе не виден)
                 .or_else(|| icon_rgba(n as u32).map(|(_, px)| on_dark(n, px)))
                 .unwrap_or_default();
@@ -1872,9 +1925,15 @@ mod tests {
             days: vec![0; 14],
         };
         // недельное окно уже сброшено — главный лимит 5-часовой
-        assert_eq!(label(std::slice::from_ref(&a), now), "\u{2002}64%");
+        let one = std::slice::from_ref(&a);
+        assert_eq!(label_with(one, now, false, None, 0), "\u{2002}64%");
+        assert_eq!(label_with(one, now, true, None, 0), "\u{2002}Co 64%");
+        // только неделя (уже сброшена — 0), только 5 часов, чужой агент — пусто
+        assert_eq!(label_with(one, now, false, None, 2), "\u{2002}0%");
+        assert_eq!(label_with(one, now, true, Some("Codex"), 1), "\u{2002}64%");
+        assert_eq!(label_with(one, now, false, Some("Claude Code"), 0), "");
         assert_eq!(tooltip(&[a], now), "Codex: 5 ч 64% · неделя 0% · сегодня 1,5 млн");
-        assert_eq!(label(&[], now), "");
+        assert_eq!(label_with(&[], now, false, None, 0), "");
     }
 
     fn agent(pct5: f64, reset5: i64, at: i64) -> Agent {

@@ -445,12 +445,6 @@ pub fn snapshot() -> Vec<Agent> {
         .collect()
 }
 
-/// Самый заполненный лимит из всех агентов, % (для значка в панели; на macOS значка пока нет).
-#[cfg_attr(target_os = "macos", allow(dead_code))]
-pub fn top(agents: &[Agent], now: i64) -> Option<f64> {
-    agents.iter().filter_map(|a| a.limits?.top(now)).reduce(f64::max)
-}
-
 // ───────────────────────────── строки на вкладке «ИИ» ─────────────────────────────
 
 /// «3,4 млн», «52 тыс.», «812».
