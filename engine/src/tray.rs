@@ -1540,11 +1540,21 @@ impl App {
             paint(&mut self.fonts, &self.agents, &self.watch, self.data_t, self.tpl.as_ref().expect("шаблон готов"), &mut c)
         };
         let rgba: Vec<u8> = buf.iter().flat_map(|p| [(p >> 16) as u8, (p >> 8) as u8, *p as u8, 255]).collect();
-        // новое имя файла при каждом обновлении: GNOME запоминает картинку по пути
+        // GNOME запоминает картинку по имени файла (повтор имени = старая картинка), поэтому имя каждый раз
+        // новое: номер процесса и счётчик; прошлые картинки удаляем
         self.panel_n = self.panel_n.wrapping_add(1);
         let dir = crate::store::runtime_dir();
-        let path = dir.join(format!("tray_panel_{}.png", self.panel_n % 2));
+        let name = format!("tray_panel_{}_{}.png", std::process::id(), self.panel_n);
+        let path = dir.join(&name);
         let _ = crate::store::write_private_quick(&path, &png_rgba(w as u32, h as u32, &rgba));
+        if let Ok(rd) = std::fs::read_dir(&dir) {
+            for e in rd.flatten() {
+                let f = e.file_name().to_string_lossy().into_owned();
+                if f.starts_with("tray_panel_") && f.ends_with(".png") && f != name {
+                    let _ = std::fs::remove_file(e.path());
+                }
+            }
+        }
         let r = |x: Rect| [x.x, x.y, x.w, x.h];
         let Some(t) = &self.tray else { return };
         t.set_panel(path.to_string_lossy().into_owned(), w as u32, h as u32, r(btn), r(close));
