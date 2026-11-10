@@ -1046,8 +1046,13 @@ impl Watch {
 // Куски уменьшаются под экран один раз и запоминаются (картинка готова заранее, мощности не тратит).
 
 /// Масштаб: дизайн — окно шириной 888 точек; на экране ×2 плашка — 0,84 от него.
+/// Ширина сценки из дизайна (в её собственных точках): плашка подогнана так, что сценка ложится 1:1
+/// (на экране с масштабом 2 — ровно ×2), как в исходнике, без пересчёта точек.
+const SCENE_W: i32 = 436;
+
 fn tpl_scale(k: i32) -> f32 {
-    0.42 * k as f32
+    // 876 точек дизайна — ширина места под сценку
+    SCENE_W as f32 / 876.0 * k as f32
 }
 
 /// Картинка: ширина, высота, точки 0xRRGGBB.
@@ -1093,10 +1098,10 @@ impl Tpl {
     fn new(k: i32) -> Tpl {
         let s = tpl_scale(k);
         let d = |v: i32| (v as f32 * s).round() as i32;
-        // сценка — настоящий пиксель-арт 367×103: увеличение ближайшей точкой до места на плашке
+        // сценка: точка в точку как в дизайне, на экране с масштабом k — каждая точка k×k
         let scene = |b: &[u8]| {
             let src = decode(b);
-            resample_nearest(&src, d(876) as f32 / src.0 as f32)
+            resample_nearest(&src, (SCENE_W * k) as f32 / src.0 as f32)
         };
         Tpl {
             k,
@@ -1119,9 +1124,10 @@ impl Tpl {
         (v as f32 * self.s).round().max(6.0) as u16
     }
 
-    /// Высоты частей (по дизайну: заголовок 98, группа агента 512, низ 349 точек).
+    /// Высоты частей (по дизайну: заголовок 98, группа агента 512; низ — строка с кнопкой и сценка).
     fn parts(&self) -> (i32, i32, i32) {
-        (self.d(98), self.d(512), self.d(349))
+        let scene_h = self.scenes.iter().map(|s| s.1).max().unwrap_or(0);
+        (self.d(98), self.d(512), self.d(92) + scene_h + self.d(11))
     }
 
     fn size(&self, agents: usize) -> (i32, i32) {
@@ -1215,7 +1221,7 @@ fn frame(c: &mut Canvas, r: Rect, col: u32) {
 use crate::gfx::{BLACK, WHITE};
 
 const W: i32 = 444;
-const BODY: u32 = 0xD7D4D1;
+const BODY: u32 = 0xD3CFCC; // как стена в сценке (цвет из дизайна)
 const INK: u32 = 0x151515;
 const GREY: u32 = 0x5E5D5C;
 const TRACK: u32 = 0xC2BDB8;
@@ -1695,6 +1701,10 @@ pub fn shot(path: &str) {
     } else {
         crate::limits::snapshot().into_iter().filter(|a| shown(a.name)).collect()
     };
+    // TRAY_SCENE=0/1/2 — какую сценку показать (спит / работает / закончил)
+    if let Some(st) = std::env::var("TRAY_SCENE").ok().and_then(|v| v.parse::<u8>().ok()) {
+        STATE.store(st.min(2), std::sync::atomic::Ordering::Relaxed);
+    }
     let t = Tpl::new(k);
     let (w, h) = t.size(agents.len());
     let mut buf = vec![0u32; (w * h) as usize];
