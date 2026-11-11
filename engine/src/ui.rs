@@ -231,10 +231,14 @@ enum MenuAct {
     Analytics,
     /// значок с лимитами ИИ в верхней панели: включить или выключить
     Tray,
-    /// следить ли за агентом (номер в tray::AGENTS)
-    TrayAgent(u8),
-    /// что показывать числом в панели (tray::number_choice)
+    /// за какими агентами следить — один выбор (tray::agents_choice: 0 — за всеми, 1.. — за одним)
+    TrayAgents(u8),
+    /// что показывать числом у значка (tray::number_choice: 0 — самый заполненный, 1 — у каждого своё)
     TrayNum(u8),
+    /// какой лимит в числе у значка (tray::window_choice: 0 — самый заполненный, 1 — 5 часов, 2 — неделя)
+    TrayWin(u8),
+    /// черта между разделами меню (не нажимается)
+    Sep,
     /// уведомления о лимитах
     LimitsNotify,
     /// лицензии и уведомления (licenses.rs): положить в папку сеанса и открыть
@@ -292,19 +296,29 @@ fn heal_menu() -> u8 {
 fn menus() -> Vec<(&'static str, Vec<(String, MenuAct)>)> {
     let fixes_menu: Vec<(String, MenuAct)> = fixes::GENERAL.iter().enumerate().map(|(i, (_, l))| (l.to_string(), MenuAct::Fix(i as u8))).collect();
     let mut view: Vec<(String, MenuAct)> = (0..N_TABS).map(|i| (tab_name(i).to_string(), MenuAct::Tab(i as u8))).collect();
+    view.push((String::new(), MenuAct::Sep));
     view.push(("Журнал".into(), MenuAct::ToggleLog));
     view.push(("Анимация картинки".into(), MenuAct::AppAnim));
     // названия языков — каждое на своём языке (не переводятся), чтобы найти свой в чужом интерфейсе
+    view.push((String::new(), MenuAct::Sep));
     view.push(("Язык: как в системе".into(), MenuAct::Lang(0)));
     view.push(("Русский".into(), MenuAct::Lang(1)));
     view.push(("English".into(), MenuAct::Lang(2)));
     let mut m = vec![
-        ("Файл", vec![("Текстовый режим (таблица в терминале)".into(), MenuAct::TextMode), ("Выход".into(), MenuAct::Quit)]),
+        (
+            "Файл",
+            vec![
+                ("Текстовый режим (таблица в терминале)".into(), MenuAct::TextMode),
+                (String::new(), MenuAct::Sep),
+                ("Выход".into(), MenuAct::Quit),
+            ],
+        ),
         (
             "Проверки",
             vec![
                 ("Проверить всё".into(), MenuAct::CheckAll),
                 ("Измерить скорость".into(), MenuAct::Speed),
+                (String::new(), MenuAct::Sep),
                 ("Проверять редко (экономно)".into(), MenuAct::Freq(0)),
                 ("Проверять обычно".into(), MenuAct::Freq(1)),
                 ("Проверять часто".into(), MenuAct::Freq(2)),
@@ -319,6 +333,7 @@ fn menus() -> Vec<(&'static str, Vec<(String, MenuAct)>)> {
             vec![
                 ("Справка от Мяудоктора".into(), MenuAct::Spravka),
                 ("Свои проверки и исправления".into(), MenuAct::CustomGuide),
+                (String::new(), MenuAct::Sep),
                 ("Лицензии".into(), MenuAct::Licenses),
                 ("О программе".into(), MenuAct::About),
             ],
@@ -333,7 +348,8 @@ fn menus() -> Vec<(&'static str, Vec<(String, MenuAct)>)> {
     m
 }
 
-/// Меню «Виджет»: показать на рабочем столе, вид (как в macos/widget и widget_look.rs), размер.
+/// Меню «Виджет»: показать на рабочем столе · стиль (как в macos/widget и widget_look.rs) · размер ·
+/// анимация. Стиль, а не «Вид»: «Вид» — соседнее меню окна, одно слово в двух местах путало.
 fn widget_menu() -> Vec<(String, MenuAct)> {
     let mut v = Vec::new();
     // НЕ ДОБАВЛЯТЬ на macOS «Показать на рабочем столе» (даже ради одинаковых меню на всех системах):
@@ -341,45 +357,59 @@ fn widget_menu() -> Vec<(String, MenuAct)> {
     // а из программы его не показать. Пункт вёл бы к отдельному окну-виджету, которое на Маке лишнее.
     if !cfg!(target_os = "macos") {
         v.push(("Показать на рабочем столе".to_string(), MenuAct::WidgetShow));
+        v.push((String::new(), MenuAct::Sep));
     }
     for (i, s) in crate::widget_look::STYLES.iter().enumerate() {
-        v.push((format!("Вид: {}", s.name()), MenuAct::WidgetStyle(i as u8)));
+        v.push((format!("Стиль: {}", s.name()), MenuAct::WidgetStyle(i as u8)));
     }
-    v.push(("Анимация виджета".into(), MenuAct::WidgetAnim));
+    v.push((String::new(), MenuAct::Sep));
     v.push(("Размер: маленький".into(), MenuAct::WidgetSize(0)));
     v.push(("Размер: средний".into(), MenuAct::WidgetSize(1)));
+    v.push((String::new(), MenuAct::Sep));
+    v.push(("Анимация виджета".into(), MenuAct::WidgetAnim));
     v
 }
 
-/// Меню «Лимиты ИИ»: значок в панели (и его вид — только когда он включён), за какими агентами следить,
-/// «Медкарта расхода». Всё про лимиты — в одном месте.
+/// Меню «Лимиты ИИ» — три раздела через черту, без пунктов, спорящих друг с другом.
+/// Сверху «Медкарта расхода ИИ». Потом за какими агентами следить — ОДИН выбор (снять всех нельзя,
+/// и он же решает, чьи цифры в плашке, в числе у значка и в уведомлениях). Внизу значок в панели и то,
+/// что бывает только при нём: число рядом (одно или у каждого — лишь когда агентов больше одного;
+/// какой лимит — самый заполненный, 5 часов или неделя) и уведомления.
 fn limits_menu() -> Vec<(String, MenuAct)> {
-    let mut v = Vec::new();
+    let mut v = vec![("Медкарта расхода ИИ".to_string(), MenuAct::Analytics), (String::new(), MenuAct::Sep)];
+    v.push((format!("Агенты: {} и {}", crate::tray::AGENTS[0], crate::tray::AGENTS[1]), MenuAct::TrayAgents(0)));
+    for (i, a) in crate::tray::AGENTS.iter().enumerate() {
+        v.push((format!("Агенты: только {a}"), MenuAct::TrayAgents(i as u8 + 1)));
+    }
     if crate::tray::SUPPORTED {
+        v.push((String::new(), MenuAct::Sep));
         v.push(("Значок в панели".to_string(), MenuAct::Tray));
         // число и уведомления — дело значка: без него их некому показывать
         if crate::tray::enabled() {
-            // один выбор: галочка всегда ровно у одного пункта
-            v.push(("Число в панели: самый заполненный лимит".to_string(), MenuAct::TrayNum(0)));
-            v.push(("Число в панели: у каждого агента своё".to_string(), MenuAct::TrayNum(1)));
-            for n in 2..2 + crate::tray::AGENTS.len() as u8 * 2 {
-                if let Some((a, week)) = crate::tray::number_target(n) {
-                    let label = if week {
-                        format!("Число в панели: {a}, неделя")
-                    } else {
-                        format!("Число в панели: {a}, 5 часов")
-                    };
-                    v.push((label, MenuAct::TrayNum(n)));
-                }
+            // на Windows у значка одно место под число — «у каждого своё» там не показать
+            if crate::tray::agents_choice() == 0 && !cfg!(windows) {
+                v.push((String::new(), MenuAct::Sep));
+                v.push(("Число у значка: одно, у кого больше".to_string(), MenuAct::TrayNum(0)));
+                v.push(("Число у значка: у каждого агента своё".to_string(), MenuAct::TrayNum(1)));
             }
-            v.push(("Уведомлять: 80 %, 95 % и сброс".to_string(), MenuAct::LimitsNotify));
+            v.push((String::new(), MenuAct::Sep));
+            v.push(("Лимит в числе: самый заполненный".to_string(), MenuAct::TrayWin(0)));
+            v.push(("Лимит в числе: 5 часов".to_string(), MenuAct::TrayWin(1)));
+            v.push(("Лимит в числе: неделя".to_string(), MenuAct::TrayWin(2)));
+            v.push((String::new(), MenuAct::Sep));
+            v.push(("Уведомлять о лимитах (80 %, 95 %, сброс)".to_string(), MenuAct::LimitsNotify));
         }
     }
-    for (i, a) in crate::tray::AGENTS.iter().enumerate() {
-        v.push((format!("Следить за: {a}"), MenuAct::TrayAgent(i as u8)));
-    }
-    v.push(("Медкарта расхода ИИ".to_string(), MenuAct::Analytics));
     v
+}
+
+/// Высота пункта меню в логических пикселях: черта ниже обычной строки.
+fn menu_item_h(act: MenuAct) -> i32 {
+    if act == MenuAct::Sep {
+        9
+    } else {
+        24
+    }
 }
 
 /// Что окно просит сделать у программы (то, что не касается самого рисования).
@@ -1703,29 +1733,21 @@ impl Ui {
             }
             MenuAct::TrayNum(n) => {
                 crate::tray::set_number_choice(n);
-                // число агента, за которым не следим, взять неоткуда — включить слежение
-                if let Some((a, _)) = crate::tray::number_target(n) {
-                    if !crate::tray::shown(a) {
-                        crate::tray::toggle_shown(a);
-                    }
-                }
                 Vec::new()
             }
             MenuAct::LimitsNotify => {
                 crate::tray::set_notify(!crate::tray::notify_on());
                 Vec::new()
             }
-            MenuAct::TrayAgent(i) => {
-                if let Some(a) = crate::tray::AGENTS.get(i as usize) {
-                    crate::tray::toggle_shown(a);
-                    // перестали следить за агентом, чьё число в панели, — в панели снова самый заполненный лимит
-                    if !crate::tray::shown(a) && crate::tray::number_target(crate::tray::number_choice()).is_some_and(|(n, _)| n == *a) {
-                        crate::tray::set_number_choice(0);
-                        self.say("В панели теперь самый заполненный лимит: за этим агентом больше не следим.");
-                    }
-                }
+            MenuAct::TrayAgents(c) => {
+                crate::tray::set_agents_choice(c);
                 Vec::new()
             }
+            MenuAct::TrayWin(w) => {
+                crate::tray::set_window_choice(w);
+                Vec::new()
+            }
+            MenuAct::Sep => Vec::new(),
             MenuAct::WidgetShow => vec![Cmd::ShowWidget],
             MenuAct::WidgetStyle(i) => {
                 let id = crate::widget_look::STYLES.get(i as usize).map_or("window", |s| s.id());
@@ -1847,7 +1869,12 @@ impl Ui {
                     }
                 }
             };
-            let next = ((cur + dy) % len + len) % len;
+            let list = &all[m as usize].1;
+            let mut next = ((cur + dy) % len + len) % len;
+            // черту стрелками перешагиваем (две черты подряд не ставим, так что хватает одного шага)
+            if list.get(next as usize).is_some_and(|x| x.1 == MenuAct::Sep) {
+                next = ((next + dy.signum()) % len + len) % len;
+            }
             self.st.hover = Some(Hit::MenuItem(m, next as u8));
         }
         self.hover_since = None;
@@ -3202,7 +3229,8 @@ impl P<'_, '_> {
                     w = w.max(self.width(l, px, false));
                 }
                 let mr = self.menu_rects().get(i as usize).copied().unwrap_or_default();
-                Rect::new(mr.x, mr.bottom(), w + 44 * k, list.len() as i32 * 24 * k + 6 * k)
+                let h: i32 = list.iter().map(|(_, a)| menu_item_h(*a)).sum();
+                Rect::new(mr.x, mr.bottom(), w + 44 * k, h * k + 6 * k)
             }
             Popup::Heal => {
                 let mut w = 0;
@@ -3235,8 +3263,17 @@ impl P<'_, '_> {
         match self.s.popup {
             Popup::Menu(m) => {
                 let list = menus().into_iter().nth(m as usize).map(|x| x.1).unwrap_or_default();
+                let mut y = r.y + 3 * k;
                 for (i, (label, act)) in list.iter().enumerate() {
-                    let ir = Rect::new(r.x + 3 * k, r.y + 3 * k + i as i32 * 24 * k, r.w - 6 * k, 24 * k);
+                    let ir = Rect::new(r.x + 3 * k, y, r.w - 6 * k, menu_item_h(*act) * k);
+                    y += ir.h;
+                    if *act == MenuAct::Sep {
+                        // вдавленная черта, как в меню Windows
+                        let ly = ir.y + ir.h / 2 - k;
+                        self.c.fill(Rect::new(ir.x + 2 * k, ly, ir.w - 4 * k, k), 0x808080);
+                        self.c.fill(Rect::new(ir.x + 2 * k, ly + k, ir.w - 4 * k, k), WHITE);
+                        continue;
+                    }
                     let h = Hit::MenuItem(m, i as u8);
                     self.hit(ir, h);
                     let hov = self.hover(h);
@@ -3253,8 +3290,9 @@ impl P<'_, '_> {
                         || matches!(act, MenuAct::WidgetAnim) && crate::widget_look::anim_enabled()
                         || matches!(act, MenuAct::Tray) && crate::tray::enabled()
                         || matches!(act, MenuAct::TrayNum(n) if *n == crate::tray::number_choice())
+                        || matches!(act, MenuAct::TrayWin(w) if *w == crate::tray::window_choice())
                         || matches!(act, MenuAct::LimitsNotify) && crate::tray::notify_on()
-                        || matches!(act, MenuAct::TrayAgent(i) if crate::tray::AGENTS.get(*i as usize).is_some_and(|a| crate::tray::shown(a)))
+                        || matches!(act, MenuAct::TrayAgents(c) if *c == crate::tray::agents_choice())
                         || matches!(act, MenuAct::Lang(i) if *i == lang_now());
                     let col = if hov { WHITE } else { BLACK };
                     if mark {

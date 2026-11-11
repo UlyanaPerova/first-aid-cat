@@ -64,6 +64,7 @@ mod proxyaddr;
 mod quips;
 mod reach;
 mod scene;
+mod scene_px;
 mod screens;
 mod shellcfg;
 mod single;

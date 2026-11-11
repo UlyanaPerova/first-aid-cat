@@ -37,36 +37,46 @@ pub fn icon_choice() -> u8 {
     STATE.load(std::sync::atomic::Ordering::Relaxed)
 }
 
-/// Агенты, о которых умеем показывать лимиты (для меню «Следить за: …»).
+/// Агенты, о которых умеем показывать лимиты (для меню «Агенты: …»).
 pub const AGENTS: [&str; 2] = ["Claude Code", "Codex"];
 
-/// Следим ли за агентом (по умолчанию — да; снятые — в limits_hide в ui.json).
+/// Следим ли за агентом. Выбор один (`agents_choice`), так что хотя бы за одним следим всегда.
 pub fn shown(name: &str) -> bool {
-    !crate::prefs::load().get("limits_hide").and_then(|v| v.as_array()).is_some_and(|a| a.iter().any(|x| x.as_str() == Some(name)))
+    match agents_choice() {
+        0 => true,
+        c => AGENTS.get(c as usize - 1) == Some(&name),
+    }
 }
 
-/// Включить или выключить слежение за агентом.
-pub fn toggle_shown(name: &str) {
-    let hide = shown(name);
-    crate::prefs::update(|v| {
-        let mut list: Vec<String> = v
-            .get("limits_hide")
-            .and_then(|a| a.as_array())
-            .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
-            .unwrap_or_default();
-        list.retain(|x| x != name);
-        if hide {
-            list.push(name.to_string());
-        }
-        v["limits_hide"] = serde_json::json!(list);
-    });
+/// За какими агентами следим — один выбор: 0 — за всеми, 1.. — только за AGENTS[n-1].
+/// Хранится как limits_hide в ui.json (список снятых); снятые все сразу — значит, за всеми.
+pub fn agents_choice() -> u8 {
+    let hide: Vec<String> = crate::prefs::load()
+        .get("limits_hide")
+        .and_then(|v| v.as_array())
+        .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+    let on: Vec<usize> = (0..AGENTS.len()).filter(|&i| !hide.iter().any(|h| h == AGENTS[i])).collect();
+    match on.as_slice() {
+        [i] => *i as u8 + 1,
+        _ => 0,
+    }
+}
+
+pub fn set_agents_choice(c: u8) {
+    let hide: Vec<&str> = match c {
+        0 => Vec::new(),
+        c => AGENTS.iter().enumerate().filter(|(i, _)| *i + 1 != c as usize).map(|(_, a)| *a).collect(),
+    };
+    crate::prefs::update(|v| v["limits_hide"] = serde_json::json!(hide));
 }
 
 /// Отпечаток выбора агентов (чтобы значок заметил перемену).
 fn shown_sig() -> Vec<bool> {
     let mut v: Vec<bool> = AGENTS.iter().map(|a| shown(a)).collect();
-    let n = number_choice();
-    v.extend((0..4).map(|b| n >> b & 1 == 1));
+    v.push(number_choice() == 1);
+    let w = window_choice();
+    v.extend([w == 1, w == 2]);
     v
 }
 
@@ -105,60 +115,76 @@ pub enum Ev {
 /// Текст рядом со значком: «64%», или пусто, если лимиты неизвестны (на Windows — число на самом значке).
 #[cfg_attr(windows, allow(dead_code))]
 pub fn label(agents: &[Agent], now: i64) -> String {
-    label_with(agents, now, number_choice())
+    label_with(agents, now, number_choice(), window_choice())
 }
 
 /// Подпись по выбору числа (см. `number_choice`).
 #[cfg_attr(windows, allow(dead_code))]
-fn label_with(agents: &[Agent], now: i64, choice: u8) -> String {
+fn label_with(agents: &[Agent], now: i64, choice: u8, window: u8) -> String {
     // перед числом — широкий пробел: панель ставит текст вплотную к значку, а у соседних показателей
     // (температура, загрузка) между значком и числом есть воздух
     if choice == 1 {
-        // у каждого агента своё: «Cl 10%  Co 13%» (у каждого — его самый заполненный лимит)
-        let parts: Vec<String> = agents.iter().filter_map(|a| Some(format!("{} {:.0}%", short(a.name), a.limits?.top(now)?))).collect();
+        // у каждого агента своё: «Cl 10%  Co 13%» (у каждого — выбранный лимит)
+        let parts: Vec<String> = agents.iter().filter_map(|a| Some(format!("{} {:.0}%", short(a.name), pick(a, now, window)?))).collect();
         return if parts.is_empty() { String::new() } else { format!("\u{2002}{}", parts.join("\u{2002}")) };
     }
-    pct_with(agents, now, choice).map(|p| format!("\u{2002}{p:.0}%")).unwrap_or_default()
+    top_pct(agents, now, window).map(|p| format!("\u{2002}{p:.0}%")).unwrap_or_default()
 }
 
 /// Одно число для значка на Windows (там одно место; «у каждого своё» — показывает самый заполненный).
 #[cfg_attr(not(windows), allow(dead_code))]
 pub fn panel_pct(agents: &[Agent], now: i64) -> Option<f64> {
-    pct_with(agents, now, number_choice())
+    top_pct(agents, now, window_choice())
 }
 
-/// Одно число: 0 и 1 — самый заполненный лимит из всех агентов; 2+ — один агент и одно окно (`number_target`).
-fn pct_with(agents: &[Agent], now: i64, choice: u8) -> Option<f64> {
-    match number_target(choice) {
-        None => agents.iter().filter_map(|a| a.limits?.top(now)).reduce(f64::max),
-        Some((name, week)) => {
-            let l = agents.iter().find(|a| a.name == name)?.limits?;
-            if week { l.week } else { l.five }.map(|w| w.now_pct(now))
-        }
+/// Одно число у значка: выбранный лимит (`window_choice`), у кого из агентов (в `agents` — только те,
+/// за кем следим) он больше.
+fn top_pct(agents: &[Agent], now: i64, window: u8) -> Option<f64> {
+    agents.iter().filter_map(|a| pick(a, now, window)).reduce(f64::max)
+}
+
+/// Выбранный лимит агента: 0 — самый заполненный из двух, 1 — 5 часов, 2 — неделя.
+fn pick(a: &Agent, now: i64, window: u8) -> Option<f64> {
+    let l = a.limits?;
+    match window {
+        1 => l.five.map(|w| w.now_pct(now)),
+        2 => l.week.map(|w| w.now_pct(now)),
+        _ => l.top(now),
     }
 }
 
-/// Что показывать числом в панели — один выбор, без противоречий:
-/// 0 — самый заполненный лимит из всех; 1 — у каждого агента своё; 2.. — один агент и один лимит
-/// (2 — Claude Code, 5 часов; 3 — Claude Code, неделя; 4 — Codex, 5 часов; 5 — Codex, неделя).
+/// Какой лимит в числе у значка: 0 — самый заполненный, 1 — 5 часов, 2 — неделя.
+/// Не зависит от выбора агентов (раньше «агент + окно» было одним пунктом и спорило с «Следить за»).
+pub fn window_choice() -> u8 {
+    let v = crate::prefs::load();
+    match v.get("tray_window").and_then(|x| x.as_u64()) {
+        Some(n @ 0..=2) => n as u8,
+        // прежняя настройка: tray_number 2..5 — агент и окно (чётное — 5 часов, нечётное — неделя)
+        _ => match v.get("tray_number").and_then(|x| x.as_u64()) {
+            Some(n @ 2..=5) => 1 + (n % 2) as u8,
+            _ => 0,
+        },
+    }
+}
+
+pub fn set_window_choice(w: u8) {
+    crate::prefs::update(|v| v["tray_window"] = serde_json::json!(w.min(2)));
+}
+
+/// Что показывать числом у значка: 0 — одно на всех (у кого больше); 1 — у каждого агента своё.
 pub fn number_choice() -> u8 {
     let v = crate::prefs::load();
     match v.get("tray_number").and_then(|x| x.as_u64()) {
-        Some(n) if (n as usize) < 2 + AGENTS.len() * 2 => n as u8,
+        Some(1) => 1,
+        Some(_) => 0,
         // старая настройка «у каждого агента»
-        _ if v.get("tray_label").and_then(|x| x.as_str()) == Some("each") => 1,
-        _ => 0,
+        None if v.get("tray_label").and_then(|x| x.as_str()) == Some("each") => 1,
+        None => 0,
     }
 }
 
 pub fn set_number_choice(n: u8) {
-    crate::prefs::update(|v| v["tray_number"] = serde_json::json!(n));
-}
-
-/// Выбор 2.. → (агент, неделя ли); 0 и 1 — None.
-pub fn number_target(choice: u8) -> Option<(&'static str, bool)> {
-    let i = choice.checked_sub(2)?;
-    Some((AGENTS.get(i as usize / 2)?, i % 2 == 1))
+    crate::prefs::update(|v| v["tray_number"] = serde_json::json!(n.min(1)));
 }
 
 /// Короткое имя агента для панели.
@@ -1096,13 +1122,30 @@ fn tpl_scale(k: i32) -> f32 {
 /// Картинка: ширина, высота, точки 0xRRGGBB.
 type Img = (i32, i32, Vec<u32>);
 
-fn decode(bytes: &[u8]) -> Img {
-    match crate::gfx::decode_png(bytes) {
-        Some(pm) => {
-            (pm.width() as i32, pm.height() as i32, pm.data().chunks(4).map(|p| (p[0] as u32) << 16 | (p[1] as u32) << 8 | p[2] as u32).collect())
-        }
-        None => (1, 1, vec![0xD7D4D1]),
+/// Разжать слой сценки: пары символов «значение, длина−1» (символ = 48 + число); переводы строк пропускаются.
+fn unrle(s: &str, n: usize) -> Vec<u8> {
+    let b: Vec<u8> = s.bytes().filter(|c| *c >= b'0').collect();
+    let mut out = Vec::with_capacity(n);
+    for p in b.as_chunks::<2>().0 {
+        out.extend(std::iter::repeat_n(p[0] - b'0', usize::from(p[1] - b'0') + 1));
     }
+    out
+}
+
+/// Сценка состояния: общий фон и поверх него слой кота (0 в слое — прозрачно). Рисуется кодом из `scene_px`.
+fn scene_img(layer: &crate::scene_px::Layer) -> Img {
+    use crate::scene_px::{BG, H, PAL, W};
+    let mut px: Vec<u32> = unrle(BG, (W * H) as usize).iter().map(|&i| PAL.get(usize::from(i)).copied().unwrap_or(0)).collect();
+    let (lx, ly, lw, lh, data) = *layer;
+    for (i, &v) in unrle(data, (lw * lh) as usize).iter().enumerate() {
+        let (x, y) = (lx + i as i32 % lw, ly + i as i32 / lw);
+        if v > 0 {
+            if let (Some(p), Some(c)) = (px.get_mut((y * W + x) as usize), PAL.get(usize::from(v) - 1)) {
+                *p = *c;
+            }
+        }
+    }
+    (W, H, px)
 }
 
 /// PNG с прозрачностью (ARGB, предумноженный, как у аватарки) — для значков агентов.
@@ -1140,8 +1183,8 @@ pub struct Tpl {
     s: f32,
     /// аватарка в заголовке: (ширина, высота, ARGB с прозрачностью)
     avatar: Img,
-    /// сценки: 0 — агенты закрыты (спит), 1 — основная (агенты открыты: работают или ждут)
-    scenes: [Img; 2],
+    /// сценки (общий фон + кот состояния, `scene_px`): как `icon_choice` — 0 спит, 1 пишет (агент думает), 2 закончил (ждёт)
+    scenes: [Img; 3],
     /// значки агентов 16×16 (пиксель-арт): 0 — Claude, 1 — Codex (ChatGPT); каждая точка k×k
     logos: [Img; 2],
 }
@@ -1151,15 +1194,15 @@ impl Tpl {
         let s = tpl_scale(k);
         let d = |v: i32| (v as f32 * s).round() as i32;
         // сценка: точка в точку как в дизайне, на экране с масштабом k — каждая точка k×k
-        let scene = |b: &[u8]| {
-            let src = decode(b);
+        let scene = |l: &crate::scene_px::Layer| {
+            let src = scene_img(l);
             resample_nearest(&src, (SCENE_W * k) as f32 / src.0 as f32)
         };
         Tpl {
             k,
             s,
             avatar: avatar(d(52)),
-            scenes: [scene(include_bytes!("../assets/сценка_спит.png")), scene(include_bytes!("../assets/сценка_закончил.png"))],
+            scenes: [scene(&crate::scene_px::SLEEP), scene(&crate::scene_px::WRITE), scene(&crate::scene_px::DONE)],
             logos: [
                 resample_nearest(&decode_alpha(include_bytes!("../assets/лого_claude.png")), k as f32),
                 resample_nearest(&decode_alpha(include_bytes!("../assets/лого_codex.png")), k as f32),
@@ -1415,7 +1458,7 @@ fn paint(f: &mut Fonts, agents: &[Agent], watch: &Watch, data_t: i64, t: &Tpl, c
     }
     // низ: сценка с котом (что делают агенты), «обновлено в…», кнопка «Медкарта расхода…» (она — в шаблоне)
     let fy = hh + gh * n as i32;
-    blit(c, &t.scenes[usize::from(icon_choice() != 0)], d(11), fy + d(92));
+    blit(c, &t.scenes[usize::from(icon_choice()).min(2)], d(11), fy + d(92));
     if data_t > 0 {
         let tm = crate::ui::localtime(data_t);
         f.draw(c, d(36), fy + d(55), &format!("обновлено в {:02}:{:02}", tm.hour, tm.min), GREY, t.font(22), false);
@@ -1754,7 +1797,7 @@ pub fn shot(path: &str) {
     } else {
         crate::limits::snapshot().into_iter().filter(|a| shown(a.name)).collect()
     };
-    // TRAY_SCENE=0/1/2 — состояние агентов для снимка (0 — спит, 1 и 2 — основная сценка)
+    // TRAY_SCENE=0/1/2 — состояние агентов для снимка (0 — спит, 1 — пишет, 2 — закончил)
     if let Some(st) = std::env::var("TRAY_SCENE").ok().and_then(|v| v.parse::<u8>().ok()) {
         STATE.store(st.min(2), std::sync::atomic::Ordering::Relaxed);
     }
@@ -1907,16 +1950,13 @@ mod tests {
         };
         // недельное окно уже сброшено — главный лимит 5-часовой
         let one = std::slice::from_ref(&a);
-        assert_eq!(label_with(one, now, 0), "\u{2002}64%");
-        assert_eq!(label_with(one, now, 1), "\u{2002}Co 64%");
-        // Codex — 5 часов; Codex — неделя (уже сброшена — 0); Claude — его нет в данных, пусто
-        assert_eq!(label_with(one, now, 4), "\u{2002}64%");
-        assert_eq!(label_with(one, now, 5), "\u{2002}0%");
-        assert_eq!(label_with(one, now, 2), "");
-        assert_eq!(number_target(3), Some(("Claude Code", true)));
-        assert_eq!(number_target(1), None);
+        assert_eq!(label_with(one, now, 0, 0), "\u{2002}64%");
+        assert_eq!(label_with(one, now, 1, 0), "\u{2002}Co 64%");
+        // выбранный лимит: 5 часов — 64; неделя уже сброшена — 0
+        assert_eq!(label_with(one, now, 0, 1), "\u{2002}64%");
+        assert_eq!(label_with(one, now, 1, 2), "\u{2002}Co 0%");
         assert_eq!(tooltip(&[a], now), "Codex: 5 ч 64% · неделя 0% · сегодня 1,5 млн");
-        assert_eq!(label_with(&[], now, 0), "");
+        assert_eq!(label_with(&[], now, 0, 0), "");
     }
 
     fn agent(pct5: f64, reset5: i64, at: i64) -> Agent {

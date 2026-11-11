@@ -75,7 +75,7 @@ ru: Показать на рабочем столе
 en: Show on desktop
 
 # ui.rs:258
-ru: Вид: {}
+ru: Стиль: {}
 en: Style: {}
 
 # ui.rs:260
@@ -926,9 +926,6 @@ en: AI usage chart
 ru: Значок в панели
 en: Panel icon
 
-ru: Следить за: {}
-en: Track: {}
-
 ru: Лимиты ИИ
 en: AI limits
 
@@ -941,23 +938,29 @@ en: The AI limits icon is removed from the panel.
 ru: кот
 en: cat
 
-ru: Число в панели: самый заполненный лимит
-en: Panel number: the fullest limit
+ru: Агенты: {} и {}
+en: Agents: {} and {}
 
-ru: Число в панели: у каждого агента своё
-en: Panel number: each agent its own
+ru: Агенты: только {}
+en: Agents: only {}
 
-ru: Число в панели: {}, 5 часов
-en: Panel number: {}, 5 hours
+ru: Число у значка: одно, у кого больше
+en: Number by the icon: one, whoever is higher
 
-ru: Число в панели: {}, неделя
-en: Panel number: {}, week
+ru: Лимит в числе: самый заполненный
+en: Limit in the number: the fullest
 
-ru: В панели теперь самый заполненный лимит: за этим агентом больше не следим.
-en: The panel now shows the fullest limit: this agent is no longer watched.
+ru: Лимит в числе: 5 часов
+en: Limit in the number: 5 hours
 
-ru: Уведомлять: 80 %, 95 % и сброс
-en: Notify: 80 %, 95 % and reset
+ru: Лимит в числе: неделя
+en: Limit in the number: week
+
+ru: Число у значка: у каждого агента своё
+en: Number by the icon: each agent its own
+
+ru: Уведомлять о лимитах (80 %, 95 %, сброс)
+en: Notify about limits (80 %, 95 %, reset)
 
 ru: ──── новый запуск ────
 en: ──── new start ────
