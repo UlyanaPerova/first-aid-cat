@@ -898,3 +898,9 @@ en: empty answer from the test server
 
 ru: сервер замера ответил {}
 en: the test server answered {}
+
+ru: тест скорости: сервер просит подождать — вторая попытка полегче
+en: speed test: the server asks to wait — a lighter second attempt
+
+ru: тест скорости: измерено системным networkQuality
+en: speed test: measured with the system networkQuality
