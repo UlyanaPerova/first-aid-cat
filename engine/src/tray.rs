@@ -1037,7 +1037,8 @@ mod mac {
                     let data = send_bytes(cls(c"NSData"), c"dataWithBytes:length:", png.as_ptr(), png.len());
                     let img = send1(send0(cls(c"NSImage"), c"alloc"), c"initWithData:", data);
                     if !img.is_null() {
-                        send_size(img, c"setSize:", Size { w: 18.0, h: 18.0 });
+                        // 16 точек: при 18 кот выглядел крупнее соседних значков строки меню
+                        send_size(img, c"setSize:", Size { w: 16.0, h: 16.0 });
                         // шаблон: система сама красит силуэт под светлую и тёмную строку меню
                         send_bool(img, c"setTemplate:", true);
                         send1(self.button, c"setImage:", img);

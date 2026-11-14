@@ -2697,6 +2697,8 @@ fn mbps_of(bytes: u64, secs: f64) -> f64 {
 #[allow(clippy::too_many_arguments)]
 /// Ответ сервера замера «слишком много запросов» (HTTP 429): замеров подряд было много, он временно ограничил адрес.
 const BUSY: &str = "сервер замера просит подождать";
+/// Пауза перед второй, облегчённой попыткой после отказа 429 (в тестах — без ожидания).
+const RETRY_PAUSE_MS: u64 = if cfg!(test) { 0 } else { 2000 };
 
 fn transfer(
     progress: &mut dyn FnMut(SpeedProgress),
@@ -2784,6 +2786,42 @@ fn transfer(
     }
     let steady = steady_rate(&samples);
     Ok(Some(steady))
+}
+
+/// Скорость приёма или отдачи, Мбит/с, по системному `networkQuality` (есть в macOS 12+): только нужный этап, не дольше 12 с.
+#[cfg(target_os = "macos")]
+fn network_quality(down: bool) -> Option<f64> {
+    // -u — без отдачи, -d — без приёма; -c — ответ в JSON; -M — предел времени
+    let skip = if down { "-u" } else { "-d" };
+    let (_, out) = run(&["/usr/bin/networkQuality", "-c", skip, "-M", "12"], 40);
+    let v: serde_json::Value = serde_json::from_str(out.trim()).ok()?;
+    let bps = v.get(if down { "dl_throughput" } else { "ul_throughput" })?.as_f64()?;
+    (bps > 0.0).then_some(bps / 1e6)
+}
+
+/// Этап замера (приём или отдача) с запасной попыткой.
+/// Обычная сеть — 6 потоков по времени (до 10 с скачивание, 8 с отдача, но раньше, если скорость устоялась; объём
+/// с запасом на гигабитную линию); лимитная — один поток и совсем немного.
+/// Сервер ответил «подождите» (429) на шесть больших запросов разом — не сдаёмся сразу: пауза и одна попытка
+/// полегче (два потока, куски впятеро меньше). Раньше приём в таком случае оставался не измерен, хотя отдача
+/// следом проходила.
+fn transfer_with_retry(progress: &mut dyn FnMut(SpeedProgress), is_down: bool, metered: bool) -> Result<Option<f64>, String> {
+    let res = match (is_down, metered) {
+        (true, false) => transfer(progress, true, 6, 10.0, 600_000_000, 50_000_000, true),
+        (false, false) => transfer(progress, false, 6, 8.0, 300_000_000, 20_000_000, true),
+        (true, true) => transfer(progress, true, 1, 10.0, 5_000_000, 5_000_000, false),
+        (false, true) => transfer(progress, false, 1, 8.0, 2_000_000, 2_000_000, false),
+    };
+    if metered || !matches!(&res, Err(e) if e == BUSY) {
+        return res;
+    }
+    log("тест скорости: сервер просит подождать — вторая попытка полегче");
+    thread::sleep(Duration::from_millis(RETRY_PAUSE_MS));
+    if is_down {
+        transfer(progress, true, 2, 6.0, 150_000_000, 10_000_000, true)
+    } else {
+        transfer(progress, false, 2, 6.0, 60_000_000, 4_000_000, true)
+    }
 }
 
 /// Установившаяся скорость, Мбит/с: от точки, где пришли первые 10% данных, до конца ряда `(время, байты)`.
@@ -2983,11 +3021,21 @@ pub fn speed_test(mut progress: impl FnMut(SpeedProgress)) -> Vec<Check> {
         log(&format!("тест скорости: {}", if is_down { "скачивание" } else { "отдача" }));
         // обычная сеть — 6 потоков по времени (до 10 с скачивание, 8 с отдача, но раньше, если скорость устоялась; объём с запасом на гигабитную
         // линию); лимитная — один поток и совсем немного
-        let res = match (is_down, metered) {
-            (true, false) => transfer(&mut progress, true, 6, 10.0, 600_000_000, 50_000_000, true),
-            (false, false) => transfer(&mut progress, false, 6, 8.0, 300_000_000, 20_000_000, true),
-            (true, true) => transfer(&mut progress, true, 1, 10.0, 5_000_000, 5_000_000, false),
-            (false, true) => transfer(&mut progress, false, 1, 8.0, 2_000_000, 2_000_000, false),
+        // SPEED_BUSY=1 — будто сервер замера отказал (проверка запасных путей без настоящего отказа)
+        let res = if std::env::var_os("SPEED_BUSY").is_some() { Err(BUSY.to_string()) } else { transfer_with_retry(&mut progress, is_down, metered) };
+        // macOS: сервер замера так и не дал измерить — спрашиваем системный networkQuality (серверы Apple).
+        // Он дольше и без живого хода, поэтому только запасной; на лимитной сети не зовём (качает сотни мегабайт).
+        #[cfg(target_os = "macos")]
+        let res = match res {
+            Ok(Some(m)) => Ok(Some(m)),
+            other if metered => other,
+            other => match network_quality(is_down) {
+                Some(m) => {
+                    log("тест скорости: измерено системным networkQuality");
+                    Ok(Some(m))
+                }
+                None => other,
+            },
         };
         let (mbps, err) = match res {
             Ok(m) => (m, String::new()),
@@ -3404,6 +3452,43 @@ mod tests {
         let r = transfer(&mut |_| {}, down, 2, limit, 1 << 30, 1 << 20, false);
         *TEST_BASE.lock().unwrap() = None;
         (r, t.elapsed().as_secs_f64())
+    }
+
+    /// Сервер отказывает (429) большим запросам, а маленьким отвечает: приём должен измериться со второй попытки.
+    #[test]
+    fn speed_busy_then_lighter_retry_measures() {
+        use std::io::Write;
+        let _g = SPEED_TEST.lock().unwrap_or_else(|e| e.into_inner());
+        let base = local_server(|mut c| {
+            let mut acc = Vec::new();
+            let mut b = [0u8; 1];
+            while !acc.ends_with(b"\r\n\r\n") {
+                if c.read(&mut b).unwrap_or(0) == 0 {
+                    return;
+                }
+                acc.push(b[0]);
+            }
+            let head = String::from_utf8_lossy(&acc).into_owned();
+            let bytes: usize = head.split("bytes=").nth(1).and_then(|t| t.split(|ch: char| !ch.is_ascii_digit()).next()).and_then(|n| n.parse().ok()).unwrap_or(0);
+            if bytes > 10_000_000 {
+                let _ = c.write_all(b"HTTP/1.1 429 Too Many Requests\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                return;
+            }
+            let _ = c.write_all(format!("HTTP/1.1 200 OK\r\nContent-Length: {bytes}\r\nConnection: close\r\n\r\n").as_bytes());
+            let block = vec![7u8; 64 * 1024];
+            let mut left = bytes;
+            while left > 0 {
+                let n = left.min(block.len());
+                if c.write_all(&block[..n]).is_err() {
+                    return;
+                }
+                left -= n;
+            }
+        });
+        *TEST_BASE.lock().unwrap() = Some(base);
+        let r = transfer_with_retry(&mut |_| {}, true, false);
+        *TEST_BASE.lock().unwrap() = None;
+        assert!(matches!(r, Ok(Some(m)) if m > 0.0), "{r:?}");
     }
 
     /// Сервер отдаёт заголовок по байту раз в секунду: замер не должен висеть (общий срок запроса + ограниченное ожидание потоков).
