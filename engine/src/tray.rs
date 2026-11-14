@@ -1693,7 +1693,8 @@ fn paint(f: &mut Fonts, agents: &[Agent], watch: &Watch, data_t: i64, t: &Tpl, c
 fn limit_line(runs_out: Option<i64>, resets_at: i64, minutes: u32, now: i64) -> (String, u32) {
     const RED: u32 = 0xB3001B;
     const GREEN: u32 = 0x0B7A0B;
-    let when = |t| crate::limits::when(t, now);
+    // длинное окно (неделя) — всегда с днём: «в 14:00» без дня непонятно
+    let when = |t| if minutes >= 24 * 60 { crate::limits::when_day(t, now) } else { crate::limits::when(t, now) };
     match runs_out {
         Some(eta) if resets_at <= now || eta + 600 < resets_at => (format!("хватит до ≈ {}", when(eta)), RED),
         _ if resets_at > now && resets_at - now <= i64::from(minutes) * 60 / 5 => (format!("сбросится {}", when(resets_at)), GREEN),

@@ -68,3 +68,30 @@ en: in {} h {} min
 
 ru: через {} мин
 en: in {} min
+
+ru: сегодня в {}
+en: today at {}
+
+ru: {} {}.{} в {}
+en: {} {}.{} at {}
+
+ru: пн
+en: Mon
+
+ru: вт
+en: Tue
+
+ru: ср
+en: Wed
+
+ru: чт
+en: Thu
+
+ru: пт
+en: Fri
+
+ru: сб
+en: Sat
+
+ru: вс
+en: Sun

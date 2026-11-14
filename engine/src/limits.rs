@@ -495,6 +495,28 @@ pub(crate) fn when(at: i64, now: i64) -> String {
     }
 }
 
+/// То же для длинного окна (неделя): день назван всегда — «сегодня в 14:00», «завтра в 14:00», «вт 17.11 в 14:00».
+/// Просто «в 14:00» у недельного лимита непонятно: сегодня, завтра или в понедельник.
+pub(crate) fn when_day(at: i64, now: i64) -> String {
+    let (t, day) = (crate::ui::localtime(at), local_day(at));
+    let hm = format!("{:02}:{:02}", t.hour, t.min);
+    if day == local_day(now) {
+        format!("сегодня в {hm}")
+    } else if day == local_day(now + 86_400) {
+        format!("завтра в {hm}")
+    } else {
+        format!("{} {:02}.{:02} в {hm}", weekday(t.year, t.mon, t.mday), t.mday, t.mon)
+    }
+}
+
+/// День недели по дате (способ Сакамото): «пн» … «вс».
+fn weekday(year: i64, mon: i32, mday: i32) -> &'static str {
+    const SHIFT: [i64; 12] = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
+    let y = if mon < 3 { year - 1 } else { year };
+    let d = (y + y / 4 - y / 100 + y / 400 + SHIFT[(mon.clamp(1, 12) - 1) as usize] + i64::from(mday)).rem_euclid(7);
+    ["вс", "пн", "вт", "ср", "чт", "пт", "сб"][d as usize]
+}
+
 /// Строка одного лимита: «42% · сброс в 21:40».
 fn limit_row(agent: &str, what: &str, w: &Window, at: i64, now: i64) -> Check {
     let pct = w.now_pct(now);
@@ -808,6 +830,25 @@ fn permissions_mode(_: &std::fs::Metadata) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn weekday_by_date() {
+        // 15 ноября 2026 — воскресенье, 17-е — вторник; 29 февраля 2028 — вторник; 1 января 1970 — четверг
+        assert_eq!(weekday(2026, 11, 15), "вс");
+        assert_eq!(weekday(2026, 11, 17), "вт");
+        assert_eq!(weekday(2028, 2, 29), "вт");
+        assert_eq!(weekday(1970, 1, 1), "чт");
+    }
+
+    #[test]
+    fn when_day_always_names_the_day() {
+        let now = 1_794_699_310; // ночь на 15.11.2026
+        assert!(when_day(now + 3600, now).starts_with("сегодня в ") || when_day(now + 3600, now).starts_with("завтра в "));
+        // через 4 суток — день недели и число
+        let far = when_day(now + 4 * 86_400, now);
+        assert!(far.split(' ').next().is_some_and(|w| ["пн", "вт", "ср", "чт", "пт", "сб", "вс"].contains(&w)), "{far}");
+        assert!(far.contains(" в "), "{far}");
+    }
 
     #[test]
     fn claude_limits_parse_and_reset() {
