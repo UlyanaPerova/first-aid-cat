@@ -1573,7 +1573,8 @@ fn paint_head(f: &mut Fonts, t: &Tpl, c: &mut Canvas, w: i32, h: i32) -> Rect {
     let base = f.center_base(title.y, title.h, t.font(34));
     f.draw(c, d(98) + 1, base + 1, "Лимиты ИИ", 0x002A8C, t.font(34), true);
     f.draw(c, d(98), base, "Лимиты ИИ", WHITE, t.font(34), true);
-    let close = Rect::new(d(821), d(15), d(52), d(48));
+    // крестик — на том же расстоянии от правого края, что аватарка от левого (21)
+    let close = Rect::new(d(815), d(15), d(52), d(48));
     c.fill(close, 0x2C2C2C);
     c.raised(close.inset(1), 0xD6D3CE);
     let xw = f.width("×", t.font(36), true);
@@ -1584,10 +1585,12 @@ fn paint_head(f: &mut Fonts, t: &Tpl, c: &mut Canvas, w: i32, h: i32) -> Rect {
 /// Рамка-группа агента (как на дизайне): вдавленная рамка группы, под подписью — вдавленная панель.
 fn paint_group(c: &mut Canvas, t: &Tpl, gy: i32) {
     let d = |v: i32| t.d(v);
-    let outer = Rect::new(d(28), gy + d(5), d(835), d(495));
+    // всё по горизонтали — симметрично относительно середины плашки (ширина дизайна 888): поля рамки 28 и 28,
+    // панели 40 и 40 (было 28/25 и 40/37 — справа выходило уже)
+    let outer = Rect::new(d(28), gy + d(5), d(832), d(495));
     frame(c, outer, 0x8E9196);
     frame(c, outer.inset(1), WHITE);
-    let panel = Rect::new(d(40), gy + d(54), d(811), d(436));
+    let panel = Rect::new(d(40), gy + d(54), d(808), d(436));
     c.fill(Rect::new(panel.x, panel.y, panel.w, 1), 0x999C9B);
     c.fill(Rect::new(panel.x, panel.y + 1, panel.w, 1), 0x888A8F);
     c.fill(Rect::new(panel.x, panel.y, 1, panel.h), 0x999C9B);
@@ -1629,7 +1632,8 @@ fn paint(f: &mut Fonts, agents: &[Agent], watch: &Watch, data_t: i64, t: &Tpl, c
         if let Some(lim) = a.limits.filter(|_| has_rings(a)) {
             let wins: Vec<(u8, &str, crate::limits::Window)> =
                 [(0u8, "5 часов", lim.five), (1u8, "неделя", lim.week)].into_iter().filter_map(|(w, s, x)| x.map(|x| (w, s, x))).collect();
-            let centers: &[i32] = if wins.len() == 2 { &[276, 609] } else { &[444] };
+            // кольца — на равном расстоянии от середины (278 + 610 = 888)
+            let centers: &[i32] = if wins.len() == 2 { &[278, 610] } else { &[444] };
             for ((which, what, win), cx) in wins.iter().zip(centers) {
                 let pct = win.now_pct(now);
                 let (cx, cy) = (d(*cx), gy + d(167));
@@ -1641,9 +1645,13 @@ fn paint(f: &mut Fonts, agents: &[Agent], watch: &Watch, data_t: i64, t: &Tpl, c
                 f.draw(c, cx - pw / 2, cy + d(13), &p, INK, t.font(37), true);
                 let lw = f.width(what, t.font(29), false);
                 f.draw(c, cx - lw / 2, gy + d(285), what, INK, t.font(29), false);
-                let (line, col) = limit_line(watch.runs_out(a.name, *which), win.resets_at, win.minutes, now);
-                let rw = f.width(&line, t.font(23), false);
-                f.draw(c, cx - rw / 2, gy + d(322), &line, col, t.font(23), false);
+                // подпись сброса — в две строки по центру кольца (слово и время): одной строкой «сбросится сегодня в 14:00»
+                // выходила вдвое шире кольца и выпирала вбок
+                let (word, time, col) = limit_line(watch.runs_out(a.name, *which), win.resets_at, win.minutes, now);
+                for (text, y) in [(&word, 316), (&time, 342)] {
+                    let rw = f.width(text, t.font(22), false);
+                    f.draw(c, cx - rw / 2, gy + d(y), text, col, t.font(22), false);
+                }
             }
         } else {
             // лимиты ещё неизвестны (агент ни разу не отвечал при Аптечке) — не пустое место, а подсказка
@@ -1653,7 +1661,8 @@ fn paint(f: &mut Fonts, agents: &[Agent], watch: &Watch, data_t: i64, t: &Tpl, c
         }
         // столбики токенов по дням
         let days = a.days.len().max(1) as i32;
-        let (x0, x1, base, maxh) = (d(58), d(830), gy + d(442), d(100));
+        // столбики ниже подписи в две строки: высота 76 (было 100)
+        let (x0, x1, base, maxh) = (d(58), d(830), gy + d(442), d(76));
         let slot = (x1 - x0) as f32 / days as f32;
         let max = a.days.iter().copied().max().unwrap_or(0).max(1);
         for (j, v) in a.days.iter().enumerate() {
@@ -1669,39 +1678,44 @@ fn paint(f: &mut Fonts, agents: &[Agent], watch: &Watch, data_t: i64, t: &Tpl, c
         c.fill(Rect::new(x0, base + lh, x1 - x0, lh), 0x808B91);
         c.fill(Rect::new(x0, base + 2 * lh, x1 - x0, lh), 0xFEFDFC);
         let first = crate::ui::localtime(now - (crate::limits::BAR_DAYS - 1) * 86_400);
-        f.draw(c, d(61), gy + d(474), &format!("{:02}.{:02}", first.mday, first.mon), GREY, t.font(22), false);
+        // даты — ровно по краям столбиков
+        f.draw(c, x0, gy + d(474), &format!("{:02}.{:02}", first.mday, first.mon), GREY, t.font(22), false);
         let tl = "сегодня";
         let tw = f.width(tl, t.font(22), false);
-        f.draw(c, d(833) - tw, gy + d(474), tl, GREY, t.font(22), false);
+        f.draw(c, x1 - tw, gy + d(474), tl, GREY, t.font(22), false);
     }
     // низ: сценка с котом (что делают агенты), «обновлено в…», кнопка «Медкарта расхода…» (она — в шаблоне)
     let fy = hh + gh * n as i32;
-    blit(c, &t.scenes[usize::from(icon_choice()).min(2)], d(11), fy + d(92));
+    // сценка — по центру плашки (раньше слева было поле 11, справа 1)
+    let scene = &t.scenes[usize::from(icon_choice()).min(2)];
+    blit(c, scene, (w - scene.0) / 2, fy + d(92));
     if data_t > 0 {
         let tm = crate::ui::localtime(data_t);
-        f.draw(c, d(36), fy + d(55), &format!("обновлено в {:02}:{:02}", tm.hour, tm.min), GREY, t.font(22), false);
+        // «обновлено» — от левого края панели агентов, кнопка — до правого её края
+        f.draw(c, d(40), fy + d(55), &format!("обновлено в {:02}:{:02}", tm.hour, tm.min), GREY, t.font(22), false);
     }
-    let btn = Rect::new(d(458), fy + d(15), d(405), d(62));
+    let btn = Rect::new(d(443), fy + d(15), d(405), d(62));
     paint_button(f, t, c, btn, "Медкарта расхода…");
     (btn, close)
 }
 
-/// Подпись под кольцом лимита и её цвет.
+/// Подпись под кольцом лимита — слово и время отдельными строками — и её цвет.
 /// Скорый сброс — хорошая новость: зелёное «сбросится …» (осталась пятая часть окна или меньше: час для
 /// 5-часового, около полутора суток для недельного). Красное «хватит до ≈ …» — только когда лимит при нынешнем
 /// темпе кончится заметно раньше сброса (больше чем за 10 минут до него): прогноз впритык к сбросу — не беда.
-fn limit_line(runs_out: Option<i64>, resets_at: i64, minutes: u32, now: i64) -> (String, u32) {
+fn limit_line(runs_out: Option<i64>, resets_at: i64, minutes: u32, now: i64) -> (String, String, u32) {
     const RED: u32 = 0xB3001B;
     const GREEN: u32 = 0x0B7A0B;
     // длинное окно (неделя) — всегда с днём: «в 14:00» без дня непонятно
     let when = |t| if minutes >= 24 * 60 { crate::limits::when_day(t, now) } else { crate::limits::when(t, now) };
-    match runs_out {
-        Some(eta) if resets_at <= now || eta + 600 < resets_at => (format!("хватит до ≈ {}", when(eta)), RED),
-        _ if resets_at > now && resets_at - now <= i64::from(minutes) * 60 / 5 => (format!("сбросится {}", when(resets_at)), GREEN),
-        _ if resets_at > now => (format!("сброс {}", when(resets_at)), GREY),
-        _ if resets_at > 0 => ("уже сброшен".to_string(), GREY),
-        _ => (String::new(), GREY),
-    }
+    let (word, time, col) = match runs_out {
+        Some(eta) if resets_at <= now || eta + 600 < resets_at => ("хватит до ≈", when(eta), RED),
+        _ if resets_at > now && resets_at - now <= i64::from(minutes) * 60 / 5 => ("сбросится", when(resets_at), GREEN),
+        _ if resets_at > now => ("сброс", when(resets_at), GREY),
+        _ if resets_at > 0 => ("уже сброшен", String::new(), GREY),
+        _ => ("", String::new(), GREY),
+    };
+    (word.to_string(), time, col)
 }
 
 fn has_rings(a: &Agent) -> bool {
@@ -2196,21 +2210,23 @@ mod tests {
     fn limit_line_good_and_bad_news() {
         let (now, five) = (1_000_000, 300);
         // до сброса 40 минут — хорошая новость, зелёным; прогноз впритык к сбросу (за 5 минут до него) её не портит
-        let (t, c) = limit_line(None, now + 40 * 60, five, now);
-        assert!(t.starts_with("сбросится "), "{t}");
+        let (w, t, c) = limit_line(None, now + 40 * 60, five, now);
+        assert_eq!(w, "сбросится");
+        assert!(t.starts_with("в ") || t.starts_with("завтра в "), "{t}");
         assert_eq!(c, 0x0B7A0B);
-        let (t, _) = limit_line(Some(now + 35 * 60), now + 40 * 60, five, now);
-        assert!(t.starts_with("сбросится "), "{t}");
+        assert_eq!(limit_line(Some(now + 35 * 60), now + 40 * 60, five, now).0, "сбросится");
         // лимит кончится задолго до сброса — плохая новость, красным, даже если сброс скоро
-        let (t, c) = limit_line(Some(now + 10 * 60), now + 40 * 60, five, now);
-        assert!(t.starts_with("хватит до ≈ "), "{t}");
+        let (w, _, c) = limit_line(Some(now + 10 * 60), now + 40 * 60, five, now);
+        assert_eq!(w, "хватит до ≈");
         assert_eq!(c, 0xB3001B);
-        // до сброса далеко и прогноза нет — спокойное серое «сброс …»
-        let (t, c) = limit_line(None, now + 4 * 3600, five, now);
-        assert!(t.starts_with("сброс "), "{t}");
-        assert_eq!(c, GREY);
-        assert_eq!(limit_line(None, now - 5, five, now).0, "уже сброшен");
+        // до сброса далеко и прогноза нет — спокойное серое «сброс»
+        let (w, _, c) = limit_line(None, now + 4 * 3600, five, now);
+        assert_eq!((w.as_str(), c), ("сброс", GREY));
+        assert_eq!(limit_line(None, now - 5, five, now), ("уже сброшен".to_string(), String::new(), GREY));
         assert_eq!(limit_line(None, 0, five, now).0, "");
+        // недельное окно — время всегда с днём
+        let (_, t, _) = limit_line(None, now + 3600, 7 * 24 * 60, now);
+        assert!(t.starts_with("сегодня в ") || t.starts_with("завтра в "), "{t}");
     }
     use crate::limits::{Limits, Window as Win};
 
