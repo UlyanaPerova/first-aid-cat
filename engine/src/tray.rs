@@ -1641,12 +1641,7 @@ fn paint(f: &mut Fonts, agents: &[Agent], watch: &Watch, data_t: i64, t: &Tpl, c
                 f.draw(c, cx - pw / 2, cy + d(13), &p, INK, t.font(37), true);
                 let lw = f.width(what, t.font(29), false);
                 f.draw(c, cx - lw / 2, gy + d(285), what, INK, t.font(29), false);
-                let (line, col) = match watch.runs_out(a.name, *which) {
-                    Some(eta) => (format!("кончится ≈ {}", crate::limits::when(eta, now)), 0xB3001B),
-                    None if win.resets_at > now => (format!("сброс {}", crate::limits::when(win.resets_at, now)), GREY),
-                    None if win.resets_at > 0 => ("уже сброшен".to_string(), GREY),
-                    None => (String::new(), GREY),
-                };
+                let (line, col) = limit_line(watch.runs_out(a.name, *which), win.resets_at, win.minutes, now);
                 let rw = f.width(&line, t.font(23), false);
                 f.draw(c, cx - rw / 2, gy + d(322), &line, col, t.font(23), false);
             }
@@ -1689,6 +1684,23 @@ fn paint(f: &mut Fonts, agents: &[Agent], watch: &Watch, data_t: i64, t: &Tpl, c
     let btn = Rect::new(d(458), fy + d(15), d(405), d(62));
     paint_button(f, t, c, btn, "Медкарта расхода…");
     (btn, close)
+}
+
+/// Подпись под кольцом лимита и её цвет.
+/// Скорый сброс — хорошая новость: зелёное «сбросится …» (осталась пятая часть окна или меньше: час для
+/// 5-часового, около полутора суток для недельного). Красное «хватит до ≈ …» — только когда лимит при нынешнем
+/// темпе кончится заметно раньше сброса (больше чем за 10 минут до него): прогноз впритык к сбросу — не беда.
+fn limit_line(runs_out: Option<i64>, resets_at: i64, minutes: u32, now: i64) -> (String, u32) {
+    const RED: u32 = 0xB3001B;
+    const GREEN: u32 = 0x0B7A0B;
+    let when = |t| crate::limits::when(t, now);
+    match runs_out {
+        Some(eta) if resets_at <= now || eta + 600 < resets_at => (format!("хватит до ≈ {}", when(eta)), RED),
+        _ if resets_at > now && resets_at - now <= i64::from(minutes) * 60 / 5 => (format!("сбросится {}", when(resets_at)), GREEN),
+        _ if resets_at > now => (format!("сброс {}", when(resets_at)), GREY),
+        _ if resets_at > 0 => ("уже сброшен".to_string(), GREY),
+        _ => (String::new(), GREY),
+    }
 }
 
 fn has_rings(a: &Agent) -> bool {
@@ -2178,6 +2190,27 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn limit_line_good_and_bad_news() {
+        let (now, five) = (1_000_000, 300);
+        // до сброса 40 минут — хорошая новость, зелёным; прогноз впритык к сбросу (за 5 минут до него) её не портит
+        let (t, c) = limit_line(None, now + 40 * 60, five, now);
+        assert!(t.starts_with("сбросится "), "{t}");
+        assert_eq!(c, 0x0B7A0B);
+        let (t, _) = limit_line(Some(now + 35 * 60), now + 40 * 60, five, now);
+        assert!(t.starts_with("сбросится "), "{t}");
+        // лимит кончится задолго до сброса — плохая новость, красным, даже если сброс скоро
+        let (t, c) = limit_line(Some(now + 10 * 60), now + 40 * 60, five, now);
+        assert!(t.starts_with("хватит до ≈ "), "{t}");
+        assert_eq!(c, 0xB3001B);
+        // до сброса далеко и прогноза нет — спокойное серое «сброс …»
+        let (t, c) = limit_line(None, now + 4 * 3600, five, now);
+        assert!(t.starts_with("сброс "), "{t}");
+        assert_eq!(c, GREY);
+        assert_eq!(limit_line(None, now - 5, five, now).0, "уже сброшен");
+        assert_eq!(limit_line(None, 0, five, now).0, "");
+    }
     use crate::limits::{Limits, Window as Win};
 
     #[test]
