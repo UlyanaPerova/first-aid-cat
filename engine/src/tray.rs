@@ -1432,6 +1432,11 @@ fn paint(f: &mut Fonts, agents: &[Agent], watch: &Watch, data_t: i64, t: &Tpl, c
                 let rw = f.width(&line, t.font(23), false);
                 f.draw(c, cx - rw / 2, gy + d(322), &line, col, t.font(23), false);
             }
+        } else {
+            // лимиты ещё неизвестны (агент ни разу не отвечал при Аптечке) — не пустое место, а подсказка
+            let hint = "лимиты появятся после первого ответа агента";
+            let hw = f.width(hint, t.font(24), false);
+            f.draw(c, d(444) - hw / 2, gy + d(180), hint, GREY, t.font(24), false);
         }
         // столбики токенов по дням
         let days = a.days.len().max(1) as i32;

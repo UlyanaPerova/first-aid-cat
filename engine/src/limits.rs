@@ -326,10 +326,22 @@ fn window(v: Option<&serde_json::Value>, pct_key: &str, minutes: u32) -> Option<
     Some(Window { pct: pct.clamp(0.0, 100.0), resets_at: v.get("resets_at").and_then(|x| x.as_i64()).unwrap_or(0), minutes })
 }
 
-/// Лимиты Claude, которые записала строка состояния (None — Claude Code ещё не отвечал с ней).
+/// Копия тех же лимитов в папке настроек: папка сеанса стирается при перезагрузке, и до первого ответа
+/// Claude Code плашка оставалась без колец. По копии показываем последние известные цифры
+/// (окно, которое с тех пор сбросилось, само станет «0 %, уже сброшен» — см. `Window::now_pct`).
+fn claude_limits_saved_path() -> PathBuf {
+    crate::store::private_dir().join("claude_limits.json")
+}
+
+/// Лимиты Claude, которые записала строка состояния: свежие из папки сеанса, а после перезагрузки —
+/// последние сохранённые (None — Claude Code с нашей строкой состояния ещё ни разу не отвечал).
 pub fn claude_limits() -> Option<Limits> {
-    let t = crate::store::read_capped(&claude_limits_path(), 4096).ok()?;
-    let v: serde_json::Value = serde_json::from_str(&t).ok()?;
+    let read = |p: PathBuf| crate::store::read_capped(&p, 4096).ok().and_then(|t| parse_claude_limits(&t));
+    read(claude_limits_path()).or_else(|| read(claude_limits_saved_path()))
+}
+
+fn parse_claude_limits(t: &str) -> Option<Limits> {
+    let v: serde_json::Value = serde_json::from_str(t).ok()?;
     let rl = v.get("rate_limits")?;
     let l = Limits {
         five: window(rl.get("five_hour"), "used_percentage", 300),
@@ -605,6 +617,13 @@ pub fn statusline_main() {
         if old.as_ref().and_then(|o| o.get("rate_limits")) != Some(&rl) || stale {
             let _ = crate::store::write_private_quick(&p, body.as_bytes());
         }
+        // копия на диск (переживает перезагрузку) — реже: когда цифры поменялись или копии больше 10 минут
+        let sp = claude_limits_saved_path();
+        let saved = crate::store::read_capped(&sp, 4096).ok().and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok());
+        let old_copy = saved.as_ref().and_then(|o| o.get("at")).and_then(|x| x.as_i64()).is_none_or(|at| crate::ui::now_secs() - at > 600);
+        if saved.as_ref().and_then(|o| o.get("rate_limits")) != Some(&rl) || old_copy {
+            let _ = crate::store::write_private_quick(&sp, body.as_bytes());
+        }
     }
     if let Some(prev) = crate::prefs::load().get("claude_statusline_prev").and_then(|x| x.get("command")).and_then(|x| x.as_str()) {
         let out = run_prev(prev, &input);
@@ -789,6 +808,18 @@ fn permissions_mode(_: &std::fs::Metadata) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn claude_limits_parse_and_reset() {
+        // так лимиты лежат в файле строки состояния (и в его копии в папке настроек)
+        let l = parse_claude_limits(r#"{"rate_limits":{"five_hour":{"used_percentage":5,"resets_at":1000},"seven_day":{"used_percentage":21,"resets_at":9000}},"at":500}"#)
+            .unwrap();
+        // после перезагрузки показываем сохранённое: 5-часовое окно уже сбросилось — 0, недельное ещё идёт — 21
+        assert_eq!(l.five.unwrap().now_pct(2000), 0.0);
+        assert_eq!(l.week.unwrap().now_pct(2000), 21.0);
+        assert_eq!(parse_claude_limits("{}"), None);
+        assert_eq!(parse_claude_limits("не json"), None);
+    }
 
     #[test]
     fn iso_time() {
