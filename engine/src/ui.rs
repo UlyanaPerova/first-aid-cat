@@ -21,7 +21,10 @@ fn tab_icon(i: usize) -> &'static str {
     CATS.get(i).map(|c| c.icon()).unwrap_or("settings")
 }
 /// Кнопки панели инструментов: проверить, вкладки по порядку, журнал, лечение.
+#[cfg(target_os = "linux")]
 const TOOL_ICONS: [&str; N_TABS + 3] = ["check", "net", "ai", "gpu", "dev", "theme", "sys", "settings", "log", "heal"];
+#[cfg(not(target_os = "linux"))]
+const TOOL_ICONS: [&str; N_TABS + 3] = ["check", "net", "ai", "dev", "theme", "sys", "settings", "log", "heal"];
 const TOOL_LOG: u8 = N_TABS as u8 + 1;
 const TOOL_HEAL: u8 = N_TABS as u8 + 2;
 const LOG_MAX: usize = 400;
@@ -150,6 +153,8 @@ pub enum Hit {
     MenuItem(u8, u8),
     Tool(u8),
     Tab(u8),
+    /// ячейка строки состояния: 0 — система, 1 — сетевой интерфейс, 2 — часы, 3 — время последней проверки
+    Status(u8),
     Check,
     Speed,
     CopyResume,
@@ -383,7 +388,14 @@ fn limits_menu() -> Vec<(String, MenuAct)> {
     }
     if crate::tray::SUPPORTED {
         v.push((String::new(), MenuAct::Sep));
-        v.push(("Значок в панели".to_string(), MenuAct::Tray));
+        let item = if cfg!(target_os = "macos") {
+            "Значок в строке меню"
+        } else if cfg!(windows) {
+            "Значок в области уведомлений"
+        } else {
+            "Значок в панели"
+        };
+        v.push((item.to_string(), MenuAct::Tray));
         // число и уведомления — дело значка: без него их некому показывать
         if crate::tray::enabled() {
             // на Windows у значка одно место под число — «у каждого своё» там не показать
@@ -521,8 +533,11 @@ struct St {
     spravka: Option<SpravkaState>,
     tip: Option<Tip>,
     drag: Option<(u8, i32, i32)>, // полоса, y мыши, сдвиг при нажатии
-    status3: String,
-    kernel: String,
+    /// третья ячейка строки состояния: части (0 — система, 1 — сетевой интерфейс, 2 — часы)
+    status3: Vec<(u8, String)>,
+    /// название и версия системы («Linux 7.0.0», «macOS 15.1»)
+    os: String,
+    /// сетевой интерфейс маршрута по умолчанию; пусто — не узнать, часть не показываем
     iface: String,
     /// анимация вкладок: прошлая вкладка и когда переключили
     tab_anim: Option<(u8, Instant)>,
@@ -827,15 +842,15 @@ impl Ui {
             spravka: None,
             tip: None,
             drag: None,
-            status3: String::new(),
-            kernel: os_label(),
+            status3: Vec::new(),
+            os: os_label(),
             iface: default_iface(),
             tab_anim: None,
             split: ui_file().get("split").and_then(|v| v.as_i64()).map(|v| v as i32),
             split_drag: None,
             maxed: false,
         };
-        st.status3 = String::new();
+        st.status3 = Vec::new();
         let art = st.geo().art;
         let mut ui = Ui {
             g: Gfx { fonts: Fonts::new(), icons: Icons::new() },
@@ -1229,7 +1244,7 @@ impl Ui {
         }
         let now = now_secs();
         let t = localtime(now);
-        let s3 = format!("{} | {} | {:02}:{:02}:{:02}", self.st.kernel, self.st.iface, t.hour, t.min, t.sec);
+        let s3 = status3_parts(&self.st.os, &self.st.iface, (t.hour, t.min, t.sec));
         let changed = s3 != self.st.status3;
         self.st.status3 = s3;
         if changed {
@@ -1672,7 +1687,13 @@ impl Ui {
             }
             Hit::DlgCopy => {
                 if let Some(c) = self.st.dialog.as_ref().and_then(|d| d.cmd.clone()) {
-                    self.say("Скопировал команду — вставь её в терминал (Ctrl+Shift+V).");
+                    self.say(if cfg!(target_os = "macos") {
+                        "Скопировал команду — вставь её в терминал (Cmd+V)."
+                    } else if cfg!(windows) {
+                        "Скопировал команду — вставь её в терминал (Ctrl+V)."
+                    } else {
+                        "Скопировал команду — вставь её в терминал (Ctrl+Shift+V)."
+                    });
                     cmds.push(Cmd::CopyText(c));
                 }
             }
@@ -1724,10 +1745,13 @@ impl Ui {
             MenuAct::Tray => {
                 let on = !crate::tray::enabled();
                 crate::prefs::update(|v| v["tray"] = serde_json::json!(on));
-                self.say(if on {
-                    "Значок с лимитами ИИ — в панели."
-                } else {
-                    "Значок с лимитами ИИ убран из панели."
+                self.say(match (on, cfg!(target_os = "macos"), cfg!(windows)) {
+                    (true, true, _) => "Значок с лимитами ИИ — в строке меню.",
+                    (true, _, true) => "Значок с лимитами ИИ — в области уведомлений.",
+                    (true, _, _) => "Значок с лимитами ИИ — в панели.",
+                    (false, true, _) => "Значок с лимитами ИИ убран из строки меню.",
+                    (false, _, true) => "Значок с лимитами ИИ убран из области уведомлений.",
+                    (false, _, _) => "Значок с лимитами ИИ убран из панели.",
                 });
                 vec![Cmd::TrayChanged]
             }
@@ -2051,7 +2075,7 @@ impl Ui {
         // составные надписи переводим по частям (i18n.rs): склеенную целиком фразу в таблице не найти
         let tr = crate::i18n::t;
         Some(match h {
-            Hit::TitleDrag | Hit::Split | Hit::Block | Hit::Dismiss | Hit::Thumb(_) | Hit::Track(_) => return None,
+            Hit::TitleDrag | Hit::Split | Hit::Block | Hit::Dismiss | Hit::Thumb(_) | Hit::Track(_) | Hit::Status(_) => return None,
             Hit::ScrollUp(_) => (A11yRole::Button, "Прокрутить вверх".into()),
             Hit::ScrollDown(_) => (A11yRole::Button, "Прокрутить вниз".into()),
             Hit::Menu(i) => (A11yRole::MenuItem, menus.get(i as usize).map(|m| m.0.to_string())?),
@@ -2107,23 +2131,31 @@ impl Ui {
     }
 
     fn tip_text(&self, h: Hit) -> Option<String> {
-        const TOOLS: [&str; N_TABS + 3] = [
-            "Проверить всё",
-            "Сеть и VPN",
-            "ИИ-помощники",
-            "Графика",
-            "Устройства",
-            "Темы и расширения",
-            "Система",
-            "Показатели: что проверять",
-            "Журнал проверок",
-            "Полечить…",
-        ];
+        // подсказка кнопки: «Проверить всё», вкладки (из каталога этой системы), журнал, лечение
+        let tool_tip = |i: u8| -> Option<&'static str> {
+            let i = i as usize;
+            Some(match i {
+                0 => "Проверить всё",
+                _ if i == TOOL_LOG as usize => "Журнал проверок",
+                _ if i == TOOL_HEAL as usize => "Полечить…",
+                _ if i == N_TABS => "Показатели: что проверять",
+                _ if i > N_TABS => return None,
+                _ => match CATS[i - 1] {
+                    catalog::Cat::Net => "Сеть и VPN",
+                    catalog::Cat::Ai => "ИИ-помощники",
+                    cat => cat.name(),
+                },
+            })
+        };
         let row = |i: u16| self.st.rows.get(i as usize);
         match h {
-            Hit::Tool(i) => TOOLS.get(i as usize).map(|t| t.to_string()),
+            Hit::Tool(i) => tool_tip(i).map(|t| t.to_string()),
             Hit::Tab(i) => Some(tab_name(i as usize).to_string()),
             Hit::Split => Some("Потяните, чтобы поменять высоту таблицы и журнала".into()),
+            Hit::Status(0) => Some("Система".into()),
+            Hit::Status(1) => Some("Сетевой интерфейс".into()),
+            Hit::Status(2) => Some("Время сейчас".into()),
+            Hit::Status(_) => Some("Время последней проверки".into()),
             Hit::TitleBtn(0) => Some("Свернуть".into()),
             Hit::TitleBtn(1) => Some(if self.st.maxed { "Восстановить" } else { "Развернуть" }.into()),
             Hit::TitleBtn(2) => Some("Закрыть".into()),
@@ -2318,6 +2350,19 @@ fn os_label() -> String {
     }
 }
 
+/// Части третьей ячейки строки состояния: система, сетевой интерфейс (если известен), часы.
+fn status3_parts(os: &str, iface: &str, hms: (i32, i32, i32)) -> Vec<(u8, String)> {
+    let mut v = Vec::new();
+    if !os.is_empty() {
+        v.push((0, os.to_string()));
+    }
+    if !iface.is_empty() {
+        v.push((1, iface.to_string()));
+    }
+    v.push((2, format!("{:02}:{:02}:{:02}", hms.0, hms.1, hms.2)));
+    v
+}
+
 fn default_iface() -> String {
     // интерфейс маршрута по умолчанию из /proc/net/route
     std::fs::read_to_string("/proc/net/route")
@@ -2335,7 +2380,7 @@ fn default_iface() -> String {
                 .then(|| crate::diag::run(&["route", "-n", "get", "default"], 3).1)
                 .and_then(|o| o.lines().find_map(|l| l.trim().strip_prefix("interface: ").map(|s| s.trim().to_string())))
         })
-        .unwrap_or_else(|| "—".into())
+        .unwrap_or_default()
 }
 
 // ───────────────────────────── Рисование ─────────────────────────────
@@ -3083,7 +3128,21 @@ impl P<'_, '_> {
             }
             None => "Первая проверка…".to_string(),
         };
-        let texts = [s1, s2, self.s.status3.clone()];
+        let s3 = self.s.status3.iter().map(|(_, t)| t.as_str()).collect::<Vec<_>>().join(" | ");
+        let texts = [s1, s2, s3];
+        self.hit(g.status[1], Hit::Status(3));
+        if self.hits.is_some() {
+            // части третьей ячейки — каждая со своей подсказкой
+            let (r, px3) = (g.status[2], px);
+            let mut x = r.x + 7 * self.s.k;
+            let sep = self.width(" | ", px3, false);
+            for (kind, t) in self.s.status3.clone() {
+                let w = self.width(&t, px3, false);
+                let part = Rect::new(x, r.y, w.min(r.right() - x), r.h);
+                self.hit(part, Hit::Status(kind));
+                x += w + sep;
+            }
+        }
         for (i, t) in texts.iter().enumerate() {
             let r = g.status[i];
             if !self.painting(r) {
@@ -3583,6 +3642,32 @@ pub fn demo_sessions() -> Vec<Session> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Вкладки свои на каждой системе: «Графика» — только в Linux, кнопки панели и вкладки считаются одинаково.
+    #[test]
+    fn tabs_per_system() {
+        let names: Vec<&str> = (0..N_TABS).map(tab_name).collect();
+        assert_eq!(names.contains(&"Графика"), cfg!(target_os = "linux"));
+        assert_eq!(names.last(), Some(&"Показатели"));
+        assert_eq!(TOOL_ICONS.len(), N_TABS + 3);
+        // иконка кнопки — та же, что у вкладки
+        for i in 0..N_TABS {
+            assert_eq!(TOOL_ICONS[i + 1], tab_icon(i));
+        }
+        // у каждой вкладки есть хоть одна проверка этой системы
+        for cat in CATS {
+            assert!(catalog::units().iter().any(|u| u.cat == cat), "пустая вкладка {}", cat.name());
+        }
+    }
+
+    /// Строка состояния: без сетевого интерфейса ячейки с прочерком нет.
+    #[test]
+    fn status_cell_skips_missing_iface() {
+        let v = status3_parts("Linux 7.0.0", "", (1, 2, 3));
+        assert_eq!(v, vec![(0, "Linux 7.0.0".to_string()), (2, "01:02:03".to_string())]);
+        let v = status3_parts("macOS 15.1", "en0", (23, 5, 9));
+        assert_eq!(v.iter().map(|p| p.0).collect::<Vec<_>>(), vec![0, 1, 2]);
+    }
 
     /// Нажали кнопку починки A, пока кнопка зажата, пришли новые строки с B, отпустили — B не запускается.
     #[test]

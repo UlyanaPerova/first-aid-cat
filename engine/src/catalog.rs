@@ -11,14 +11,18 @@ use crate::diag::Check;
 pub enum Cat {
     Net,
     Ai,
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     Gpu,
     Dev,
     Look,
     Sys,
 }
 
-/// Категории в порядке вкладок.
+/// Категории в порядке вкладок. «Графика» — только в Linux: на macOS и Windows в ней нет проверок.
+#[cfg(target_os = "linux")]
 pub const CATS: [Cat; 6] = [Cat::Net, Cat::Ai, Cat::Gpu, Cat::Dev, Cat::Look, Cat::Sys];
+#[cfg(not(target_os = "linux"))]
+pub const CATS: [Cat; 5] = [Cat::Net, Cat::Ai, Cat::Dev, Cat::Look, Cat::Sys];
 
 impl Cat {
     /// Ключ группы в строках проверок (Check::key).
@@ -48,7 +52,11 @@ impl Cat {
             Cat::Net => "Интернет, DNS, прокси и VPN",
             Cat::Ai => "Связь с ИИ-помощниками и их сессии в терминале",
             Cat::Gpu => "Видеокарта, драйвер, кто рисует экран",
+            Cat::Dev if cfg!(target_os = "macos") => "Звук",
+            Cat::Dev if cfg!(windows) => "Звук, печать, Bluetooth, диск",
             Cat::Dev => "Звук, Bluetooth, принтер, клавиатура",
+            Cat::Look if cfg!(target_os = "macos") => "Оформление, цвета, Dock",
+            Cat::Look if cfg!(windows) => "Тема, цвет акцента, обои, панель задач",
             Cat::Look => "Темы, значки, расширения, док",
             Cat::Sys => "Время, диск, память, обновления, службы",
         }

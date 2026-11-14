@@ -967,3 +967,36 @@ en: ──── new start ────
 
 ru: Нажато: «{}»
 en: Pressed: “{}”
+
+ru: Значок в строке меню
+en: Menu bar icon
+
+ru: Значок в области уведомлений
+en: Notification area icon
+
+ru: Скопировал команду — вставь её в терминал (Cmd+V).
+en: Copied the command — paste it into the terminal (Cmd+V).
+
+ru: Скопировал команду — вставь её в терминал (Ctrl+V).
+en: Copied the command — paste it into the terminal (Ctrl+V).
+
+ru: Значок с лимитами ИИ — в строке меню.
+en: The AI limits icon is in the menu bar.
+
+ru: Значок с лимитами ИИ — в области уведомлений.
+en: The AI limits icon is in the notification area.
+
+ru: Значок с лимитами ИИ убран из строки меню.
+en: The AI limits icon is removed from the menu bar.
+
+ru: Значок с лимитами ИИ убран из области уведомлений.
+en: The AI limits icon is removed from the notification area.
+
+ru: Сетевой интерфейс
+en: Network interface
+
+ru: Время сейчас
+en: Current time
+
+ru: Время последней проверки
+en: Time of the last check

@@ -784,3 +784,6 @@ en: That number now belongs to a different program, so I am leaving it alone. Ch
 
 ru: Здесь принудительный перезапуск оболочки закрыл бы весь сеанс со всеми окнами, поэтому Аптечка его не делает. Перезапусти сама: нажми Alt+F2, введи r и нажми Enter.
 en: Here a forced shell restart would close the whole session with all windows, so First Aid Cat does not do it. Restart it yourself: press Alt+F2, type r and press Enter.
+
+ru:    # не закрылась? запусти строку ещё раз или завершить принудительно через Мониторинг системы
+en:    # still running? run this line again or force quit it in Activity Monitor

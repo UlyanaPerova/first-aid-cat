@@ -1385,6 +1385,19 @@ fn read_snapshot_file() -> Option<Snapshot> {
     })
 }
 
+/// Время эталона для показа: в файле оно как у ctime («Fri Nov  6 23:23:11 2026»), в окне — «06.11.2026 23:23».
+/// Не разобралось (чужой вид) — как есть.
+pub fn snapshot_time_shown(t: &str) -> String {
+    let f: Vec<&str> = t.split_whitespace().collect();
+    if let [_, mon, day, hms, year] = f[..] {
+        let m = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].iter().position(|x| *x == mon);
+        if let (Some(m), Ok(d), Some(hm), Ok(_)) = (m, day.parse::<u32>(), hms.get(..5), year.parse::<u32>()) {
+            return format!("{d:02}.{:02}.{year} {hm}", m + 1);
+        }
+    }
+    t.to_string()
+}
+
 /// Эталон для проверок. Отличие от Python: если файла нет, текущее состояние берётся
 /// «в уме» и на диск НЕ пишется (проверки только читают). Записывает эталон кнопка «Запомнить…».
 pub fn load_snapshot() -> Snapshot {
@@ -1486,7 +1499,7 @@ pub(crate) fn check_themes() -> Vec<Check> {
                     .hint("Пока экран заблокирован, GNOME выключает расширения — проверю после разблокировки."),
             );
         }
-        out.push(Check::new("theme", "Эталон", INFO, &snap.time).hint("С этим состоянием сравниваются темы.").fixes(vec![fx(
+        out.push(Check::new("theme", "Эталон", INFO, &snapshot_time_shown(&snap.time)).hint("С этим состоянием сравниваются темы.").fixes(vec![fx(
             "snapshot",
             "Запомнить текущее как норму",
             None,
@@ -1499,7 +1512,7 @@ pub(crate) fn check_themes() -> Vec<Check> {
                 Check::new("theme", "Расширения", INFO, "не проверить").unknown().hint("gnome-extensions не ответил — не знаю, какие включены."),
             );
         }
-        out.push(Check::new("theme", "Эталон", INFO, &snap.time).hint("С этим состоянием сравниваются темы.").fixes(vec![fx(
+        out.push(Check::new("theme", "Эталон", INFO, &snapshot_time_shown(&snap.time)).hint("С этим состоянием сравниваются темы.").fixes(vec![fx(
             "snapshot",
             "Запомнить текущее как норму",
             None,
@@ -1533,7 +1546,7 @@ pub(crate) fn check_themes() -> Vec<Check> {
             out.push(Check::new("theme", &title, WARN, &state.to_lowercase()).fixes(fix()));
         }
     }
-    out.push(Check::new("theme", "Эталон", INFO, &snap.time).hint("С этим состоянием сравниваются темы.").fixes(vec![fx(
+    out.push(Check::new("theme", "Эталон", INFO, &snapshot_time_shown(&snap.time)).hint("С этим состоянием сравниваются темы.").fixes(vec![fx(
         "snapshot",
         "Запомнить текущее как норму",
         None,
@@ -3378,6 +3391,13 @@ mod tests {
         assert_eq!(clock_row(Some(70.0), Some(true), vec![]).status, OK);
         assert_eq!(clock_row(Some(70.0), Some(false), vec![]).status, WARN);
         assert_eq!(clock_row(Some(-400.0), None, vec![]).value, "отстаёт на 6 мин");
+    }
+
+    #[test]
+    fn snapshot_time_is_shown_like_other_dates() {
+        assert_eq!(snapshot_time_shown("Fri Nov  6 23:23:11 2026"), "06.11.2026 23:23");
+        assert_eq!(snapshot_time_shown("Mon Jan 12 07:05:00 2026"), "12.01.2026 07:05");
+        assert_eq!(snapshot_time_shown("?"), "?");
     }
 
     /// Эталон пишется в формате Python (читается им) и читается обратно. HOME подменён на временную папку.

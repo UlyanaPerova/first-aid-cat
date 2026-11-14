@@ -1893,17 +1893,25 @@ fn attach_console() {
     }
 }
 
-/// aptechka --help
-const HELP: &str = "Аптечка — проверка компьютера с котом-доктором.\n\n\
+/// aptechka --help: начало и конец общие, строка про значок — своя на каждой системе
+const HELP_TOP: &str = "Аптечка — проверка компьютера с котом-доктором.\n\n\
 aptechka                 открыть окно\n\
 aptechka --diag          все проверки таблицей в терминале\n\
 aptechka --sessions      сессии ИИ-агентов и как их продолжить\n\
 aptechka --speed         замер скорости в терминале\n\
-aptechka --widget        только виджет на рабочем столе (Linux, Windows)\n\
-aptechka --tray          только значок с лимитами ИИ в панели (Linux, Windows)\n\
-aptechka --fix ID [ARG]  одна починка; DRY_RUN=1 — только показать, что было бы\n\
+aptechka --widget        только виджет на рабочем столе (Linux, Windows)\n";
+const HELP_BOTTOM: &str = "aptechka --fix ID [ARG]  одна починка; DRY_RUN=1 — только показать, что было бы\n\
 aptechka --claude-limits on|off  лимиты Claude Code через его строку состояния (off — вернуть прежнюю)\n\n\
 Язык: APTECHKA_LANG=ru|en";
+fn help_tray_line() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "aptechka --tray          только значок с лимитами ИИ в строке меню\n"
+    } else if cfg!(windows) {
+        "aptechka --tray          только значок с лимитами ИИ в области уведомлений\n"
+    } else {
+        "aptechka --tray          только значок с лимитами ИИ в панели\n"
+    }
+}
 
 fn main() {
     // строка состояния Claude Code: зовётся часто, поэтому — первым делом, без подготовки остального
@@ -1918,7 +1926,7 @@ fn main() {
     }
     if cli_args().iter().any(|a| a == "--help" || a == "-h") {
         println!("{} {}\n", i18n::t("Аптечка"), env!("CARGO_PKG_VERSION"));
-        println!("{}", i18n::tr(HELP));
+        println!("{}{}{}", i18n::tr(HELP_TOP), i18n::tr(help_tray_line()), i18n::tr(HELP_BOTTOM));
         return;
     }
     if let Some(i) = cli_args().iter().position(|a| a == "--claude-limits") {

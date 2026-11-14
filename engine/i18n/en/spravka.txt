@@ -441,3 +441,33 @@ en: share
 
 ru: остальные
 en: others
+
+ru: Переключитесь на ближайший сервер VPN (Европа обычно быстрее Америки); закройте торренты и большие загрузки; по возможности подключитесь кабелем вместо Wi-Fi. Самопроверка: в терминале «ping -c 30 1.1.1.1» — в последней строке смотрите avg (средний пинг) и stddev (джиттер).
+en: Switch to the nearest VPN server (Europe is usually faster than America); close torrents and big downloads; use a cable instead of Wi-Fi if you can. Self-check: in Terminal run “ping -c 30 1.1.1.1” and look at avg (average ping) and stddev (jitter) on the last line.
+
+ru: Включите автосверку времени (кнопка в Аптечке) и проверьте часовой пояс в Системных настройках → Основные → Дата и время.
+en: Turn on automatic time sync (the button in First Aid Cat) and check the time zone in System Settings → General → Date & Time.
+
+ru: Проверьте, не забиты ли пылью вентиляторы, и не работает ли что-то тяжёлое в фоне («Мониторинг системы»).
+en: Check whether the fans are clogged with dust and whether something heavy is running in the background (Activity Monitor).
+
+ru: Закройте лишние вкладки и программы; посмотреть, кто ест память, — «Мониторинг системы» (вкладка «Память»).
+en: Close extra tabs and programs; to see who is eating memory, use Activity Monitor (the Memory tab).
+
+ru: Очистите Загрузки и Корзину; что занимает место, покажет «Системные настройки → Основные → Хранилище».
+en: Empty Downloads and the Trash; System Settings → General → Storage will show what takes the space.
+
+ru: Переключитесь на ближайший сервер VPN (Европа обычно быстрее Америки); закройте торренты и большие загрузки; по возможности подключитесь кабелем вместо Wi-Fi. Самопроверка: в командной строке «ping -n 30 1.1.1.1» — внизу смотрите «Среднее» (средний пинг) и разницу между «Максимальное» и «Минимальное» (джиттер).
+en: Switch to the nearest VPN server (Europe is usually faster than America); close torrents and big downloads; use a cable instead of Wi-Fi if you can. Self-check: in the command prompt run “ping -n 30 1.1.1.1” and look at Average (average ping) and the difference between Maximum and Minimum (jitter) at the bottom.
+
+ru: Включите автосверку времени (кнопка в Аптечке) и проверьте часовой пояс в Параметрах → Время и язык → Дата и время.
+en: Turn on automatic time sync (the button in First Aid Cat) and check the time zone in Settings → Time & language → Date & time.
+
+ru: Проверьте, не забиты ли пылью вентиляторы, и не работает ли что-то тяжёлое в фоне (Диспетчер задач).
+en: Check whether the fans are clogged with dust and whether something heavy is running in the background (Task Manager).
+
+ru: Закройте лишние вкладки и программы; посмотреть, кто ест память, — Диспетчер задач.
+en: Close extra tabs and programs; to see who is eating memory, use Task Manager.
+
+ru: Очистите Загрузки и корзину; что занимает место, покажет «Параметры → Система → Память».
+en: Empty Downloads and the Recycle Bin; Settings → System → Storage will show what takes the space.

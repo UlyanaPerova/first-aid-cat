@@ -372,7 +372,7 @@ fn open_to_others(_: &Path) -> bool {
 }
 
 /// Есть ли на компьютере другие люди (учётные записи с домашней папкой и входом).
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "macos")))]
 fn other_humans() -> usize {
     let me = crate::store::home_str();
     crate::store::read_text("/etc/passwd")
@@ -385,6 +385,30 @@ fn other_humans() -> usize {
                 && f[5] != me
                 && !f[6].ends_with("nologin")
                 && !f[6].ends_with("false")
+        })
+        .count()
+}
+
+/// macOS: местные учётные записи живут не в /etc/passwd, а в службе каталогов — спрашиваем dscl (только чтение).
+#[cfg(target_os = "macos")]
+fn other_humans() -> usize {
+    let me = crate::store::home_str();
+    let me = me.rsplit('/').next().unwrap_or("").to_string();
+    count_dscl_humans(&crate::diag::run(&["dscl", ".", "-list", "/Users", "UniqueID"], 5).1, &me)
+}
+
+/// Разбор вывода «dscl . -list /Users UniqueID» («имя  номер» по строке): обычные люди — номер от 501,
+/// без служебных (_имя, nobody, daemon, root, Guest) и без хозяина окна.
+#[cfg(any(target_os = "macos", test))]
+fn count_dscl_humans(out: &str, me: &str) -> usize {
+    out.lines()
+        .filter(|l| {
+            let mut f = l.split_whitespace();
+            let (Some(name), Some(uid), None) = (f.next(), f.next(), f.next()) else { return false };
+            uid.parse::<u32>().is_ok_and(|u| (501..60000).contains(&u))
+                && name != me
+                && !name.starts_with('_')
+                && !["nobody", "daemon", "root", "Guest"].contains(&name)
         })
         .count()
 }
@@ -489,8 +513,14 @@ pub fn check() -> Vec<Check> {
         }
     }
     if !env_hits.is_empty() {
-        out.push(Check::new("sys", "След: ключи в настройках оболочки", INFO, &env_hits.join(", "))
-            .hint("Ключ в переменной окружения видят все программы, запущенные из терминала. Надёжнее — хранилище паролей системы (Связка ключей / «Пароли и ключи»)."));
+        let hint = if cfg!(target_os = "macos") {
+            "Ключ в переменной окружения видят все программы, запущенные из терминала. Надёжнее — хранилище паролей системы (Связка ключей)."
+        } else if cfg!(windows) {
+            "Ключ в переменной окружения видят все программы, запущенные из терминала. Надёжнее — хранилище паролей системы (Диспетчер учётных данных)."
+        } else {
+            "Ключ в переменной окружения видят все программы, запущенные из терминала. Надёжнее — хранилище паролей системы («Пароли и ключи»)."
+        };
+        out.push(Check::new("sys", "След: ключи в настройках оболочки", INFO, &env_hits.join(", ")).hint(hint));
     }
 
     // 3. чаты ИИ-агентов: ключ, вставленный в чат, видела модель — его стоит заменить
@@ -665,8 +695,14 @@ pub fn check() -> Vec<Check> {
         out.push(if enc {
             Check::new("sys", "След: шифрование диска", OK, "включено")
         } else {
-            Check::new("sys", "След: шифрование диска", INFO, "выключено")
-                .hint("Без шифрования украденный ноутбук читается целиком: ключи, чаты, пароли браузера. Шифрование включается при установке системы (Linux), FileVault (macOS), BitLocker (Windows).")
+            let hint = if cfg!(target_os = "macos") {
+                "Без шифрования украденный ноутбук читается целиком: ключи, чаты, пароли браузера. Шифрование включается в FileVault."
+            } else if cfg!(windows) {
+                "Без шифрования украденный ноутбук читается целиком: ключи, чаты, пароли браузера. Шифрование включается в BitLocker."
+            } else {
+                "Без шифрования украденный ноутбук читается целиком: ключи, чаты, пароли браузера. Шифрование включается при установке системы."
+            };
+            Check::new("sys", "След: шифрование диска", INFO, "выключено").hint(hint)
         });
     }
 
@@ -1050,6 +1086,16 @@ fn drop_secret_records(t: &[u8], fish: bool) -> (Vec<u8>, usize) {
 
 #[cfg(test)]
 mod tests {
+    /// Вывод dscl: служебные записи и хозяин не считаются, обычный второй человек — да.
+    #[test]
+    fn dscl_other_humans() {
+        let out = "_amavisd                -6\nGuest                   201\ndaemon                  1\nnobody                  -2\nroot                    0\nulyanaperova            501\nanna                    502\n_spotlight              89\n";
+        assert_eq!(count_dscl_humans(out, "ulyanaperova"), 1);
+        assert_eq!(count_dscl_humans(out, "anna"), 1);
+        assert_eq!(count_dscl_humans("ulyanaperova 501\n", "ulyanaperova"), 0);
+        assert_eq!(count_dscl_humans("", "x"), 0);
+    }
+
     /// Длинная цепочка «sk-sk-sk-…» не должна вешать поиск ключей (время росло как квадрат длины).
     #[test]
     fn long_prefix_run_is_fast() {

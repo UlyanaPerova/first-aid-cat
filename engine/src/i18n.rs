@@ -356,7 +356,7 @@ fn translate(t: &Table, s: &str, depth: u8) -> String {
         }
     }
     // составная строка: части через разделители — переводим по частям
-    for sep in ["\n", " · ", " — ", "; ", ". ", ", ", ": "] {
+    for sep in ["\n", "   # ", " · ", " — ", "; ", ". ", ", ", ": "] {
         if s.contains(sep) {
             let parts: Vec<String> = s.split(sep).map(|p| translate(t, p, depth + 1)).collect();
             return parts.join(sep);

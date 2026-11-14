@@ -27,8 +27,8 @@ ru: След: ключи в настройках оболочки
 en: Footprint: keys in shell settings
 
 # footprint.rs:372
-ru: Ключ в переменной окружения видят все программы, запущенные из терминала. Надёжнее — хранилище паролей системы (Связка ключей / «Пароли и ключи»).
-en: A key in an environment variable is visible to every program started from the terminal. Safer: the system password store (Keychain / “Passwords and Keys”).
+ru: Ключ в переменной окружения видят все программы, запущенные из терминала. Надёжнее — хранилище паролей системы («Пароли и ключи»).
+en: A key in an environment variable is visible to every program started from the terminal. Safer: the system password store (“Passwords and Keys”).
 
 # footprint.rs:392
 ru: OpenCode (база SQLite)
@@ -111,8 +111,8 @@ ru: включено
 en: on
 
 # footprint.rs:536
-ru: Без шифрования украденный ноутбук читается целиком: ключи, чаты, пароли браузера. Шифрование включается при установке системы (Linux), FileVault (macOS), BitLocker (Windows).
-en: Without encryption a stolen laptop can be read in full: keys, chats, browser passwords. Encryption is enabled at system install (Linux), with FileVault (macOS) or BitLocker (Windows).
+ru: Без шифрования украденный ноутбук читается целиком: ключи, чаты, пароли браузера. Шифрование включается при установке системы.
+en: Without encryption a stolen laptop can be read in full: keys, chats, browser passwords. Encryption is enabled when the system is installed.
 
 # footprint.rs:550
 ru: След: файлы открыты другим
@@ -214,3 +214,15 @@ en: the symlink doesn't lead to a history file
 
 ru: цель ссылки принадлежит не тебе
 en: the symlink target isn't yours
+
+ru: Ключ в переменной окружения видят все программы, запущенные из терминала. Надёжнее — хранилище паролей системы (Связка ключей).
+en: A key in an environment variable is visible to every program started from the terminal. Safer: the system password store (Keychain).
+
+ru: Ключ в переменной окружения видят все программы, запущенные из терминала. Надёжнее — хранилище паролей системы (Диспетчер учётных данных).
+en: A key in an environment variable is visible to every program started from the terminal. Safer: the system password store (Credential Manager).
+
+ru: Без шифрования украденный ноутбук читается целиком: ключи, чаты, пароли браузера. Шифрование включается в FileVault.
+en: Without encryption a stolen laptop can be read in full: keys, chats, browser passwords. Encryption is turned on in FileVault.
+
+ru: Без шифрования украденный ноутбук читается целиком: ключи, чаты, пароли браузера. Шифрование включается в BitLocker.
+en: Without encryption a stolen laptop can be read in full: keys, chats, browser passwords. Encryption is turned on in BitLocker.

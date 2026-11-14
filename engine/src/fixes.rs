@@ -1296,10 +1296,10 @@ pub fn manual(id: &str, arg: Option<&str>) -> Option<String> {
             "mac_menubar_restart" => "killall SystemUIServer; killall ControlCenter".into(),
             "mac_audio_restart" => "sudo killall coreaudiod".into(),
             "mac_time_sync" => "sudo sntp -sS time.apple.com".into(),
-            "mac_thin_snapshots" => "tmutil thinlocalsnapshots / 999999999999 4".into(),
+            "mac_thin_snapshots" => "sudo tmutil thinlocalsnapshots / 999999999999 4".into(),
             "mac_force_quit" => {
                 let p = a.split('@').next().unwrap_or("").trim().parse::<u32>().ok()?;
-                confirm_kill(p, "   # still running? run this line again; if it stays, use Activity Monitor > Force Quit")
+                confirm_kill(p, "   # не закрылась? запусти строку ещё раз или завершить принудительно через Мониторинг системы")
             }
             _ => return None,
         })
@@ -1312,7 +1312,7 @@ pub fn manual(id: &str, arg: Option<&str>) -> Option<String> {
 }
 
 /// Для ручного закрытия по номеру: сначала показать, что за программа под этим номером, и спросить
-/// (номер мог достаться другой программе). Текст без русских слов — как есть в любом языке интерфейса.
+/// (номер мог достаться другой программе). Вопрос в самой команде — по-английски, как есть; русский комментарий в конце переводится.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn confirm_kill(pid: u32, tail: &str) -> String {
     format!("ps -o pid=,comm= -p {pid} && printf 'Close this program? [y/N] ' && read a && [ \"$a\" = y ] && kill {pid}{tail}")

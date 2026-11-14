@@ -377,3 +377,9 @@ en: AI limits and usage
 
 ru: Сколько занято лимитов подписки Claude Code и Codex, когда сброс, сколько токенов ушло
 en: How much of the Claude Code and Codex subscription limits is used, when they reset, how many tokens were spent
+
+ru: Оформление, цвета, Dock
+en: Appearance, colors, Dock
+
+ru: Тема, цвет акцента, обои, панель задач
+en: Theme, accent color, wallpaper, taskbar
