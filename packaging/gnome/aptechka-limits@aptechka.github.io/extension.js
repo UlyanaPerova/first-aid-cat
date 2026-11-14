@@ -8,6 +8,8 @@ import St from 'gi://St';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Clutter from 'gi://Clutter';
+import Cogl from 'gi://Cogl';
+import GdkPixbuf from 'gi://GdkPixbuf';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
@@ -113,9 +115,37 @@ class AptechkaIndicator extends PanelMenu.Button {
         const p = data.panel;
         if (p && p.path && (!this._panelInfo || this._panelInfo.path !== p.path || this._panelInfo.at !== data.at)) {
             this._panelInfo = {...p, at: data.at};
-            // the picture is in screen pixels; the menu is laid out in logical pixels
+            this._showPanel(p);
+        }
+    }
+
+    // The picture is pixel art drawn by the app in screen pixels. Show it dot for dot: its own pixels as the
+    // actor's content, actor size in stage (= screen) pixels, nearest-neighbour filter. A CSS background-image
+    // is wrong for this: at display scale 2 St treats the file as a 1x image, upscales it with smoothing and
+    // scales it back down, which blurs every pixel edge.
+    _showPanel(p) {
+        try {
+            const pixbuf = GdkPixbuf.Pixbuf.new_from_file(p.path);
+            const [w, h] = [pixbuf.get_width(), pixbuf.get_height()];
+            const format = pixbuf.get_has_alpha() ? Cogl.PixelFormat.RGBA_8888 : Cogl.PixelFormat.RGB_888;
+            const content = St.ImageContent.new_with_preferred_size(w, h);
+            const args = [pixbuf.read_pixel_bytes(), format, w, h, pixbuf.get_rowstride()];
+            try {
+                content.set_bytes(...args);
+            } catch (e) {
+                // GNOME 48+: the Cogl context comes first
+                content.set_bytes(global.stage.context.get_backend().get_cogl_context(), ...args);
+            }
+            this._panel.style = '';
+            this._panel.set_content(content);
+            this._panel.set_content_scaling_filters(Clutter.ScalingFilter.NEAREST, Clutter.ScalingFilter.NEAREST);
+            this._panel.set_size(w, h);
+        } catch (e) {
+            // could not load the pixels: the old way (smoothed, but the panel is there)
             const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor || 1;
             const w = Math.round(p.w / scale), h = Math.round(p.h / scale);
+            this._panel.set_content(null);
+            this._panel.set_size(-1, -1);
             this._panel.style = `background-image: url("file://${p.path}"); background-size: ${w}px ${h}px; width: ${w}px; height: ${h}px;`;
         }
     }
