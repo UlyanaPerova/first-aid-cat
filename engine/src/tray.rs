@@ -870,6 +870,201 @@ mod win {
     }
 }
 
+// ───────────────────────────── macOS: значок в строке меню ─────────────────────────────
+
+/// Значок в строке меню (NSStatusItem): кот и число рядом, как на Linux. Нажатие — та же плашка-окно.
+/// Прямые вызовы Objective-C (как прямой WinAPI в `win`): без новых зависимостей.
+#[cfg(target_os = "macos")]
+mod mac {
+    use super::Ev;
+    use std::ffi::{c_char, c_void, CStr};
+    use std::sync::{Mutex, OnceLock};
+    use winit::event_loop::EventLoopProxy;
+
+    type Id = *mut c_void;
+    type Sel = *const c_void;
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Default)]
+    struct Rect {
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+    }
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct Size {
+        w: f64,
+        h: f64,
+    }
+
+    #[link(name = "AppKit", kind = "framework")]
+    extern "C" {}
+    #[link(name = "objc")]
+    extern "C" {
+        fn objc_getClass(name: *const c_char) -> Id;
+        fn sel_registerName(name: *const c_char) -> Sel;
+        fn objc_msgSend();
+        #[cfg(target_arch = "x86_64")]
+        fn objc_msgSend_stret();
+        fn objc_allocateClassPair(superclass: Id, name: *const c_char, extra: usize) -> Id;
+        fn objc_registerClassPair(cls: Id);
+        fn class_addMethod(cls: Id, sel: Sel, imp: unsafe extern "C" fn(Id, Sel, Id), types: *const c_char) -> bool;
+    }
+
+    unsafe fn cls(n: &CStr) -> Id {
+        objc_getClass(n.as_ptr())
+    }
+    unsafe fn sel(n: &CStr) -> Sel {
+        sel_registerName(n.as_ptr())
+    }
+    // objc_msgSend зовётся с точной подписью каждого вызова (на arm64 иначе нельзя)
+    unsafe fn send0(o: Id, s: &CStr) -> Id {
+        let f: unsafe extern "C" fn(Id, Sel) -> Id = std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+        f(o, sel(s))
+    }
+    unsafe fn send1(o: Id, s: &CStr, a: Id) -> Id {
+        let f: unsafe extern "C" fn(Id, Sel, Id) -> Id = std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+        f(o, sel(s), a)
+    }
+    unsafe fn send_f64(o: Id, s: &CStr, a: f64) -> Id {
+        let f: unsafe extern "C" fn(Id, Sel, f64) -> Id = std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+        f(o, sel(s), a)
+    }
+    unsafe fn send_int(o: Id, s: &CStr, a: isize) -> Id {
+        let f: unsafe extern "C" fn(Id, Sel, isize) -> Id = std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+        f(o, sel(s), a)
+    }
+    unsafe fn send_bool(o: Id, s: &CStr, a: bool) -> Id {
+        let f: unsafe extern "C" fn(Id, Sel, i8) -> Id = std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+        f(o, sel(s), i8::from(a))
+    }
+    unsafe fn send_size(o: Id, s: &CStr, a: Size) -> Id {
+        let f: unsafe extern "C" fn(Id, Sel, Size) -> Id = std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+        f(o, sel(s), a)
+    }
+    unsafe fn send_bytes(o: Id, s: &CStr, p: *const u8, n: usize) -> Id {
+        let f: unsafe extern "C" fn(Id, Sel, *const u8, usize) -> Id = std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+        f(o, sel(s), p, n)
+    }
+    unsafe fn get_f64(o: Id, s: &CStr) -> f64 {
+        let f: unsafe extern "C" fn(Id, Sel) -> f64 = std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+        f(o, sel(s))
+    }
+    /// Сообщение, возвращающее NSRect (на x86_64 большие структуры возвращаются через objc_msgSend_stret).
+    unsafe fn get_rect(o: Id, s: &CStr) -> Rect {
+        #[cfg(target_arch = "x86_64")]
+        {
+            let mut r = Rect::default();
+            let f: unsafe extern "C" fn(*mut Rect, Id, Sel) = std::mem::transmute(objc_msgSend_stret as unsafe extern "C" fn());
+            f(&mut r, o, sel(s));
+            r
+        }
+        #[cfg(not(target_arch = "x86_64"))]
+        {
+            let f: unsafe extern "C" fn(Id, Sel) -> Rect = std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+            f(o, sel(s))
+        }
+    }
+    unsafe fn nsstring(t: &str) -> Id {
+        // строка с длиной (внутри текста нулей не ждём, но и не зависим от них): NSUTF8StringEncoding = 4
+        let f: unsafe extern "C" fn(Id, Sel, *const u8, usize, usize) -> Id = std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+        let s = f(send0(cls(c"NSString"), c"alloc"), sel(c"initWithBytes:length:encoding:"), t.as_ptr(), t.len(), 4);
+        send0(s, c"autorelease")
+    }
+
+    static PROXY: OnceLock<Mutex<EventLoopProxy<Ev>>> = OnceLock::new();
+
+    /// Нажали на значок: где он на экране (в точках экрана, от левого верхнего угла основного экрана) — плашка встанет под ним.
+    unsafe extern "C" fn clicked(_this: Id, _sel: Sel, sender: Id) {
+        let (mut x, mut y) = (0, 0);
+        let win = send0(sender, c"window");
+        if !win.is_null() {
+            let fr = get_rect(win, c"frame");
+            let scale = get_f64(win, c"backingScaleFactor");
+            // у macOS ось y идёт снизу основного экрана
+            let first = send0(send0(cls(c"NSScreen"), c"screens"), c"firstObject");
+            if !first.is_null() {
+                let sh = get_rect(first, c"frame").h;
+                x = ((fr.x + fr.w / 2.0) * scale) as i32;
+                y = ((sh - fr.y) * scale) as i32;
+            }
+        }
+        if let Some(p) = PROXY.get() {
+            if let Ok(p) = p.lock() {
+                let _ = p.send_event(Ev::Click(x, y));
+            }
+        }
+    }
+
+    pub struct Tray {
+        item: Id,
+        button: Id,
+    }
+
+    impl Tray {
+        /// Только из главного потока (после создания цикла событий: NSApplication уже есть).
+        pub fn start(proxy: EventLoopProxy<Ev>) -> Option<Tray> {
+            let _ = PROXY.set(Mutex::new(proxy));
+            unsafe {
+                let bar = send0(cls(c"NSStatusBar"), c"systemStatusBar");
+                // NSVariableStatusItemLength = -1: ширина по содержимому (значок и число)
+                let item = send0(send_f64(bar, c"statusItemWithLength:", -1.0), c"retain");
+                let button = send0(item, c"button");
+                if item.is_null() || button.is_null() {
+                    return None;
+                }
+                // получатель нажатия: свой класс с одним методом
+                let mut target_cls = cls(c"AptechkaTrayTarget");
+                if target_cls.is_null() {
+                    target_cls = objc_allocateClassPair(cls(c"NSObject"), c"AptechkaTrayTarget".as_ptr(), 0);
+                    class_addMethod(target_cls, sel(c"clicked:"), clicked, c"v@:@".as_ptr());
+                    objc_registerClassPair(target_cls);
+                }
+                let target = send0(send0(target_cls, c"alloc"), c"init"); // живёт, пока жив значок
+                send1(button, c"setTarget:", target);
+                let f: unsafe extern "C" fn(Id, Sel, Sel) -> Id = std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+                f(button, sel(c"setAction:"), sel(c"clicked:"));
+                Some(Tray { item, button })
+            }
+        }
+
+        /// Число рядом со значком, сам значок (PNG) и подсказка.
+        pub fn set(&self, label: &str, png: &[u8], tip: &str) {
+            unsafe {
+                if !png.is_empty() {
+                    let data = send_bytes(cls(c"NSData"), c"dataWithBytes:length:", png.as_ptr(), png.len());
+                    let img = send1(send0(cls(c"NSImage"), c"alloc"), c"initWithData:", data);
+                    if !img.is_null() {
+                        send_size(img, c"setSize:", Size { w: 18.0, h: 18.0 });
+                        // шаблон: система сама красит силуэт под светлую и тёмную строку меню
+                        send_bool(img, c"setTemplate:", true);
+                        send1(self.button, c"setImage:", img);
+                        send0(img, c"release");
+                        send_int(self.button, c"setImagePosition:", 2); // NSImageLeft: значок слева от числа
+                    }
+                }
+                send1(self.button, c"setTitle:", nsstring(label.trim_start()));
+                send1(self.button, c"setToolTip:", nsstring(tip));
+            }
+        }
+
+        pub fn remove(&self) {
+            unsafe {
+                send1(send0(cls(c"NSStatusBar"), c"systemStatusBar"), c"removeStatusItem:", self.item);
+            }
+        }
+    }
+
+    /// Вывести программу вперёд: у значка нет своего окна в Dock, и новая плашка иначе не получает клавиши.
+    pub fn activate() {
+        unsafe {
+            send_bool(send0(cls(c"NSApplication"), c"sharedApplication"), c"activateIgnoringOtherApps:", true);
+        }
+    }
+}
+
 // ───────────────────────────── включение и автозапуск ─────────────────────────────
 
 /// Значок включён в настройках (по умолчанию — да).
@@ -877,8 +1072,8 @@ pub fn enabled() -> bool {
     crate::prefs::load().get("tray").and_then(|v| v.as_bool()).unwrap_or(true)
 }
 
-/// Значок есть пока на Linux и Windows (на macOS — следующий шаг).
-pub const SUPPORTED: bool = cfg!(any(target_os = "linux", windows));
+/// Значок есть на Linux (панель), Windows (область уведомлений) и macOS (строка меню).
+pub const SUPPORTED: bool = cfg!(any(target_os = "linux", windows, target_os = "macos"));
 
 /// Есть ли о чём показывать: стоит Claude Code или Codex.
 fn has_agents() -> bool {
@@ -984,7 +1179,27 @@ fn set_autostart(on: bool) {
         let val = format!("\"{}\" --tray", exe.display());
         let _ = crate::diag::run(&["reg", "add", KEY, "/v", "AptechkaTray", "/t", "REG_SZ", "/d", &val, "/f"], 10);
     }
-    #[cfg(not(any(target_os = "linux", windows)))]
+    #[cfg(target_os = "macos")]
+    {
+        // агент запуска: launchd стартует значок при входе (файл подхватится со следующего входа; сейчас значок запускает `ensure`)
+        let Some(f) = crate::store::home_dir().map(|h| h.join("Library/LaunchAgents/io.github.aptechka-tray.plist")) else { return };
+        if !on {
+            crate::store::remove_file_nofollow(&f);
+            return;
+        }
+        let Some(exe) = exe() else { return };
+        let q = exe.to_string_lossy().replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+        let body = format!(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n\t<key>Label</key>\n\t<string>io.github.aptechka-tray</string>\n\t<key>ProgramArguments</key>\n\t<array>\n\t\t<string>{q}</string>\n\t\t<string>--tray</string>\n\t</array>\n\t<key>RunAtLoad</key>\n\t<true/>\n\t<key>ProcessType</key>\n\t<string>Interactive</string>\n</dict>\n</plist>\n"
+        );
+        if crate::store::read_capped(&f, 4096).ok().as_deref() != Some(body.as_str()) {
+            if let Some(d) = f.parent() {
+                let _ = std::fs::create_dir_all(d);
+            }
+            let _ = crate::store::write_mode(&f, body.as_bytes(), 0o644);
+        }
+    }
+    #[cfg(not(any(target_os = "linux", windows, target_os = "macos")))]
     let _ = on;
 }
 
@@ -1499,6 +1714,8 @@ struct App {
     tray: Option<sni::Tray>,
     #[cfg(windows)]
     tray: Option<win::Tray>,
+    #[cfg(target_os = "macos")]
+    tray: Option<mac::Tray>,
     popup: Option<Popup>,
     fonts: Fonts,
     k: i32,
@@ -1594,6 +1811,8 @@ impl App {
         let window = Rc::new(window);
         let Ok(ctx) = softbuffer::Context::new(window.clone()) else { return };
         let Ok(surface) = softbuffer::Surface::new(&ctx, window.clone()) else { return };
+        #[cfg(target_os = "macos")]
+        mac::activate();
         window.focus_window();
         self.popup =
             Some(Popup { window, surface, btn: Rect::new(0, 0, 0, 0), close: Rect::new(0, 0, 0, 0), cursor: (0, 0), opened: Instant::now() });
@@ -1689,6 +1908,12 @@ impl App {
                 .unwrap_or_default();
             t.set(n, argb, &crate::i18n::t(&tooltip(&self.agents, now)));
         }
+        #[cfg(target_os = "macos")]
+        if let Some(t) = &self.tray {
+            // значок — силуэт кота по состоянию агентов (ARGB → PNG), число — текстом рядом, как на Linux
+            let png = icon_rgba(44).map(|(n, px)| png_rgba(n, n, &px.iter().flat_map(|p| [p[1], p[2], p[3], p[0]]).collect::<Vec<u8>>())).unwrap_or_default();
+            t.set(&label(&self.agents, now), &png, &crate::i18n::t(&tooltip(&self.agents, now)));
+        }
         let _ = now;
     }
 }
@@ -1698,6 +1923,10 @@ impl ApplicationHandler<Ev> for App {
         // масштаб экрана — для картинки плашки (меню расширения GNOME рисует её без окна)
         self.k = el.primary_monitor().map(|m| m.scale_factor().round() as i32).unwrap_or(1).clamp(1, 4);
         self.set_tray();
+        // TRAY_OPEN=1 — сразу открыть плашку (проверка там, где на значок не нажать: по SSH, в тестах)
+        if std::env::var_os("TRAY_OPEN").is_some() {
+            let _ = self.proxy.send_event(Ev::Show(0, 0));
+        }
     }
 
     fn user_event(&mut self, el: &ActiveEventLoop, ev: Ev) {
@@ -1719,7 +1948,7 @@ impl ApplicationHandler<Ev> for App {
                 self.set_tray();
             }
             Ev::Update => {
-                #[cfg(windows)]
+                #[cfg(any(windows, target_os = "macos"))]
                 if let Some(t) = &self.tray {
                     t.remove();
                 }
@@ -1731,7 +1960,7 @@ impl ApplicationHandler<Ev> for App {
                 el.exit()
             }
             Ev::Quit => {
-                #[cfg(windows)]
+                #[cfg(any(windows, target_os = "macos"))]
                 if let Some(t) = &self.tray {
                     t.remove();
                 }
@@ -1864,7 +2093,14 @@ pub fn run() {
         eprintln!("[значок] уже запущен");
         return;
     };
-    let Ok(el) = EventLoop::<Ev>::with_user_event().build() else {
+    let mut builder = EventLoop::<Ev>::with_user_event();
+    #[cfg(target_os = "macos")]
+    {
+        // только значок в строке меню: без значка в Dock и без своего меню программы
+        use winit::platform::macos::{ActivationPolicy, EventLoopBuilderExtMacOS};
+        builder.with_activation_policy(ActivationPolicy::Accessory).with_default_menu(false);
+    }
+    let Ok(el) = builder.build() else {
         eprintln!("[значок] нет экрана");
         return;
     };
@@ -1916,6 +2152,8 @@ pub fn run() {
         tray: sni::Tray::start(proxy.clone()),
         #[cfg(windows)]
         tray: win::Tray::start(proxy.clone()),
+        #[cfg(target_os = "macos")]
+        tray: mac::Tray::start(proxy.clone()),
         proxy,
         all: Vec::new(),
         agents: Vec::new(),
