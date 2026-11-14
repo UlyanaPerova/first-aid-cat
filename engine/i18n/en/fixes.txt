@@ -567,8 +567,8 @@ ru: Программа не закрылась.
 en: The program didn't close.
 
 # fixes.rs:1093
-ru: killall -3 gnome-shell   # только X11; на Wayland — выйти и войти
-en: killall -3 gnome-shell   # X11 only; on Wayland, log out and back in
+ru: # X11: нажми Alt+F2, введи r и нажми Enter; на Wayland — выйти и войти
+en: # X11: press Alt+F2, type r and press Enter; on Wayland, log out and back in
 
 # fixes.rs:1104
 ru: gnome-control-center keyboard   # «Переключить на следующий источник ввода» → Super+Пробел
@@ -781,3 +781,6 @@ en: Could not get access to this program (the kernel refuses or no permission) -
 # fixes.rs: macOS — номер достался другой программе
 ru: Под этим номером теперь другая программа — её не трогаю. Проверь ещё раз.
 en: That number now belongs to a different program, so I am leaving it alone. Check again.
+
+ru: Здесь принудительный перезапуск оболочки закрыл бы весь сеанс со всеми окнами, поэтому Аптечка его не делает. Перезапусти сама: нажми Alt+F2, введи r и нажми Enter.
+en: Here a forced shell restart would close the whole session with all windows, so First Aid Cat does not do it. Restart it yourself: press Alt+F2, type r and press Enter.

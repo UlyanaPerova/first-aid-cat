@@ -366,6 +366,36 @@ fn ext_enable(uuid: &str) -> (bool, String) {
     (ok, if ok { "Включено.".into() } else { m })
 }
 
+const SHELL_RESTART_BY_HAND: &str =
+    "Здесь принудительный перезапуск оболочки закрыл бы весь сеанс со всеми окнами, поэтому Аптечка его не делает. Перезапусти сама: нажми Alt+F2, введи r и нажми Enter.";
+
+/// Оболочка GNOME запущена службой systemd, у которой сбой службы ведёт к завершению сеанса.
+/// Только чтение (systemctl show): в режиме DRY_RUN тоже проверяем по-настоящему.
+fn shell_restart_ends_session() -> bool {
+    ["org.gnome.Shell@x11.service", "org.gnome.Shell@wayland.service"].iter().any(|unit| {
+        let out = crate::diag::run(&["systemctl", "--user", "show", unit, "-p", "OnFailure", "-p", "ActiveState"], 5).1;
+        shell_unit_ends_session(&out)
+    })
+}
+
+/// Разбор вывода `systemctl show … -p OnFailure -p ActiveState`: служба работает и при сбое зовёт gnome-session-failed.
+fn shell_unit_ends_session(show: &str) -> bool {
+    let active = show.lines().any(|l| l.trim() == "ActiveState=active");
+    let fails_session = show.lines().any(|l| l.starts_with("OnFailure=") && l.contains("gnome-session-failed"));
+    active && fails_session
+}
+
+#[cfg(test)]
+#[test]
+fn shell_restart_refused_when_failure_ends_session() {
+    // так отвечает systemctl на Ubuntu с GNOME 46 (X11): убить оболочку = закрыть сеанс
+    assert!(shell_unit_ends_session("OnFailure=gnome-session-failed.target org.gnome.Shell-disable-extensions.service\nActiveState=active\n"));
+    // служба не запущена (оболочка не под systemd или другой тип сеанса) — правило не действует
+    assert!(!shell_unit_ends_session("OnFailure=gnome-session-failed.target\nActiveState=inactive\n"));
+    assert!(!shell_unit_ends_session("OnFailure=\nActiveState=active\n"));
+    assert!(!shell_unit_ends_session(""));
+}
+
 fn shell_restart() -> (bool, String) {
     // тип сеанса — у logind, а не по переменной окружения (она врёт при запуске из ssh, sudo, другого сеанса):
     // в Wayland этот перезапуск завершил бы весь сеанс
@@ -377,6 +407,12 @@ fn shell_restart() -> (bool, String) {
     };
     if ty != "x11" && !dry_run() {
         return (false, "Перезапуск оболочки без выхода работает только в X11.".into());
+    }
+    // Оболочка под systemd с правилом «упала — закрыть сеанс» (GNOME 42+: OnFailure=gnome-session-failed.target):
+    // принудительная остановка там считается падением, сеанс завершается и все окна закрываются
+    // (так и вышло 2026-11-14 у владелицы на GNOME 46). Там оболочку перезапускает только сам человек.
+    if shell_restart_ends_session() {
+        return (false, SHELL_RESTART_BY_HAND.into());
     }
     // systemd поднимает оболочку заново, но после 3 падений за 15 с сдаётся и рушит сессию —
     // поэтому чаще раза в 20 с не перезапускаем
@@ -1168,7 +1204,8 @@ pub fn manual(id: &str, arg: Option<&str>) -> Option<String> {
                 let u = if a.is_empty() { crate::diag::current_dock()? } else { a.to_string() };
                 format!("gnome-extensions disable {0} && sleep 1 && gnome-extensions enable {0}", q(&u))
             }
-            "shell_restart" => "killall -3 gnome-shell   # только X11; на Wayland — выйти и войти".into(),
+            // не killall: на GNOME 42+ убитая оболочка считается сбоем и закрывает весь сеанс
+            "shell_restart" => "# X11: нажми Alt+F2, введи r и нажми Enter; на Wayland — выйти и войти".into(),
             "sound_restart" => "systemctl --user restart pipewire pipewire-pulse wireplumber".into(),
             "sound_unmute" => "wpctl set-mute @DEFAULT_AUDIO_SINK@ 0".into(),
             "sound_volume" => "wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.5".into(),
