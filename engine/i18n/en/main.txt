@@ -138,8 +138,8 @@ en: PowerShell did not start
 ru: Сеть лимитная — скорость не мерю (замер качает около 60 МБ). Измерить: кнопка «Скорость».
 en: The network is metered, so I'm not measuring speed (the test downloads about 60 MB). To measure: the “Speed” button.
 
-ru: Аптечка — проверка компьютера с котом-доктором.\n\naptechka                 открыть окно\naptechka --diag          все проверки таблицей в терминале\naptechka --sessions      сессии ИИ-агентов и как их продолжить\naptechka --speed         замер скорости в терминале\naptechka --widget        только виджет на рабочем столе (Linux, Windows)\n
-en: First Aid Cat — a computer health check with a doctor cat.\n\naptechka                 open the window\naptechka --diag          all checks as a table in the terminal\naptechka --sessions      AI agent sessions and how to resume them\naptechka --speed         speed test in the terminal\naptechka --widget        only the desktop widget (Linux, Windows)\n
+ru: Аптечка — проверка компьютера с котом-доктором.\n\naptechka                 открыть окно\naptechka --diag          все проверки таблицей в терминале\naptechka --sessions      сессии ИИ-агентов и как их продолжить\naptechka --speed         замер скорости в терминале\n
+en: First Aid Cat — a computer health check with a doctor cat.\n\naptechka                 open the window\naptechka --diag          all checks as a table in the terminal\naptechka --sessions      AI agent sessions and how to resume them\naptechka --speed         speed test in the terminal\n
 
 ru: aptechka --fix ID [ARG]  одна починка; DRY_RUN=1 — только показать, что было бы\naptechka --claude-limits on|off  лимиты Claude Code через его строку состояния (off — вернуть прежнюю)\n\nЯзык: APTECHKA_LANG=ru|en
 en: aptechka --fix ID [ARG]  run one fix; DRY_RUN=1 shows what would happen\naptechka --claude-limits on|off  Claude Code limits through its status line (off restores your own)\n\nLanguage: APTECHKA_LANG=ru|en
@@ -152,3 +152,6 @@ en: aptechka --tray          only the AI limits icon in the notification area\n
 
 ru: aptechka --tray          только значок с лимитами ИИ в панели\n
 en: aptechka --tray          only the AI limits icon in the panel\n
+
+ru: aptechka --widget        только виджет на рабочем столе\n
+en: aptechka --widget        only the desktop widget\n

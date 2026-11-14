@@ -39,9 +39,6 @@ en: 5 hours
 ru: токены за {} дней
 en: tokens, last {} days
 
-ru: сегодня {} · 7 дней {}
-en: today {} · 7 days {}
-
 ru: сегодня
 en: today
 

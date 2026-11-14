@@ -1898,8 +1898,15 @@ const HELP_TOP: &str = "Аптечка — проверка компьютера
 aptechka                 открыть окно\n\
 aptechka --diag          все проверки таблицей в терминале\n\
 aptechka --sessions      сессии ИИ-агентов и как их продолжить\n\
-aptechka --speed         замер скорости в терминале\n\
-aptechka --widget        только виджет на рабочем столе (Linux, Windows)\n";
+aptechka --speed         замер скорости в терминале\n";
+/// Окно-виджет есть на Linux и Windows; на macOS виджет системный (WidgetKit), команды такой там нет.
+fn help_widget_line() -> &'static str {
+    if cfg!(target_os = "macos") {
+        ""
+    } else {
+        "aptechka --widget        только виджет на рабочем столе\n"
+    }
+}
 const HELP_BOTTOM: &str = "aptechka --fix ID [ARG]  одна починка; DRY_RUN=1 — только показать, что было бы\n\
 aptechka --claude-limits on|off  лимиты Claude Code через его строку состояния (off — вернуть прежнюю)\n\n\
 Язык: APTECHKA_LANG=ru|en";
@@ -1926,7 +1933,7 @@ fn main() {
     }
     if cli_args().iter().any(|a| a == "--help" || a == "-h") {
         println!("{} {}\n", i18n::t("Аптечка"), env!("CARGO_PKG_VERSION"));
-        println!("{}{}{}", i18n::tr(HELP_TOP), i18n::tr(help_tray_line()), i18n::tr(HELP_BOTTOM));
+        println!("{}{}{}{}", i18n::tr(HELP_TOP), i18n::tr(help_widget_line()), i18n::tr(help_tray_line()), i18n::tr(HELP_BOTTOM));
         return;
     }
     if let Some(i) = cli_args().iter().position(|a| a == "--claude-limits") {

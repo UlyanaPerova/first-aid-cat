@@ -30,9 +30,6 @@ en:  · data from {} ago
 ru: данные {} назад
 en: data from {} ago
 
-ru: данные {} дн. назад
-en: data from {} d ago
-
 ru: Лимит исчерпан: агент ответит после сброса.
 en: Limit used up: the agent will answer after the reset.
 
