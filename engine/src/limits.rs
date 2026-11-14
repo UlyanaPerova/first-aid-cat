@@ -195,7 +195,7 @@ const LINE_CAP: usize = 8 << 20;
 
 /// Дочитать новые строки файла: каждая строка с `needle` разбирается как JSON и отдаётся в `eat`.
 /// Файл стал короче (его переписали) — читаем заново.
-fn read_new(p: &Path, st: &mut FileState, needles: &[&[u8]], eat: &mut dyn FnMut(&serde_json::Value, &mut FileState)) {
+fn read_new(p: &Path, st: &mut FileState, needles: &[&[u8]], seen: &mut HashSet<u64>, eat: &mut Eat) {
     let Ok(mut f) = crate::store::open_regular(p) else { return };
     let len = f.metadata().map(|m| m.len()).unwrap_or(0);
     if len < st.pos {
@@ -221,23 +221,38 @@ fn read_new(p: &Path, st: &mut FileState, needles: &[&[u8]], eat: &mut dyn FnMut
             continue;
         }
         if let Ok(v) = serde_json::from_slice::<serde_json::Value>(&buf) {
-            eat(&v, st);
+            eat(&v, st, seen);
         }
     }
 }
 
+/// Разбор одной строки журнала: строка, состояние её файла и отпечатки ответов, уже учтённых во ВСЕХ файлах агента.
+type Eat<'a> = dyn FnMut(&serde_json::Value, &mut FileState, &mut HashSet<u64>) + 'a;
+
 /// Прочитать все свежие журналы агента; файлы старше DAYS дней забываются.
-fn scan(state: &Mutex<Option<Files>>, root: &Path, depth: usize, needles: &[&[u8]], eat: &mut dyn FnMut(&serde_json::Value, &mut FileState)) {
+fn scan(state: &Mutex<Option<Files>>, roots: &[PathBuf], depth: usize, needles: &[&[u8]], eat: &mut Eat) {
     let since = std::time::SystemTime::now() - std::time::Duration::from_secs((DAYS as u64 + 1) * 86_400);
     let mut logs = Vec::new();
-    recent_logs(root, depth, since, &mut logs);
+    for root in roots {
+        recent_logs(root, depth, since, &mut logs);
+    }
     let mut g = state.lock().unwrap_or_else(|e| e.into_inner());
     let files = g.get_or_insert_with(HashMap::new);
     let keep: HashSet<&PathBuf> = logs.iter().collect();
     files.retain(|p, _| keep.contains(p));
+    // файл стал короче (его переписали) — он будет прочитан заново; забыть его ответы ДО сбора общего списка,
+    // иначе его же строки сочлись бы повторами
+    for (p, st) in files.iter_mut() {
+        if std::fs::metadata(p).is_ok_and(|m| m.len() < st.pos) {
+            *st = FileState::default();
+        }
+    }
+    // ответы, уже учтённые в любом файле: один ответ считается один раз, даже если историю сессии
+    // скопировали в новый файл (раньше повторы отсеивались только внутри одного файла)
+    let mut seen: HashSet<u64> = files.values().flat_map(|st| st.ids.iter().copied()).collect();
     for p in &logs {
         let st = files.entry(p.clone()).or_default();
-        read_new(p, st, needles, eat);
+        read_new(p, st, needles, &mut seen, eat);
     }
 }
 
@@ -267,23 +282,42 @@ fn hash(s: &str) -> u64 {
 
 /// Папка Claude Code (CLAUDE_CONFIG_DIR или ~/.claude).
 pub fn claude_dir() -> Option<PathBuf> {
-    std::env::var_os("CLAUDE_CONFIG_DIR")
-        .map(PathBuf::from)
-        .filter(|p| p.is_absolute())
-        .or_else(|| crate::store::home_dir().map(|h| h.join(".claude")))
-        .filter(|p| p.is_dir())
+    claude_dirs().into_iter().next()
+}
+
+/// Все папки, где Claude Code держит данные на этой машине. Задана CLAUDE_CONFIG_DIR — только она;
+/// иначе обычная ~/.claude и папка по правилам XDG (~/.config/claude или $XDG_CONFIG_HOME/claude):
+/// на части машин журналы лежат там. Журналы читаются из всех, что есть.
+fn claude_dirs() -> Vec<PathBuf> {
+    let env = |k: &str| std::env::var_os(k).map(PathBuf::from).filter(|p| p.is_absolute());
+    claude_dirs_from(env("CLAUDE_CONFIG_DIR"), crate::store::home_dir(), env("XDG_CONFIG_HOME"))
+}
+
+fn claude_dirs_from(config_dir: Option<PathBuf>, home: Option<PathBuf>, xdg: Option<PathBuf>) -> Vec<PathBuf> {
+    let mut v = match (config_dir, home) {
+        (Some(p), _) => vec![p],
+        (None, Some(h)) => vec![h.join(".claude"), xdg.unwrap_or_else(|| h.join(".config")).join("claude")],
+        (None, None) => Vec::new(),
+    };
+    v.retain(|p| p.is_dir());
+    v
 }
 
 /// Строка журнала Claude: ответ модели с usage.
-fn claude_line(v: &serde_json::Value, st: &mut FileState) {
+fn claude_line(v: &serde_json::Value, st: &mut FileState, seen: &mut HashSet<u64>) {
     if v.get("type").and_then(|x| x.as_str()) != Some("assistant") {
         return;
     }
     let Some(m) = v.get("message") else { return };
     let Some(us) = m.get("usage") else { return };
     let id = m.get("id").and_then(|x| x.as_str()).unwrap_or("");
-    if !id.is_empty() && !st.ids.insert(hash(id)) {
-        return;
+    if !id.is_empty() {
+        // уже учтён — в этом файле или в другом (в `seen` — ответы всех файлов)
+        let h = hash(id);
+        if !seen.insert(h) {
+            return;
+        }
+        st.ids.insert(h);
     }
     let Some(t) = v.get("timestamp").and_then(|x| x.as_str()).and_then(iso_secs) else { return };
     let model = m.get("model").and_then(|x| x.as_str()).unwrap_or("?");
@@ -306,8 +340,9 @@ fn claude_line(v: &serde_json::Value, st: &mut FileState) {
 
 /// Расход Claude Code за DAYS дней.
 pub fn claude_usage() -> Usage {
-    if let Some(d) = claude_dir() {
-        scan(&CLAUDE, &d.join("projects"), 4, &[b"\"usage\""], &mut claude_line);
+    let roots: Vec<PathBuf> = claude_dirs().iter().map(|d| d.join("projects")).collect();
+    if !roots.is_empty() {
+        scan(&CLAUDE, &roots, 4, &[b"\"usage\""], &mut claude_line);
     }
     sum_usage(&CLAUDE)
 }
@@ -358,7 +393,7 @@ fn codex_dir() -> Option<PathBuf> {
 }
 
 /// Строка журнала Codex: модель хода, токены ответа и лимиты.
-fn codex_line(v: &serde_json::Value, st: &mut FileState) {
+fn codex_line(v: &serde_json::Value, st: &mut FileState, _seen: &mut HashSet<u64>) {
     let Some(p) = v.get("payload") else { return };
     let kind = v.get("type").and_then(|x| x.as_str()).unwrap_or("");
     if kind == "turn_context" {
@@ -402,7 +437,7 @@ fn codex_line(v: &serde_json::Value, st: &mut FileState) {
 
 fn codex_scan() {
     if let Some(d) = codex_dir() {
-        scan(&CODEX, &d.join("sessions"), 4, &[b"token_count", b"turn_context"], &mut codex_line);
+        scan(&CODEX, &[d.join("sessions")], 4, &[b"token_count", b"turn_context"], &mut codex_line);
     }
 }
 
@@ -530,7 +565,8 @@ fn limit_row(agent: &str, what: &str, w: &Window, at: i64, now: i64) -> Check {
     let mut value = if w.resets_at > 0 && w.resets_at <= now {
         "0% · уже сброшен".to_string()
     } else if w.resets_at > 0 {
-        format!("{pct:.0}% · сброс {}", when(w.resets_at, now))
+        // недельный лимит — всегда с днём («сегодня в 14:00»), как на плашке
+        format!("{pct:.0}% · сброс {}", if w.minutes >= 24 * 60 { when_day(w.resets_at, now) } else { when(w.resets_at, now) })
     } else {
         format!("{pct:.0}%")
     };
@@ -832,6 +868,24 @@ mod tests {
     use super::*;
 
     #[test]
+    fn claude_dirs_default_xdg_and_override() {
+        let base = std::env::temp_dir().join(format!("aptechka-claude-dirs-{}", std::process::id()));
+        let (home, xdg) = (base.join("home"), base.join("xdg"));
+        for d in [home.join(".claude"), home.join(".config/claude"), xdg.join("claude"), base.join("custom")] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+        // обе папки есть — читаем обе; первая (для настроек) — обычная ~/.claude
+        assert_eq!(claude_dirs_from(None, Some(home.clone()), None), vec![home.join(".claude"), home.join(".config/claude")]);
+        // XDG_CONFIG_HOME задана — вторая папка там
+        assert_eq!(claude_dirs_from(None, Some(home.clone()), Some(xdg.clone())), vec![home.join(".claude"), xdg.join("claude")]);
+        // CLAUDE_CONFIG_DIR — только она
+        assert_eq!(claude_dirs_from(Some(base.join("custom")), Some(home.clone()), None), vec![base.join("custom")]);
+        // папки нет — пусто
+        assert!(claude_dirs_from(Some(base.join("нет")), Some(home), None).is_empty());
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
     fn weekday_by_date() {
         // 15 ноября 2026 — воскресенье, 17-е — вторник; 29 февраля 2028 — вторник; 1 января 1970 — четверг
         assert_eq!(weekday(2026, 11, 15), "вс");
@@ -878,26 +932,34 @@ mod tests {
                 "message": {"id": id, "model": "claude-x", "usage": {"input_tokens": 10, "output_tokens": 5,
                 "cache_read_input_tokens": 100, "cache_creation_input_tokens": 1}}})
         };
-        claude_line(&line("a"), &mut st);
-        claude_line(&line("a"), &mut st);
-        claude_line(&line("b"), &mut st);
+        let mut seen = HashSet::new();
+        claude_line(&line("a"), &mut st, &mut seen);
+        claude_line(&line("a"), &mut st, &mut seen);
+        claude_line(&line("b"), &mut st, &mut seen);
         let t: Tok = st.usage.values().copied().fold(Tok::default(), |mut a, b| {
             a.add(&b);
             a
         });
         assert_eq!(t, Tok { input: 20, output: 10, cache_read: 200, cache_write: 2 });
+        // тот же ответ «a» в ДРУГОМ файле (историю сессии скопировали в новый журнал) — второй раз не считается;
+        // новый ответ «c» в том файле — считается
+        let mut other = FileState::default();
+        claude_line(&line("a"), &mut other, &mut seen);
+        assert!(other.usage.is_empty());
+        claude_line(&line("c"), &mut other, &mut seen);
+        assert_eq!(other.usage.values().map(|t| t.output).sum::<u64>(), 5);
     }
 
     #[test]
     fn codex_limits_and_tokens() {
         let mut st = FileState::default();
-        codex_line(&serde_json::json!({"type": "turn_context", "payload": {"model": "gpt-x"}}), &mut st);
+        codex_line(&serde_json::json!({"type": "turn_context", "payload": {"model": "gpt-x"}}), &mut st, &mut HashSet::new());
         codex_line(
             &serde_json::json!({"timestamp": "2026-11-04T23:03:29.405Z", "type": "event_msg", "payload": {"type": "token_count",
                 "info": {"last_token_usage": {"input_tokens": 100, "cached_input_tokens": 60, "output_tokens": 7}},
                 "rate_limits": {"primary": {"used_percent": 85.0, "window_minutes": 300, "resets_at": 1_793_847_719_i64},
                     "secondary": {"used_percent": 13.0, "window_minutes": 10080, "resets_at": 1_794_434_519_i64}}}}),
-            &mut st,
+            &mut st, &mut HashSet::new()
         );
         let l = st.limits.unwrap();
         assert_eq!(l.five.unwrap().pct, 85.0);
