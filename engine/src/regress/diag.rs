@@ -280,6 +280,9 @@ fn latency_server(lat: Vec<u64>, drop_after: Option<usize>, status: &'static str
 /// двух средних, (80+100)/2 = 90; джиттер — все расхождения по 20 → 20. Допуск ±8 мс на накладные расходы.
 #[test]
 fn ping_stats_median_and_jitter_against_server_side_latency() {
+    if !timing_ok("ping_stats_median_and_jitter_against_server_side_latency") {
+        return;
+    }
     let (base, _) = latency_server(vec![0, 20, 40, 60, 80, 100, 120, 140, 160], None, "200 OK");
     let (med, jit) = with_base(base, || ping_stats(8)).expect("локальный сервер отвечает");
     // накладные расходы планировщика (особенно на загруженной машине) только ДОБАВЛЯЮТ время: нижняя граница строгая,
@@ -340,6 +343,9 @@ fn ping_stats_server_closes_or_speaks_garbage() {
 /// Частичный результат: сервер ответил на прогрев и 5 замеров и пропал. Замеров ≥3 — результат считается по 5.
 #[test]
 fn ping_stats_partial_series_is_reported_from_available_samples() {
+    if !timing_ok("ping_stats_partial_series_is_reported_from_available_samples") {
+        return;
+    }
     let (base, _) = latency_server(vec![0, 10, 10, 10, 10, 10], Some(6), "200 OK");
     let (med, jit) = with_base(base, || ping_stats(8)).expect("5 удачных замеров достаточно");
     assert!((5.0..40.0).contains(&med), "{med}");
@@ -395,6 +401,9 @@ fn ping_stats_mute_server_honors_read_timeout() {
 /// Если бы программа путала байты и биты или MiB и МБ, результат ушёл бы в 8 раз или на 4,9% (последнее не поймать).
 #[test]
 fn transfer_down_throttled_server_reports_about_8_mbit() {
+    if !timing_ok("transfer_down_throttled_server_reports_about_8_mbit") {
+        return;
+    }
     let sent = Arc::new(AtomicU64::new(0));
     let s2 = sent.clone();
     let base = local_server(move |mut c, _| {
@@ -425,6 +434,9 @@ fn transfer_down_throttled_server_reports_about_8_mbit() {
 /// первой и последней записью. Отчёт программы должен совпасть с ним в пределах ±35% (и лежать в разумных 300..1000).
 #[test]
 fn transfer_down_paced_server_matches_server_side_window() {
+    if !timing_ok("transfer_down_paced_server_matches_server_side_window") {
+        return;
+    }
     let sent = Arc::new(AtomicU64::new(0));
     let win: Arc<std::sync::Mutex<Option<(Instant, Instant)>>> = Arc::new(std::sync::Mutex::new(None));
     let (s2, w2) = (sent.clone(), win.clone());
@@ -459,6 +471,9 @@ fn transfer_down_paced_server_matches_server_side_window() {
 /// Отдача: сервер сам читает тело (≈100 МБ/с: 500 КБ раз в 5 мс) и записывает, сколько принял и за какое время.
 #[test]
 fn transfer_up_matches_server_received_window() {
+    if !timing_ok("transfer_up_matches_server_received_window") {
+        return;
+    }
     let got = Arc::new(AtomicU64::new(0));
     let win: Arc<std::sync::Mutex<Option<(Instant, Instant)>>> = Arc::new(std::sync::Mutex::new(None));
     let (g2, w2) = (got.clone(), win.clone());

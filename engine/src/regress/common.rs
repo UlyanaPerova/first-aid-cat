@@ -207,3 +207,14 @@ pub fn read_head(c: &mut std::net::TcpStream) -> Option<String> {
     }
     Some(String::from_utf8_lossy(&acc).into_owned())
 }
+
+/// Тесты с допусками по настоящему времени (задержка и скорость против локального сервера) на общих машинах CI
+/// ненадёжны: соседние задачи растягивают паузы в разы (на macOS-раннере джиттер вышел 90 мс вместо 20, скорость 4,6
+/// вместо 8 Мбит/с). Под CI (переменная CI) такие тесты пропускаются; REGRESS_TIMING=1 включает их и там.
+pub fn timing_ok(test: &str) -> bool {
+    let ok = std::env::var_os("CI").is_none() || std::env::var_os("REGRESS_TIMING").is_some();
+    if !ok {
+        eprintln!("{test}: пропущен под CI (зависит от настоящего времени; REGRESS_TIMING=1 — включить)");
+    }
+    ok
+}
