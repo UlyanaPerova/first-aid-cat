@@ -729,6 +729,9 @@ impl App {
                 Cmd::Recheck => self.start_checks(false),
                 Cmd::AnimChanged => {
                     self.anim = crate::prefs::app_anim();
+                    crate::screens::set_still(!self.anim);
+                    // экраны перерисовать сразу: помехи должны исчезнуть (или вернуться) в тот же миг
+                    self.screens_t = f64::MIN;
                     wlog(if self.anim {
                         "анимация картинки включена"
                     } else {
@@ -876,6 +879,7 @@ impl App {
         self.drain_bg(t);
         // экраны — 12 раз в секунду
         if self.screens.is_none() && self.scale > 0 {
+            crate::screens::set_still(!self.anim);
             self.screens = Screens::load(&self.art, self.sc.w, self.sc.h, self.scale);
         }
         if let Some(scr) = self.screens.as_mut() {

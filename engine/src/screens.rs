@@ -380,19 +380,41 @@ fn hash_of<T: std::hash::Hash>(v: T) -> u64 {
 }
 
 /// Мигание точки «плохо» (3 Гц) и двоеточия часов (2 Гц): фаза как число.
+/// «Анимация картинки» выключена: экраны показывают только данные (текст, значки, часы), а помехи кинескопа, мигание,
+/// бегущая полоса и печать по буквам стоят в одном спокойном виде. Иначе при редкой перерисовке (раз в секунду) они
+/// выглядели как зависшая анимация: полоса и сбои прыгали рывками.
+static STILL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_still(on: bool) {
+    STILL.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+fn still() -> bool {
+    STILL.load(std::sync::atomic::Ordering::Relaxed)
+}
+/// Время для помех: при выключенной анимации стоит на месте.
+fn fx_t(t: f64) -> f64 {
+    if still() {
+        0.0
+    } else {
+        t
+    }
+}
+
 fn blink3(t: f64) -> bool {
-    (t * 3.0) as i64 % 2 == 1
+    !still() && (t * 3.0) as i64 % 2 == 1
 }
 fn colon_on(t: f64) -> bool {
-    (t * 2.0) as i64 % 2 == 0
+    still() || (t * 2.0) as i64 % 2 == 0
 }
 /// Плавная пульсация «CLAUDE ON» и качание стрелки на пинге: ступени, неразличимые глазом (≤ 1–2 уровня цвета).
 fn pulse(t: f64, rate: f64, steps: f32) -> f32 {
+    let t = fx_t(t);
     let k = 0.5 + 0.5 * (t * rate).sin() as f32;
     (k * steps).round() / steps
 }
 /// Мерцание сканлайнов: прозрачность с шагом 1/64 (разница в цвете меньше уровня).
 fn flicker(t: f64) -> f32 {
+    let t = fx_t(t);
     (((0.1 + 0.04 * (t * 9.0).sin() + 0.03 * (t * 23.7).sin()) * 64.0).round() / 64.0) as f32
 }
 /// Сдвиг полосы по строкам слоя: целые пиксели.
@@ -454,17 +476,19 @@ fn screen_key(sc: &Screen, st: &ScreenState, t: f64) -> (u64, u64) {
     let h = (bl.0 - tl.0).hypot(bl.1 - tl.1) as f64;
     let _ = trr;
     let fk = match c {
-        Some((period, phase, _)) => hash_of((ck, flicker(t).to_bits(), band_pos(t, period, phase, h).to_bits(), (t * 24.0) as u64, glitch)),
+        Some((period, phase, _)) => {
+            hash_of((ck, flicker(t).to_bits(), band_pos(fx_t(t), period, phase, h).to_bits(), (fx_t(t) * 24.0) as u64, glitch, still()))
+        }
         None => hash_of((ck, flicker(t).to_bits())),
     };
     (ck, fk)
 }
 
 fn glitch_at(c: (f64, f64, f64), t: f64) -> bool {
-    (t + c.1 * 10.0) % c.2 < 0.18
+    !still() && (t + c.1 * 10.0) % c.2 < 0.18
 }
 fn glitch_rng(sc: &Screen, t: f64) -> Rng {
-    Rng(((t * 24.0) as u64).wrapping_mul(7919) + sc.name.len() as u64 * 131 + 1)
+    Rng(((fx_t(t) * 24.0) as u64).wrapping_mul(7919) + sc.name.len() as u64 * 131 + 1)
 }
 fn glitch_dx(sc: &Screen, t: f64, glitch: bool) -> f32 {
     if !glitch {
@@ -475,7 +499,7 @@ fn glitch_dx(sc: &Screen, t: f64, glitch: bool) -> f32 {
 }
 /// Сколько букв сообщения уже напечатано (не больше длины перевода).
 fn typed(st: &ScreenState, t: f64) -> usize {
-    let n = ((t - st.message_t).max(0.0) * 30.0) as usize;
+    let n = if still() { usize::MAX } else { ((t - st.message_t).max(0.0) * 30.0) as usize };
     n.min(crate::i18n::t(&st.message).chars().count())
 }
 
@@ -543,8 +567,8 @@ fn draw_screen(sc: &mut Screen, tr0: Transform, face: &Face, st: &ScreenState, t
     let lines: Vec<_> = (0..h as i32).step_by(4).map(|y| (0.0, y as f32, w, 1.0)).collect();
     p.rects(&lines, (0.0, 0.1, 0.2), flick);
     let Some((period, phase, _)) = c else { return };
-    // катящаяся светлая полоса
-    let k = band_pos(t, period, phase, h as f64);
+    // катящаяся светлая полоса (без анимации её нет: застывшая посреди экрана полоса выглядела бы поломкой)
+    let k = if still() { -h * 10.0 } else { band_pos(t, period, phase, h as f64) };
     let band = h * 0.2;
     let stops = vec![
         GradientStop::new(0.0, Color::from_rgba(1., 1., 1., 0.).unwrap()),

@@ -233,7 +233,6 @@ enum MenuAct {
     Quit,
     CheckAll,
     Speed,
-    Tab(u8),
     ToggleLog,
     Fix(u8),
     Spravka,
@@ -305,9 +304,9 @@ fn heal_menu() -> u8 {
 
 fn menus() -> Vec<(&'static str, Vec<(String, MenuAct)>)> {
     let fixes_menu: Vec<(String, MenuAct)> = fixes::GENERAL.iter().enumerate().map(|(i, (_, l))| (l.to_string(), MenuAct::Fix(i as u8))).collect();
-    let mut view: Vec<(String, MenuAct)> = (0..N_TABS).map(|i| (tab_name(i).to_string(), MenuAct::Tab(i as u8))).collect();
-    view.push((String::new(), MenuAct::Sep));
-    view.push(("Журнал".into(), MenuAct::ToggleLog));
+    // вкладок («Сеть» … «Показатели») в меню нет: они и так выбираются на самих вкладках, а в меню читались как
+    // «что показывать», а не «куда перейти»
+    let mut view: Vec<(String, MenuAct)> = vec![("Журнал".into(), MenuAct::ToggleLog)];
     view.push(("Анимация картинки".into(), MenuAct::AppAnim));
     // названия языков — каждое на своём языке (не переводятся), чтобы найти свой в чужом интерфейсе
     view.push((String::new(), MenuAct::Sep));
@@ -1772,10 +1771,6 @@ impl Ui {
             MenuAct::Quit => vec![Cmd::Quit],
             MenuAct::CheckAll => vec![Cmd::RunChecks],
             MenuAct::Speed => vec![Cmd::RunSpeed],
-            MenuAct::Tab(i) => {
-                self.set_tab(i);
-                Vec::new()
-            }
             MenuAct::ToggleLog => {
                 self.toggle_log();
                 Vec::new()
@@ -3417,7 +3412,6 @@ impl P<'_, '_> {
                     }
                     let (wst, wsz) = crate::widget_look::chosen();
                     let mark = matches!(act, MenuAct::ToggleLog) && self.s.log_vis
-                        || matches!(act, MenuAct::Tab(t) if *t == self.s.tab)
                         || matches!(act, MenuAct::WidgetStyle(i) if crate::widget_look::STYLES.get(*i as usize) == Some(&wst))
                         || matches!(act, MenuAct::WidgetSize(i) if (*i == 0) == (wsz == crate::widget_look::Size::Small))
                         || matches!(act, MenuAct::Freq(i) if *i == freq_now())
