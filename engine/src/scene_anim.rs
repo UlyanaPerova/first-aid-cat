@@ -492,12 +492,12 @@ mod tests {
         assert!(!frame(2, 1500).shy && !frame_poked(2, 1500, None).shy);
         assert_eq!(next_change_poked(2, 3100, Some((1000, false))).min(3140), next_change(2, 3100).min(3140));
         assert_eq!(frame_poked(1, 3140, Some((1000, false))), frame(1, 3140));
-        // у «пишет» лица ещё нет: картинка от смущения не меняется; у «спит» и «закончил» — меняется
+        // смущённое лицо есть у всех трёх состояний
         let still: Vec<u32> = vec![0x0100_0000; (W * crate::scene_px::H) as usize];
         let shy = Frame { shy: true, ..Frame::default() };
-        assert_eq!(compose(1, &still, &shy), still);
-        assert_ne!(compose(0, &still, &shy), still);
-        assert_ne!(compose(2, &still, &shy), still);
+        for state in 0..3 {
+            assert_ne!(compose(state, &still, &shy), still);
+        }
         assert_eq!(frame_poked(1, 500, None), frame(1, 500));
         // будильник: до нажатия — не позже его мига, во время движения — на границах шагов
         assert_eq!(next_change_poked(2, 990, Some((1000, false))), 1000);
@@ -513,13 +513,11 @@ mod tests {
 
     #[test]
     fn pen_writes_only_in_writing_state() {
-        // шаги письма (мс, положение) — из заготовки: покой 1100, затем 1, 2, 3, 4, покой, 5, 5, 6; круг 4170 мс
-        assert_eq!(pen_loop_ms(), 1100 + 200 + 260 + 700 + 230 + 250 + 230 + 1000 + 200);
+        // кисть ходит по прямой вправо-влево: покой 1100 мс, влево на клетку (поза 4) 230, на две (поза 3) 700, обратно 230,
+        // покой 250, вправо на клетку (поза 5) 1000 — и снова покой; круг 3510 мс
+        assert_eq!(pen_loop_ms(), 1100 + 230 + 700 + 230 + 250 + 1000);
         let p = |t| frame(1, t).pen;
-        assert_eq!(
-            [p(0), p(1099), p(1100), p(1300), p(1560), p(2260), p(2490), p(2740), p(3970), p(4169), p(4170)],
-            [0, 0, 1, 2, 3, 4, 0, 5, 6, 6, 0]
-        );
+        assert_eq!([p(0), p(1099), p(1100), p(1330), p(2030), p(2260), p(2510), p(3509), p(3510)], [0, 0, 4, 3, 4, 0, 5, 5, 0]);
         for t in (0..10_000).step_by(7) {
             assert_eq!((frame(0, t).pen, frame(2, t).pen), (0, 0));
         }
