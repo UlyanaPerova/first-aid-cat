@@ -1663,6 +1663,13 @@ fn paint(f: &mut Fonts, agents: &[Agent], data_t: i64, t: &Tpl, fr: &Frame, c: &
         let mark = logo.0;
         blit_alpha(c, logo, d(55), band_y + (band_h - logo.1) / 2);
         f.draw(c, d(55) + mark + d(15), f.center_base(band_y, band_h, t.font(30)), a.name, INK, t.font(30), true);
+        // цифры давние: лимиты приходят только с ответом агента НА ЭТОМ компьютере (между компьютерами они не
+        // сверяются), и без пометки старые 20 % выглядели как нынешние
+        if let Some(at) = a.limits.map(|l| l.at).filter(|at| *at > 0 && now - *at > 15 * 60) {
+            let old = format!("данные {} назад", crate::limits::ago(now - at));
+            let w = f.width(&old, t.font(22), false);
+            f.draw(c, d(833) - w, f.center_base(band_y, band_h, t.font(22)), &old, GREY, t.font(22), false);
+        }
         // кольца лимитов: белый ободок, дорожка, дуга, белая серединка с процентом; подпись и сброс — под ним
         if let Some(lim) = a.limits.filter(|_| has_rings(a)) {
             let wins: Vec<(u8, &str, crate::limits::Window)> =
