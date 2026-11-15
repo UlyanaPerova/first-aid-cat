@@ -1,7 +1,7 @@
-// Анимация сценки плашки: что в какой миг включено (моргание, кардиограмма, огурчик, «z») и сборка картинки.
+// Анимация сценки плашки: что в какой миг включено (моргание, кардиограмма, огурчик, «z», хвост) и сборка картинки.
 // Данные кадров — scene_anim_px.rs, фон и коты — scene_px.rs. Время — целые миллисекунды от открытия плашки.
 
-use crate::scene_anim_px::{Patch, BLINK_DONE, BLINK_WRITE, ECG, PICKLE, Z};
+use crate::scene_anim_px::{Patch, BLINK_DONE, BLINK_WRITE, ECG, PICKLE, TAIL, Z};
 use crate::scene_px::{PAL, W};
 
 /// Что включено в один миг. `Frame::default()` — «без анимации»: сценка как в статике.
@@ -15,6 +15,8 @@ pub struct Frame {
     pub pickle: u8,
     /// «z» у спящего: 0 — как в слое, 1 и 2 — кадры
     pub z: u8,
+    /// хвост: 0 покой, 1–3 — всё дальше вправо
+    pub tail: u8,
 }
 
 const ECG_MS: u64 = 120;
@@ -24,6 +26,10 @@ const BLINK_MS: u64 = 3 * BLINK_STEP_MS;
 /// огурчик: (конец отрезка в мс от начала цикла, поза)
 const PICKLE_TL: [(u64, u8); 4] = [(1300, 0), (2800, 1), (3900, 0), (5500, 2)];
 const Z_MS: u64 = 900;
+/// хвост, как в основном окне (life.rs, TAIL): (длительность в мс, поза) — два взмаха, второй шире и с задержкой
+const TAIL_TL: [(u64, u8); 10] = [(3200, 0), (280, 1), (500, 2), (280, 1), (3600, 0), (200, 1), (220, 2), (1000, 3), (260, 2), (240, 1)];
+/// скорость хвоста по состояниям (спит, пишет, закончил), тысячные доли длительности: пишущий машет чаще, спящий — лениво
+const TAIL_SPEED: [u64; 3] = [1800, 600, 1000];
 /// пауз между морганиями хватает на цикл из стольких морганий, дальше они повторяются
 const BLINKS_IN_LOOP: u64 = 16;
 
@@ -76,6 +82,24 @@ fn pickle_at(t: u64) -> (u8, u64) {
     (pose, end)
 }
 
+/// Хвост в миг `t`: поза и когда она кончится (мс от начала круга).
+fn tail_at(state: u8, t: u64) -> (u8, u64) {
+    let k = TAIL_SPEED[usize::from(state).min(2)];
+    let o = t % tail_loop_ms(state);
+    let mut end = 0;
+    for (d, pose) in TAIL_TL {
+        end += d * k / 1000;
+        if o < end {
+            return (pose, end);
+        }
+    }
+    (0, end)
+}
+
+fn tail_loop_ms(state: u8) -> u64 {
+    TAIL_TL.iter().map(|(d, _)| d * TAIL_SPEED[usize::from(state).min(2)] / 1000).sum()
+}
+
 /// Что включено в миг `t` мс для состояния `state` (0 спит, 1 пишет, 2 закончил).
 pub fn frame(state: u8, t: u64) -> Frame {
     Frame {
@@ -83,6 +107,7 @@ pub fn frame(state: u8, t: u64) -> Frame {
         ecg: Some((t / ECG_MS % ECG.len() as u64) as u8),
         pickle: pickle_at(t).0,
         z: if state == 0 { (t / Z_MS % 3) as u8 } else { 0 },
+        tail: tail_at(state, t).0,
     }
 }
 
@@ -91,6 +116,7 @@ pub fn next_change(state: u8, t: u64) -> u64 {
     let mut n = (t / ECG_MS + 1) * ECG_MS;
     let lap = |len: u64, end_in_lap: u64| t / len * len + end_in_lap;
     n = n.min(lap(PICKLE_TL[3].0, pickle_at(t).1));
+    n = n.min(lap(tail_loop_ms(state), tail_at(state, t).1));
     if blinks(state) {
         n = n.min(lap(blink_loop_ms(), blink_at(t).1));
     }
@@ -127,6 +153,7 @@ struct Decoded {
     blink_write: Vec<Cells>,
     blink_done: Vec<Cells>,
     z: Vec<Cells>,
+    tail: Vec<Vec<Cells>>,
 }
 
 fn decoded() -> &'static Decoded {
@@ -137,6 +164,7 @@ fn decoded() -> &'static Decoded {
         blink_write: BLINK_WRITE.iter().map(decode).collect(),
         blink_done: BLINK_DONE.iter().map(decode).collect(),
         z: Z.iter().map(decode).collect(),
+        tail: TAIL.iter().map(|s| s.iter().map(decode).collect()).collect(),
     })
 }
 
@@ -144,6 +172,9 @@ fn decoded() -> &'static Decoded {
 fn overlays(state: u8, f: &Frame) -> Vec<&'static Cells> {
     let d = decoded();
     let mut v = Vec::new();
+    if f.tail > 0 {
+        v.extend(d.tail.get(usize::from(state).min(2)).and_then(|s| s.get(usize::from(f.tail) - 1)));
+    }
     if let Some(e) = f.ecg {
         v.extend(d.ecg.get(usize::from(e)));
     }
@@ -247,6 +278,48 @@ mod tests {
     }
 
     #[test]
+    fn tail_sways_at_state_speed() {
+        // «закончил» — как в основном окне: покой 3,2 с, затем позы 1, 2, 1, покой, 1, 2, 3, 2, 1
+        let p = |s, t| frame(s, t).tail;
+        assert_eq!([p(2, 0), p(2, 3199), p(2, 3200), p(2, 3480), p(2, 3980), p(2, 4260), p(2, 8500)], [0, 0, 1, 2, 1, 0, 3]);
+        assert_eq!(tail_loop_ms(2), 9780);
+        // пишущий машет чаще, спящий — реже; порядок поз тот же
+        assert_eq!((tail_loop_ms(1), tail_loop_ms(0)), (5868, 17_604));
+        assert_eq!([p(1, 1919), p(1, 1920), p(0, 5759), p(0, 5760)], [0, 1, 0, 1]);
+        for s in 0..3 {
+            let mut seq = Vec::new();
+            let mut t = 0;
+            while t < tail_loop_ms(s) {
+                if seq.last() != Some(&p(s, t)) {
+                    seq.push(p(s, t));
+                }
+                t = next_change(s, t);
+            }
+            assert_eq!(seq, [0, 1, 2, 1, 0, 1, 2, 3, 2, 1]);
+            assert_eq!(p(s, tail_loop_ms(s)), 0);
+        }
+    }
+
+    #[test]
+    fn tail_patch_stays_in_tail_area() {
+        let still: Vec<u32> = vec![0x0100_0000; (W * H) as usize];
+        for s in 0..3u8 {
+            for pose in 1..=3u8 {
+                let out = compose(s, &still, &Frame { tail: pose, ..Frame::default() });
+                let (bx, by, bw, bh, _) = TAIL[usize::from(s)][usize::from(pose) - 1];
+                let changed = still.iter().zip(&out).enumerate().filter(|(_, (a, b))| a != b);
+                let mut n = 0;
+                for (i, _) in changed {
+                    let (x, y) = (i as i32 % W, i as i32 / W);
+                    assert!(x >= bx && x < bx + bw && y >= by && y < by + bh);
+                    n += 1;
+                }
+                assert!(n > 300, "{s} {pose} {n}");
+            }
+        }
+    }
+
+    #[test]
     fn next_change_is_a_change() {
         for state in 0..3 {
             for t in (0..30_000).step_by(37) {
@@ -261,7 +334,7 @@ mod tests {
 
     #[test]
     fn patches_inside_box() {
-        for p in ECG.iter().chain(&PICKLE).chain(&BLINK_WRITE).chain(&BLINK_DONE).chain(&Z) {
+        for p in ECG.iter().chain(&PICKLE).chain(&BLINK_WRITE).chain(&BLINK_DONE).chain(&Z).chain(TAIL.iter().flatten()) {
             let (x, y, w, h, _) = *p;
             assert!(x >= 0 && y >= 0 && x + w <= W && y + h <= H);
             let c = decode(p);
