@@ -21,6 +21,7 @@ use winit::window::{Window, WindowId, WindowLevel};
 
 use crate::gfx::{Canvas, Fonts, Rect};
 use crate::limits::Agent;
+use crate::scene_anim::Frame;
 
 /// Как часто обновлять цифры.
 const EVERY: Duration = Duration::from_secs(30);
@@ -106,6 +107,9 @@ pub enum Ev {
     Shown,
     /// значок выключили в настройках
     Quit,
+    /// меню расширения GNOME открылось (true) или закрылось (false): пока открыто, сценка живёт
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    PanelOpen(bool),
     /// выбрали другой значок
     Icon,
     /// файл программы обновили — перезапуститься новой версией
@@ -291,6 +295,8 @@ mod sni {
         pub icons: Vec<Pixmap>,
         /// плашка картинкой для меню расширения GNOME: путь, ширина, высота, кнопка «Медкарта», «×»
         pub panel: Option<(String, u32, u32, [i32; 4], [i32; 4])>,
+        /// кадр сценки для меню расширения GNOME (пока оно открыто): путь к картинке 436×130 и где она на плашке (x, y, ширина, высота — в точках экрана)
+        pub scene: Option<(String, i32, i32, i32, i32)>,
     }
 
     pub struct Item {
@@ -398,6 +404,10 @@ mod sni {
         fn open_analytics(&self) {
             super::open_analytics();
         }
+        /// меню открылось или закрылось: пока открыто, программа кладёт кадры живой сценки
+        fn panel_open(&self, open: bool) {
+            let _ = self.proxy.send_event(Ev::PanelOpen(open));
+        }
     }
 
     /// Имя, которое держит работающее расширение, и имя, по которому оно зовёт программу.
@@ -474,6 +484,14 @@ mod sni {
             self.write_shell_state();
         }
 
+        /// Кадр сценки для открытого меню расширения; None — убрать.
+        pub fn set_scene(&self, scene: Option<(String, i32, i32, i32, i32)>) {
+            if let Ok(mut s) = self.state.lock() {
+                s.scene = scene;
+            }
+            self.write_shell_state();
+        }
+
         /// Для нашего расширения GNOME: tray.json в папке сеанса (текст, картинка значка, картинка плашки,
         /// когда обновлено). Зовётся при каждой перемене и раз в 10 с — расширение прячет значок, если
         /// файл старше 2 минут.
@@ -490,10 +508,13 @@ mod sni {
                     let _ = crate::store::write_private_quick(&icon, &super::png_rgba(n, n, &rgba));
                 }
             }
-            let (label, panel) = self.state.lock().map(|s| (s.label.trim().to_string(), s.panel.clone())).unwrap_or_default();
+            let (label, panel, scene) = self.state.lock().map(|s| (s.label.trim().to_string(), s.panel.clone(), s.scene.clone())).unwrap_or_default();
             let mut body = serde_json::json!({ "label": label, "icon": icon.to_string_lossy(), "visible": true, "at": crate::ui::now_secs() });
             if let Some((p, w, h, btn, close)) = panel {
                 body["panel"] = serde_json::json!({ "path": p, "w": w, "h": h, "btn": btn, "close": close });
+            }
+            if let Some((p, x, y, w, h)) = scene {
+                body["scene"] = serde_json::json!({ "path": p, "x": x, "y": y, "w": w, "h": h });
             }
             let _ = crate::store::write_private_quick(&dir.join("tray.json"), body.to_string().as_bytes());
         }
@@ -1394,6 +1415,22 @@ fn resample_nearest(src: &Img, s: f32) -> Img {
     (dw, dh, out)
 }
 
+/// Увеличение в целое число раз, каждая точка k×k.
+fn upscale(src: Img, k: i32) -> Img {
+    let (w, h, px) = src;
+    if k <= 1 {
+        return (w, h, px);
+    }
+    let mut out = Vec::with_capacity((w * h * k * k) as usize);
+    for row in px.chunks(w as usize) {
+        let line: Vec<u32> = row.iter().flat_map(|p| std::iter::repeat_n(*p, k as usize)).collect();
+        for _ in 0..k {
+            out.extend_from_slice(&line);
+        }
+    }
+    (w * k, h * k, out)
+}
+
 /// Куски плашки под один масштаб экрана: аватарка (из значка программы) и пиксельные сценки — уменьшены
 /// один раз. Всё остальное (рамка, заголовок, группы, кнопка) рисует код по меркам дизайна.
 pub struct Tpl {
@@ -1403,6 +1440,8 @@ pub struct Tpl {
     avatar: Img,
     /// сценки (общий фон + кот состояния, `scene_px`): как `icon_choice` — 0 спит, 1 пишет (агент думает), 2 закончил (ждёт)
     scenes: [Img; 3],
+    /// те же сценки без увеличения (436×130, 0xRRGGBB) — основа кадров анимации
+    stills: [Vec<u32>; 3],
     /// значки агентов 16×16 (пиксель-арт): 0 — Claude, 1 — Codex (ChatGPT); каждая точка k×k
     logos: [Img; 2],
 }
@@ -1421,10 +1460,24 @@ impl Tpl {
             s,
             avatar: avatar(d(52)),
             scenes: [scene(&crate::scene_px::SLEEP), scene(&crate::scene_px::WRITE), scene(&crate::scene_px::DONE)],
+            stills: [scene_img(&crate::scene_px::SLEEP).2, scene_img(&crate::scene_px::WRITE).2, scene_img(&crate::scene_px::DONE).2],
             logos: [
                 resample_nearest(&decode_alpha(include_bytes!("../assets/лого_claude.png")), k as f32),
                 resample_nearest(&decode_alpha(include_bytes!("../assets/лого_codex.png")), k as f32),
             ],
+        }
+    }
+
+    /// Сценка состояния `state` в кадре анимации `fr`, без увеличения; пустой кадр — None (тогда готовая `scenes`).
+    fn frame_1x(&self, state: u8, fr: &Frame) -> Option<Vec<u32>> {
+        (*fr != Frame::default()).then(|| crate::scene_anim::compose(state, &self.stills[usize::from(state).min(2)], fr))
+    }
+
+    /// Сценка для рисования: статичная или кадр анимации, каждая точка k×k.
+    fn scene_for(&self, state: u8, fr: &Frame) -> std::borrow::Cow<'_, Img> {
+        match self.frame_1x(state, fr) {
+            Some(px) => std::borrow::Cow::Owned(upscale((crate::scene_px::W, crate::scene_px::H, px), self.k)),
+            None => std::borrow::Cow::Borrowed(&self.scenes[usize::from(state).min(2)]),
         }
     }
 
@@ -1608,7 +1661,7 @@ fn paint_button(f: &mut Fonts, t: &Tpl, c: &mut Canvas, r: Rect, label: &str) {
 }
 
 /// Нарисовать плашку (окно — кодом, сценка — пиксель-арт); возвращает места кнопок «Медкарта расхода» и «×».
-fn paint(f: &mut Fonts, agents: &[Agent], watch: &Watch, data_t: i64, t: &Tpl, c: &mut Canvas) -> (Rect, Rect) {
+fn paint(f: &mut Fonts, agents: &[Agent], watch: &Watch, data_t: i64, t: &Tpl, fr: &Frame, c: &mut Canvas) -> (Rect, Rect, Rect) {
     let now = crate::ui::now_secs();
     let d = |v: i32| t.d(v);
     let (w, h) = t.size(agents.len());
@@ -1687,8 +1740,9 @@ fn paint(f: &mut Fonts, agents: &[Agent], watch: &Watch, data_t: i64, t: &Tpl, c
     // низ: сценка с котом (что делают агенты), «обновлено в…», кнопка «Медкарта расхода…» (она — в шаблоне)
     let fy = hh + gh * n as i32;
     // сценка — по центру плашки (раньше слева было поле 11, справа 1)
-    let scene = &t.scenes[usize::from(icon_choice()).min(2)];
-    blit(c, scene, (w - scene.0) / 2, fy + d(92));
+    let scene = t.scene_for(icon_choice(), fr);
+    let scene_at = Rect::new((w - scene.0) / 2, fy + d(92), scene.0, scene.1);
+    blit(c, &scene, scene_at.x, scene_at.y);
     if data_t > 0 {
         let tm = crate::ui::localtime(data_t);
         // «обновлено» — от левого края панели агентов, кнопка — до правого её края
@@ -1696,7 +1750,7 @@ fn paint(f: &mut Fonts, agents: &[Agent], watch: &Watch, data_t: i64, t: &Tpl, c
     }
     let btn = Rect::new(d(443), fy + d(15), d(405), d(62));
     paint_button(f, t, c, btn, "Медкарта расхода…");
-    (btn, close)
+    (btn, close, scene_at)
 }
 
 /// Подпись под кольцом лимита — слово и время отдельными строками — и её цвет.
@@ -1731,6 +1785,13 @@ struct Popup {
     cursor: (i32, i32),
     /// когда открыли (второй щелчок двойного нажатия не закрывает)
     opened: Instant,
+    /// анимация сценки (настройка «Анимация картинки» на момент открытия) и отсчёт её времени
+    anim: bool,
+    /// что нарисовано сейчас: состояние кота и кадр анимации
+    shown: (u8, Frame),
+    /// где в окне сценка и вся плашка без неё перемен — чтобы кадр анимации менял только сценку
+    scene: Rect,
+    cache: Vec<u32>,
 }
 
 struct App {
@@ -1755,6 +1816,15 @@ struct App {
     /// счётчик картинок плашки (меню расширения GNOME)
     #[cfg(target_os = "linux")]
     panel_n: u32,
+    /// меню расширения GNOME открыто с этого мига (сценка живая); что показано; где сценка на плашке; файлы кадров
+    #[cfg(target_os = "linux")]
+    panel_t0: Option<Instant>,
+    #[cfg(target_os = "linux")]
+    panel_shown: Option<(u8, Frame)>,
+    #[cfg(target_os = "linux")]
+    panel_scene: Rect,
+    #[cfg(target_os = "linux")]
+    strips: Vec<std::path::PathBuf>,
     /// когда пришли последние цифры
     data_t: i64,
 }
@@ -1780,13 +1850,57 @@ impl App {
             return;
         }
         let Ok(mut buf) = p.surface.buffer_mut() else { return };
-        let (btn, close) = {
+        let fr = if p.anim { crate::scene_anim::frame(icon_choice(), p.opened.elapsed().as_millis() as u64) } else { Frame::default() };
+        let (btn, close, scene) = {
             let mut c = Canvas::new(&mut buf, w as usize, w, h);
-            paint(&mut self.fonts, &self.agents, &self.watch, self.data_t, self.tpl.as_ref().expect("шаблон готов"), &mut c)
+            paint(&mut self.fonts, &self.agents, &self.watch, self.data_t, self.tpl.as_ref().expect("шаблон готов"), &fr, &mut c)
         };
         p.btn = btn;
         p.close = close;
+        p.scene = scene;
+        p.shown = (icon_choice(), fr);
+        if p.anim {
+            p.cache.clear();
+            p.cache.extend_from_slice(&buf);
+        }
         let _ = buf.present();
+    }
+
+    /// Сменился кадр анимации: в окне перерисовывается только сценка (остальное — из запомненной плашки).
+    /// Возвращает, когда (от открытия плашки) кадр сменится дальше.
+    fn animate(&mut self) -> Option<Instant> {
+        let p = self.popup.as_mut()?;
+        if !p.anim {
+            return None;
+        }
+        let ms = p.opened.elapsed().as_millis() as u64;
+        let (st, fr) = (icon_choice(), crate::scene_anim::frame(icon_choice(), ms));
+        let next = p.opened + Duration::from_millis(crate::scene_anim::next_change(st, ms));
+        if p.shown == (st, fr) {
+            return Some(next);
+        }
+        let size = p.window.inner_size();
+        let (w, h) = (size.width as i32, size.height as i32);
+        let whole = p.cache.len() != (w * h) as usize || p.shown.0 != st;
+        if whole {
+            // размер или состояние поменялись — рисуем всю плашку
+            self.draw();
+            return Some(next);
+        }
+        let (Some(nw), Some(nh)) = (NonZeroU32::new(w as u32), NonZeroU32::new(h as u32)) else { return Some(next) };
+        if p.surface.resize(nw, nh).is_err() {
+            return Some(next);
+        }
+        let Ok(mut buf) = p.surface.buffer_mut() else { return Some(next) };
+        buf.copy_from_slice(&p.cache);
+        if let Some(t) = self.tpl.as_ref() {
+            let scene = t.scene_for(st, &fr);
+            let mut c = Canvas::new(&mut buf, w as usize, w, h);
+            blit(&mut c, &scene, p.scene.x, p.scene.y);
+        }
+        p.shown = (st, fr);
+        let _ = buf.present();
+        Some(next)
     }
 }
 
@@ -1843,7 +1957,13 @@ impl App {
         mac::activate();
         window.focus_window();
         self.popup =
-            Some(Popup { window, surface, btn: Rect::new(0, 0, 0, 0), close: Rect::new(0, 0, 0, 0), cursor: (0, 0), opened: Instant::now() });
+            Some(Popup { window, surface, btn: Rect::new(0, 0, 0, 0), close: Rect::new(0, 0, 0, 0), cursor: (0, 0),
+            opened: Instant::now(),
+            anim: crate::prefs::app_anim(),
+            shown: (0, Frame::default()),
+            scene: Rect::new(0, 0, 0, 0),
+            cache: Vec::new(),
+        });
         self.draw();
     }
 
@@ -1894,10 +2014,13 @@ impl App {
         }
         let (w, h) = self.tpl_size();
         let mut buf = vec![0u32; (w * h) as usize];
-        let (btn, close) = {
+        let (btn, close, scene) = {
             let mut c = Canvas::new(&mut buf, w as usize, w, h);
-            paint(&mut self.fonts, &self.agents, &self.watch, self.data_t, self.tpl.as_ref().expect("шаблон готов"), &mut c)
+            paint(&mut self.fonts, &self.agents, &self.watch, self.data_t, self.tpl.as_ref().expect("шаблон готов"), &Frame::default(), &mut c)
         };
+        self.panel_scene = scene;
+        // плашка перерисована (другое состояние кота) — кадр сценки положить заново
+        self.panel_shown = None;
         let rgba: Vec<u8> = buf.iter().flat_map(|p| [(p >> 16) as u8, (p >> 8) as u8, *p as u8, 255]).collect();
         // GNOME запоминает картинку по имени файла (повтор имени = старая картинка), поэтому имя каждый раз
         // новое: номер процесса и счётчик; прошлые картинки удаляем
@@ -1917,6 +2040,63 @@ impl App {
         let r = |x: Rect| [x.x, x.y, x.w, x.h];
         let Some(t) = &self.tray else { return };
         t.set_panel(path.to_string_lossy().into_owned(), w as u32, h as u32, r(btn), r(close));
+    }
+
+    /// Меню расширения открылось или закрылось. Открыто — сценка живёт (если не выключена «Анимация картинки»);
+    /// закрыто — кадры и таймеры убираются.
+    #[cfg(target_os = "linux")]
+    fn panel_open(&mut self, open: bool) {
+        self.panel_shown = None;
+        if open && crate::prefs::app_anim() && self.tray.as_ref().is_some_and(|t| t.shell_icon()) {
+            self.panel_t0 = Some(Instant::now());
+            self.panel_animate();
+            return;
+        }
+        if self.panel_t0.take().is_none() && self.strips.is_empty() {
+            return;
+        }
+        if let Some(t) = &self.tray {
+            t.set_scene(None);
+        }
+        for p in self.strips.drain(..) {
+            let _ = std::fs::remove_file(p);
+        }
+    }
+
+    /// Пока меню открыто: если кадр сценки сменился — положить новый (маленькая картинка 436×130; расширение
+    /// растягивает её по точкам). Возвращает, когда проснуться в следующий раз.
+    #[cfg(target_os = "linux")]
+    fn panel_animate(&mut self) -> Option<Instant> {
+        let t0 = self.panel_t0?;
+        let ms = t0.elapsed().as_millis() as u64;
+        // меню не закрылось по-честному (расширение упало) — не живём вечно
+        if ms > 15 * 60 * 1000 {
+            self.panel_open(false);
+            return None;
+        }
+        let st = icon_choice();
+        let fr = crate::scene_anim::frame(st, ms);
+        let next = t0 + Duration::from_millis(crate::scene_anim::next_change(st, ms));
+        if self.panel_shown == Some((st, fr)) || self.panel_scene.w == 0 {
+            return Some(next);
+        }
+        let Some(px) = self.tpl.as_ref().and_then(|t| t.frame_1x(st, &fr)) else { return Some(next) };
+        let rgba: Vec<u8> = px.iter().flat_map(|p| [(p >> 16) as u8, (p >> 8) as u8, *p as u8, 255]).collect();
+        self.panel_n = self.panel_n.wrapping_add(1);
+        let path = crate::store::runtime_dir().join(format!("tray_scene_{}_{}.png", std::process::id(), self.panel_n));
+        if crate::store::write_private_quick(&path, &png_rgba(crate::scene_px::W as u32, crate::scene_px::H as u32, &rgba)).is_ok() {
+            let r = self.panel_scene;
+            if let Some(t) = &self.tray {
+                t.set_scene(Some((path.to_string_lossy().into_owned(), r.x, r.y, r.w, r.h)));
+            }
+            self.strips.push(path);
+            // старые кадры — долой, но несколько последних оставляем: расширение могло ещё не дочитать
+            while self.strips.len() > 6 {
+                let _ = std::fs::remove_file(self.strips.remove(0));
+            }
+            self.panel_shown = Some((st, fr));
+        }
+        Some(next)
     }
 
     fn set_tray(&mut self) {
@@ -1967,6 +2147,10 @@ impl ApplicationHandler<Ev> for App {
                 }
             }
             Ev::Shown => self.apply_shown(),
+            Ev::PanelOpen(_open) => {
+                #[cfg(target_os = "linux")]
+                self.panel_open(_open);
+            }
             Ev::Icon => {
                 #[cfg(target_os = "linux")]
                 if let Some(t) = &self.tray {
@@ -2038,9 +2222,21 @@ impl ApplicationHandler<Ev> for App {
                 t.register();
                 t.write_shell_state();
             }
+            // расширение пропало, не сообщив о закрытии меню — кадры больше не нужны
+            if self.panel_t0.is_some() && !self.tray.as_ref().is_some_and(|t| t.shell_icon()) {
+                self.panel_open(false);
+            }
         }
-        let wait = Duration::from_secs(10);
-        el.set_control_flow(ControlFlow::WaitUntil(Instant::now() + wait));
+        let mut until = Instant::now() + Duration::from_secs(10);
+        // плашка открыта — просыпаемся к смене кадра сценки; закрыта — никаких таймеров анимации
+        if let Some(next) = self.animate() {
+            until = until.min(next);
+        }
+        #[cfg(target_os = "linux")]
+        if let Some(next) = self.panel_animate() {
+            until = until.min(next);
+        }
+        el.set_control_flow(ControlFlow::WaitUntil(until));
     }
 }
 
@@ -2068,9 +2264,14 @@ pub fn shot(path: &str) {
     let t = Tpl::new(k);
     let (w, h) = t.size(agents.len());
     let mut buf = vec![0u32; (w * h) as usize];
+    // TRAY_T=секунды — кадр анимации сценки в этот миг от открытия плашки; без него — статичная сценка
+    let fr = std::env::var("TRAY_T")
+        .ok()
+        .and_then(|v| v.parse::<f64>().ok())
+        .map_or(Frame::default(), |s| crate::scene_anim::frame(icon_choice(), (s.max(0.0) * 1000.0).round() as u64));
     {
         let mut c = Canvas::new(&mut buf, w as usize, w, h);
-        paint(&mut Fonts::new(), &agents, &Watch::default(), crate::ui::now_secs(), &t, &mut c);
+        paint(&mut Fonts::new(), &agents, &Watch::default(), crate::ui::now_secs(), &t, &fr, &mut c);
     }
     let rgb: Vec<u8> = buf.iter().flat_map(|p| [(p >> 16) as u8, (p >> 8) as u8, *p as u8]).collect();
     let Ok(f) = std::fs::File::create(path) else { return };
@@ -2195,6 +2396,14 @@ pub fn run() {
         tpl: None,
         #[cfg(target_os = "linux")]
         panel_n: 0,
+        #[cfg(target_os = "linux")]
+        panel_t0: None,
+        #[cfg(target_os = "linux")]
+        panel_shown: None,
+        #[cfg(target_os = "linux")]
+        panel_scene: Rect::new(0, 0, 0, 0),
+        #[cfg(target_os = "linux")]
+        strips: Vec::new(),
     };
     let _ = &app.proxy;
     // значок сразу, ещё до первых цифр

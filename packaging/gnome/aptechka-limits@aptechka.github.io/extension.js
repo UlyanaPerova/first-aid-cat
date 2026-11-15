@@ -3,6 +3,9 @@
 // picture of its limits panel. Like other top-bar indicators, the panel is a normal GNOME menu: one click
 // opens it at once, the next click (or a click elsewhere) closes it. The «Usage chart…» button on the
 // picture asks the app (session bus, io.github.aptechka.Tray) to open its usage chart.
+// While the menu is open the scene at the bottom of the picture is alive: the app is told (PanelOpen) and
+// writes a small picture of the current frame into tray.json ({scene: {path, x, y, w, h}}); a second actor
+// shows it exactly over the static scene. An app without PanelOpen simply leaves the static picture.
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 import Gio from 'gi://Gio';
@@ -18,6 +21,7 @@ const BUS = 'io.github.aptechka.Tray';
 const PATH = '/io/github/aptechka/Tray';
 const IFACE = `<node><interface name="io.github.aptechka.Tray">
   <method name="OpenAnalytics"/>
+  <method name="PanelOpen"><arg type="b" direction="in" name="open"/></method>
 </interface></node>`;
 const TrayProxy = Gio.DBusProxy.makeProxyWrapper(IFACE);
 // the app updates the file every few seconds; older than this means the app is gone
@@ -35,7 +39,12 @@ class AptechkaIndicator extends PanelMenu.Button {
         this.add_child(box);
 
         // the panel picture inside the menu
-        this._panel = new St.Widget({reactive: true});
+        this._panel = new St.Widget({reactive: true, layout_manager: new Clutter.FixedLayout()});
+        // the live scene lies over the static one (not reactive: clicks go to the panel)
+        this._scene = new St.Widget({reactive: false, visible: false});
+        this._scenePath = '';
+        this._monitor = null;
+        this._panel.add_child(this._scene);
         this._panel.connect('button-release-event', (_a, event) => this._onPanelClick(event));
         this.menu.box.add_child(this._panel);
         // только плашка: без тёмного фона, рамки, отступов и стрелки стандартного меню
@@ -48,6 +57,7 @@ class AptechkaIndicator extends PanelMenu.Button {
         this.menu.connect('open-state-changed', (_m, open) => {
             if (open)
                 this._refresh();
+            this._setLive(open);
         });
 
         this._file = Gio.File.new_for_path(GLib.build_filenamev([GLib.get_user_runtime_dir(), 'aptechka', 'tray.json']));
@@ -94,7 +104,64 @@ class AptechkaIndicator extends PanelMenu.Button {
         });
     }
 
-    _refresh() {
+    // Menu open: tell the app and watch tray.json for new scene frames; closed: stop and hide the scene.
+    _setLive(open) {
+        try {
+            this._call(proxy => proxy.PanelOpenRemote(open, () => {}));
+        } catch (e) {
+            // an app without PanelOpen: the picture stays static
+        }
+        if (open && !this._monitor) {
+            try {
+                this._monitor = this._file.monitor_file(Gio.FileMonitorFlags.NONE, null);
+                this._monitorId = this._monitor.connect('changed', () => this._refresh(true));
+            } catch (e) {
+                this._monitor = null;
+            }
+        } else if (!open) {
+            if (this._monitor) {
+                this._monitor.disconnect(this._monitorId);
+                this._monitor.cancel();
+                this._monitor = null;
+            }
+            this._scenePath = '';
+            this._scene.visible = false;
+            this._scene.set_content(null);
+        }
+    }
+
+    // Put the current scene frame (a 1x picture) over the static scene: stretched by whole pixels, NEAREST.
+    _updateScene(s) {
+        if (!this.menu.isOpen || !s || !s.path) {
+            this._scene.visible = false;
+            return;
+        }
+        if (s.path !== this._scenePath) {
+            try {
+                const pixbuf = GdkPixbuf.Pixbuf.new_from_file(s.path);
+                const [w, h] = [pixbuf.get_width(), pixbuf.get_height()];
+                const format = pixbuf.get_has_alpha() ? Cogl.PixelFormat.RGBA_8888 : Cogl.PixelFormat.RGB_888;
+                const content = St.ImageContent.new_with_preferred_size(w, h);
+                const args = [pixbuf.read_pixel_bytes(), format, w, h, pixbuf.get_rowstride()];
+                try {
+                    content.set_bytes(...args);
+                } catch (e) {
+                    content.set_bytes(global.stage.context.get_backend().get_cogl_context(), ...args);
+                }
+                this._scene.set_content(content);
+                this._scene.set_content_scaling_filters(Clutter.ScalingFilter.NEAREST, Clutter.ScalingFilter.NEAREST);
+                this._scenePath = s.path;
+            } catch (e) {
+                // frame not readable (already replaced): wait for the next one
+                return;
+            }
+        }
+        this._scene.set_position(s.x, s.y);
+        this._scene.set_size(s.w, s.h);
+        this._scene.visible = true;
+    }
+
+    _refresh(sceneOnly = false) {
         let data = null;
         try {
             const [ok, bytes] = this._file.load_contents(null);
@@ -102,6 +169,11 @@ class AptechkaIndicator extends PanelMenu.Button {
                 data = JSON.parse(new TextDecoder().decode(bytes));
         } catch (e) {
             data = null;
+        }
+        if (sceneOnly) {
+            if (data)
+                this._updateScene(data.scene);
+            return;
         }
         const now = GLib.get_real_time() / 1e6;
         this.visible = !!(data && data.visible && now - (data.at || 0) < STALE_S);
@@ -113,10 +185,11 @@ class AptechkaIndicator extends PanelMenu.Button {
             this._icon.gicon = Gio.FileIcon.new(Gio.File.new_for_path(data.icon));
         }
         const p = data.panel;
-        if (p && p.path && (!this._panelInfo || this._panelInfo.path !== p.path || this._panelInfo.at !== data.at)) {
+        if (p && p.path && (!this._panelInfo || this._panelInfo.path !== p.path || (this._panelInfo.at !== data.at && !this.menu.isOpen))) {
             this._panelInfo = {...p, at: data.at};
             this._showPanel(p);
         }
+        this._updateScene(data.scene);
     }
 
     // The picture is pixel art drawn by the app in screen pixels. Show it dot for dot: its own pixels as the
@@ -151,6 +224,7 @@ class AptechkaIndicator extends PanelMenu.Button {
     }
 
     destroy() {
+        this._setLive(false);
         if (this._timerId)
             GLib.source_remove(this._timerId);
         this._timerId = 0;
