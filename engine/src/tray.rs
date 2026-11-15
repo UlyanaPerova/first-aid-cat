@@ -1782,14 +1782,19 @@ struct Popup {
     /// где в окне сценка и вся плашка без неё перемен — чтобы кадр анимации менял только сценку
     scene: Rect,
     cache: Vec<u32>,
-    /// когда (мс от открытия) кота тронули за ушко
-    poke: Option<u64>,
+    /// когда (мс от открытия) кота тронули за ушко и за какое
+    poke: crate::scene_anim::Poke,
 }
 
 /// Попало ли нажатие (точка окна или картинки плашки) в ушко кота на сценке, нарисованной в `scene`.
-fn ear_at(state: u8, scene: Rect, x: i32, y: i32) -> bool {
+/// Some(false) — левое ушко, Some(true) — правое.
+fn ear_at(state: u8, scene: Rect, x: i32, y: i32) -> Option<bool> {
     let k = scene.w / crate::scene_px::W;
-    k > 0 && scene.contains(x, y) && crate::scene_anim::ear_hit(state, (x - scene.x) / k, (y - scene.y) / k)
+    if k > 0 && scene.contains(x, y) {
+        crate::scene_anim::ear_hit(state, (x - scene.x) / k, (y - scene.y) / k)
+    } else {
+        None
+    }
 }
 
 struct App {
@@ -1821,9 +1826,9 @@ struct App {
     panel_shown: Option<(u8, Frame)>,
     #[cfg(target_os = "linux")]
     panel_scene: Rect,
-    /// когда (мс от открытия меню) кота тронули за ушко
+    /// когда (мс от открытия меню) кота тронули за ушко и за какое
     #[cfg(target_os = "linux")]
-    panel_poke: Option<u64>,
+    panel_poke: crate::scene_anim::Poke,
     #[cfg(target_os = "linux")]
     strips: Vec<std::path::PathBuf>,
     /// когда пришли последние цифры
@@ -2074,8 +2079,8 @@ impl App {
     #[cfg(target_os = "linux")]
     fn panel_click(&mut self, x: i32, y: i32) {
         if let Some(t0) = self.panel_t0 {
-            if ear_at(icon_choice(), self.panel_scene, x, y) {
-                self.panel_poke = Some(t0.elapsed().as_millis() as u64);
+            if let Some(right) = ear_at(icon_choice(), self.panel_scene, x, y) {
+                self.panel_poke = Some((t0.elapsed().as_millis() as u64, right));
                 self.panel_animate();
             }
         }
@@ -2229,8 +2234,8 @@ impl ApplicationHandler<Ev> for App {
                     } else if !p.close.contains(p.cursor.0, p.cursor.1) {
                         let mut p = p;
                         // тронули за ушко — кот дёргает им (плашка остаётся открытой)
-                        if p.anim && ear_at(icon_choice(), p.scene, p.cursor.0, p.cursor.1) {
-                            p.poke = Some(p.opened.elapsed().as_millis() as u64);
+                        if let Some(right) = ear_at(icon_choice(), p.scene, p.cursor.0, p.cursor.1).filter(|_| p.anim) {
+                            p.poke = Some((p.opened.elapsed().as_millis() as u64, right));
                         }
                         self.popup = Some(p);
                         self.animate();
@@ -2295,9 +2300,11 @@ pub fn shot(path: &str) {
     let (w, h) = t.size(agents.len());
     let mut buf = vec![0u32; (w * h) as usize];
     // TRAY_T=секунды — кадр анимации сценки в этот миг от открытия плашки; без него — статичная сценка.
-    // TRAY_POKE=секунды — в этот миг кота тронули за ушко
+    // TRAY_POKE=секунды — в этот миг кота тронули за ушко (TRAY_POKE_R=1 — за правое)
     let secs = |k: &str| std::env::var(k).ok().and_then(|v| v.parse::<f64>().ok()).map(|s| (s.max(0.0) * 1000.0).round() as u64);
-    let fr = secs("TRAY_T").map_or(Frame::default(), |ms| crate::scene_anim::frame_poked(icon_choice(), ms, secs("TRAY_POKE")));
+    let fr = secs("TRAY_T").map_or(Frame::default(), |ms| {
+        crate::scene_anim::frame_poked(icon_choice(), ms, secs("TRAY_POKE").map(|p| (p, std::env::var_os("TRAY_POKE_R").is_some())))
+    });
     {
         let mut c = Canvas::new(&mut buf, w as usize, w, h);
         paint(&mut Fonts::new(), &agents, crate::ui::now_secs(), &t, &fr, &mut c);

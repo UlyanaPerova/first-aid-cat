@@ -28,6 +28,11 @@ const EAR_PAUSES: [u64; 16] = [9844, 11192, 6614, 8012, 7251, 5929, 9692, 5335, 
 /// Круг ушка: сумма пауз + 16 × (70 + 90 + 80 мс) = 130995 (Python).
 const EAR_LOOP: u64 = 130995;
 
+/// Каким ушком дёргает в i-й раз (1 — правым): splitmix64(i + 2000) & 1 для i = 0..15 — посчитано на Python.
+const EAR_SIDES: [u8; 16] = [1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1, 1, 0];
+/// Письмо ручкой: (длительность мс, положение) — из заготовки (manifest_ручка.json), круг 4170 мс.
+const PEN_SPEC: [(u64, u8); 9] = [(1100, 0), (200, 1), (260, 2), (700, 3), (230, 4), (250, 0), (230, 5), (1000, 5), (200, 6)];
+
 /// Наивный оракул: что включено в миг `t` (мс) — без общего кода с `scene_anim`.
 fn oracle(state: u8, t: u64) -> Frame {
     // кардиограмма: 20 кадров по 120 мс
@@ -75,20 +80,37 @@ fn oracle(state: u8, t: u64) -> Frame {
         }
     }
     // ушко: пауза_i, затем наклон 70 мс (1), сложено 90 мс (2), наклон 80 мс (1) — одинаково во всех состояниях
-    let mut ear = 0;
+    let (mut ear, mut ear_r) = (0, 0);
     let mut o = t % EAR_LOOP;
-    for p in EAR_PAUSES {
+    for (i, p) in EAR_PAUSES.into_iter().enumerate() {
         if o < p {
             break;
         }
         o -= p;
         if o < 240 {
-            ear = if (70..160).contains(&o) { 2 } else { 1 };
+            let pose = if (70..160).contains(&o) { 2 } else { 1 };
+            if EAR_SIDES[i] == 1 {
+                ear_r = pose;
+            } else {
+                ear = pose;
+            }
             break;
         }
         o -= 240;
     }
-    Frame { blink, ecg: Some(ecg), pickle, z, tail, ear, shy: false }
+    // ручка: только у «пишет», шаги по таблице
+    let mut pen = 0;
+    if state == 1 {
+        let mut o = t % 4170;
+        for (d, pose) in PEN_SPEC {
+            if o < d {
+                pen = pose;
+                break;
+            }
+            o -= d;
+        }
+    }
+    Frame { blink, ecg: Some(ecg), pickle, z, tail, ear, ear_r, shy: false, pen }
 }
 
 #[test]
@@ -217,10 +239,10 @@ fn case_frame(name: &str) -> (u8, Frame) {
         "blink" => (n(1), Frame { blink: n(2), ..Frame::default() }),
         "z" => (n(1), Frame { z: n(2), ..Frame::default() }),
         "combo" => match p[1] {
-            "a" => (1, Frame { tail: 2, ecg: Some(5), pickle: 1, blink: 2, z: 0, ear: 0, shy: false }),
-            "b" => (0, Frame { tail: 3, ecg: Some(11), pickle: 2, blink: 0, z: 2, ear: 0, shy: false }),
-            "c" => (2, Frame { tail: 1, ecg: Some(0), pickle: 1, blink: 1, z: 0, ear: 0, shy: false }),
-            "d" => (1, Frame { tail: 3, ecg: Some(19), pickle: 2, blink: 1, z: 0, ear: 0, shy: false }),
+            "a" => (1, Frame { tail: 2, ecg: Some(5), pickle: 1, blink: 2, z: 0, ear: 0, ear_r: 0, shy: false, pen: 0 }),
+            "b" => (0, Frame { tail: 3, ecg: Some(11), pickle: 2, blink: 0, z: 2, ear: 0, ear_r: 0, shy: false, pen: 0 }),
+            "c" => (2, Frame { tail: 1, ecg: Some(0), pickle: 1, blink: 1, z: 0, ear: 0, ear_r: 0, shy: false, pen: 0 }),
+            "d" => (1, Frame { tail: 3, ecg: Some(19), pickle: 2, blink: 1, z: 0, ear: 0, ear_r: 0, shy: false, pen: 0 }),
             x => panic!("неизвестный состав {x}"),
         },
         x => panic!("неизвестный кадр {x}"),
@@ -258,7 +280,9 @@ fn compose_changes_only_inside_patch_boxes_and_is_idempotent() {
             z: if state == 0 { r.below(3) as u8 } else { 0 },
             tail: r.below(4) as u8,
             ear: r.below(3) as u8,
+            ear_r: r.below(3) as u8,
             shy: false,
+            pen: if state == 1 { r.below(7) as u8 } else { 0 },
         };
         let out = compose(state, &s, &f);
         assert_eq!(out.len(), s.len());
@@ -270,6 +294,16 @@ fn compose_changes_only_inside_patch_boxes_and_is_idempotent() {
         }
         if f.ear > 0 {
             let b = crate::scene_anim_px::EAR[usize::from(state)][usize::from(f.ear) - 1];
+            boxes.push((b.0, b.1, b.2, b.3));
+        }
+        if f.ear_r > 0 {
+            let b = crate::scene_anim_px::EAR_R[usize::from(state)][usize::from(f.ear_r) - 1];
+            boxes.push((b.0, b.1, b.2, b.3));
+        }
+        if f.pen > 0 && state == 1 {
+            let b = crate::scene_anim_px::PEN[usize::from(f.pen) - 1];
+            boxes.push((b.0, b.1, b.2, b.3));
+            let b = crate::scene_anim_px::PEN_UNDER[usize::from(f.pen) - 1];
             boxes.push((b.0, b.1, b.2, b.3));
         }
         if let Some(e) = f.ecg {
@@ -307,7 +341,7 @@ fn compose_changes_only_inside_patch_boxes_and_is_idempotent() {
 /// Короткая или пустая картинка-основа и «чужие» значения кадра: без паники, без расползания по памяти.
 #[test]
 fn compose_tolerates_bad_inputs() {
-    let f = Frame { blink: 2, ecg: Some(255), pickle: 2, z: 2, tail: 3, ear: 2, shy: true };
+    let f = Frame { blink: 2, ecg: Some(255), pickle: 2, z: 2, tail: 3, ear: 2, ear_r: 2, shy: true, pen: 6 };
     for state in [0u8, 1, 2, 9] {
         let _ = compose(state, &[], &f);
         let short = vec![0u32; 1000];
@@ -316,7 +350,7 @@ fn compose_tolerates_bad_inputs() {
     }
     // номера вне диапазона просто пропускаются
     let s = still(1);
-    assert_eq!(compose(1, &s, &Frame { blink: 9, ecg: Some(200), pickle: 9, z: 9, tail: 9, ear: 9, shy: false }), s);
+    assert_eq!(compose(1, &s, &Frame { blink: 9, ecg: Some(200), pickle: 9, z: 9, tail: 9, ear: 9, ear_r: 9, shy: false, pen: 9 }), s);
 }
 
 // ───────────── разжимание и целостность данных ─────────────
