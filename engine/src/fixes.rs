@@ -1834,3 +1834,8 @@ mod mac_quit_tests {
         assert!(manual("mac_force_quit", Some("4242@Thu-Nov-5-21-59-32-2026")).is_some_and(|m| m.contains("4242")));
     }
 }
+
+/// Независимые регрессионные тесты (REGRESSION_TESTS.md).
+#[cfg(test)]
+#[path = "regress/fixes.rs"]
+mod regress;

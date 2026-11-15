@@ -2525,3 +2525,8 @@ mod tests {
         }
     }
 }
+
+/// Независимые регрессионные тесты (REGRESSION_TESTS.md).
+#[cfg(test)]
+#[path = "regress/tray.rs"]
+mod regress;

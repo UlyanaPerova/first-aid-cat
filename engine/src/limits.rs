@@ -1030,3 +1030,8 @@ fn real_logs_timing() {
         println!("проход {pass}: {n} записей, {:?}", t.elapsed());
     }
 }
+
+/// Независимые регрессионные тесты (REGRESSION_TESTS.md); подключены отдельным файлом, на сборку без `cfg(test)` не влияют.
+#[cfg(test)]
+#[path = "regress/limits.rs"]
+mod regress;

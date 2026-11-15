@@ -3882,3 +3882,8 @@ mod tests {
         assert!(nodes.iter().all(|n| seen.insert(n.id)));
     }
 }
+
+/// Независимые регрессионные тесты (REGRESSION_TESTS.md).
+#[cfg(test)]
+#[path = "regress/ui.rs"]
+mod regress;

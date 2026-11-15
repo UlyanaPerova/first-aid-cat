@@ -360,3 +360,8 @@ mod tests {
         assert_ne!(out, still);
     }
 }
+
+/// Независимые регрессионные тесты (REGRESSION_TESTS.md).
+#[cfg(test)]
+#[path = "regress/scene.rs"]
+mod regress;

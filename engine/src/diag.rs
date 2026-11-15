@@ -3463,7 +3463,7 @@ mod tests {
     }
 
     // ── замер скорости против локального сервера (в Cloudflare тесты не ходят) ──
-    static SPEED_TEST: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    pub(super) static SPEED_TEST: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     /// Локальный сервер: `handler` получает сокет после чтения заголовков запроса (до пустой строки).
     fn local_server(handler: fn(std::net::TcpStream)) -> String {
@@ -3635,3 +3635,8 @@ mod ignore_tests {
         assert_eq!(out[0].value, "мало места");
     }
 }
+
+/// Независимые регрессионные тесты (REGRESSION_TESTS.md).
+#[cfg(test)]
+#[path = "regress/diag.rs"]
+mod regress;

@@ -1640,3 +1640,8 @@ mod tests {
         assert!(ssh_key_encrypted(&mk(b"aes256-ctr")));
     }
 }
+
+/// Независимые регрессионные тесты (REGRESSION_TESTS.md).
+#[cfg(test)]
+#[path = "regress/footprint.rs"]
+mod regress;
