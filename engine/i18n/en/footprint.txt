@@ -42,9 +42,9 @@ en: Footprint: keys in AI chats
 ru: чат|чата|чатов
 en: chat|chats
 
-# footprint.rs:433
-ru: Эти ключи были в переписке с ИИ: их видела модель, и они лежат открытым текстом в файлах сессий (например, {}). Замени ключи новыми у поставщика; старые сессии с ними можно удалить.{}
-en: These keys were in conversations with an AI: the model saw them, and they sit as plain text in session files (for example, {}). Replace the keys with new ones at the provider; old sessions that contain them can be deleted.{}
+# footprint.rs:669
+ru: Эти ключи были в переписке с ИИ: их видела модель, и они лежат открытым текстом в файлах сессий (например, {}). Замени ключи новыми у поставщика; кнопка заменит их в чатах маской, сами чаты останутся читаемыми.{}
+en: These keys were in conversations with an AI: the model saw them, and they sit as plain text in session files (for example, {}). Replace the keys with new ones at the provider; the button replaces them in the chats with a mask, the chats themselves stay readable.{}
 
 # footprint.rs:436
 ru:  Проверил не все чаты — продолжу в следующий раз.
@@ -226,3 +226,63 @@ en: Without encryption a stolen laptop can be read in full: keys, chats, browser
 
 ru: Без шифрования украденный ноутбук читается целиком: ключи, чаты, пароли браузера. Шифрование включается в BitLocker.
 en: Without encryption a stolen laptop can be read in full: keys, chats, browser passwords. Encryption is turned on in BitLocker.
+
+# footprint.rs:667
+ru: Вымарать ключи из чатов
+en: Mask keys in chats
+
+# footprint.rs:1113
+ru: нет прав на запись
+en: no write permission
+
+# footprint.rs:1117
+ru: это ссылка
+en: it is a symlink
+
+# footprint.rs:1146
+ru: ключ длиннее запаса на стыке
+en: key longer than the block margin
+
+# footprint.rs:1157
+ru: файл изменился во время работы
+en: file changed meanwhile
+
+# footprint.rs:1238
+ru: папка чатов ведёт за пределы домашней
+en: chat folder leads outside the home folder
+
+# footprint.rs:1254
+ru: закрыть ключи ({}) в {}
+en: mask keys ({}) in {}
+
+# footprint.rs:1257
+ru: ключ записан необычно и остался
+en: key written in an unusual way and left in place
+
+# footprint.rs:1266
+ru: Пробный запуск: закрыл бы {} в {}.
+en: Dry run: would mask {} in {}.
+
+# footprint.rs:1267
+ru: ключ|ключа|ключей
+en: key|keys
+
+# footprint.rs:1268
+ru: чате|чатах|чатах
+en: chat|chats
+
+# footprint.rs:1275
+ru: В чатах не нашёл ключей.
+en: Found no keys in the chats.
+
+# footprint.rs:1278
+ru: Закрыл {} в {}.
+en: Masked {} in {}.
+
+# footprint.rs:1283
+ru:  Не удалось изменить файлов: {} ({}) — ключи там могли остаться.
+en:  Could not change {} files ({}) — keys may remain there.
+
+# footprint.rs:1285
+ru:  Модель ключи уже видела: замени их у поставщика.
+en:  The model has already seen the keys: replace them at the provider.

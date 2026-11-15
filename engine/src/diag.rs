@@ -2695,8 +2695,20 @@ fn ping_stats(n: usize) -> Option<(f64, f64)> {
     let mut s = times.clone();
     s.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     let med = *s.get(s.len() / 2)?;
-    let jit = times.windows(2).map(|w| (w[0] - w[1]).abs()).sum::<f64>() / (times.len() - 1) as f64;
-    Some((med, jit))
+    Some((med, jitter(&times)))
+}
+
+/// Джиттер, мс: насколько соседние замеры расходятся между собой — МЕДИАНА этих расхождений.
+/// Раньше было среднее: один застрявший ответ из пяти (скажем, 3 с при обычных 100 мс) давал «джиттер 1222 мс»,
+/// хотя сеть ровная; на Wi-Fi ноутбука такие одиночные задержки случаются постоянно.
+fn jitter(times: &[f64]) -> f64 {
+    let mut d: Vec<f64> = times.windows(2).map(|w| (w[0] - w[1]).abs()).collect();
+    if d.is_empty() {
+        return 0.0;
+    }
+    d.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    // при чётном числе — нижняя из двух средних: один выброс портит два соседних расхождения
+    d[(d.len() - 1) / 2]
 }
 
 fn mbps_of(bytes: u64, secs: f64) -> f64 {
@@ -3213,7 +3225,8 @@ fn speed_usual(down: bool) -> Option<f64> {
 
 /// Задержка сети — лёгкий автоматический замер для расписания (несколько маленьких соединений, без скачивания).
 pub(crate) fn check_latency() -> Vec<Check> {
-    match ping_stats(5) {
+    // 8 замеров, как в замере скорости (было 5: на таком малом числе цифры прыгали от запуска к запуску)
+    match ping_stats(8) {
         Some((med, jit)) => {
             let st = if med < 250.0 && jit < 60.0 {
                 OK
@@ -3438,6 +3451,15 @@ mod tests {
         let a = Check::new("sys", "Диск", INFO, "не проверить").unknown();
         let b = Check::new("sys", "Пояс", INFO, "не проверить"); // та же фраза, но без пометки
         assert_eq!(unchecked_count(&[a, b]), 1);
+    }
+
+    #[test]
+    fn jitter_ignores_single_spike() {
+        // ровная сеть с одним застрявшим ответом: среднее расхождение было бы ~1450 мс, медиана — пара миллисекунд
+        assert!(jitter(&[100.0, 102.0, 99.0, 3000.0, 101.0]) < 5.0);
+        // сеть, где задержка и правда гуляет, — джиттер большой
+        assert!(jitter(&[100.0, 400.0, 120.0, 380.0, 90.0, 410.0]) > 200.0);
+        assert_eq!(jitter(&[100.0]), 0.0);
     }
 
     // ── замер скорости против локального сервера (в Cloudflare тесты не ходят) ──

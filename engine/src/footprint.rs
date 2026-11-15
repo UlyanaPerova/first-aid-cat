@@ -39,11 +39,33 @@ const KINDS: [(&str, &str, usize); 15] = [
     ("-----BEGIN", "закрытый ключ", 0),
 ];
 
-/// Какие виды секретов есть в тексте (без самих значений).
 const TAIL_MAX: usize = 256;
 
+/// Где в тексте лежит секрет: байты [start, end), первые `keep` из них — узнаваемое начало («sk-proj-»),
+/// `first` — первый кусок секрета (у закрытого ключа кусков несколько — по строке base64).
+pub(crate) struct Span {
+    pub start: usize,
+    pub end: usize,
+    pub keep: usize,
+    pub name: &'static str,
+    pub first: bool,
+}
+
+/// Какие виды секретов есть в тексте (без самих значений).
 pub fn secret_kinds(text: &str) -> Vec<&'static str> {
     let mut found: Vec<&'static str> = Vec::new();
+    for s in secret_spans(text) {
+        if !found.contains(&s.name) {
+            found.push(s.name);
+        }
+    }
+    found
+}
+
+/// Секреты в тексте вместе с местом (по ним Аптечка вымарывает ключи из чатов: убирает ровно то, о чём
+/// говорит проверка).
+pub(crate) fn secret_spans(text: &str) -> Vec<Span> {
+    let mut found: Vec<Span> = Vec::new();
     let tok = |c: char| c.is_ascii_alphanumeric() || c == '-' || c == '_';
     for (prefix, name, min) in KINDS {
         let mut from = 0;
@@ -63,8 +85,8 @@ pub fn secret_kinds(text: &str) -> Vec<&'static str> {
                     let after = &text[at + h + "PRIVATE KEY-----".len()..];
                     let after = after.trim_start_matches(['\r', '\n']).trim_start_matches("\\n");
                     let body = after.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '+' || *c == '/' || *c == '=').count();
-                    if body >= 60 && !found.contains(&name) {
-                        found.push(name);
+                    if body >= 60 {
+                        pem_spans(text, at + h + "PRIVATE KEY-----".len(), name, &mut found);
                     }
                 }
                 continue;
@@ -98,13 +120,52 @@ pub fn secret_kinds(text: &str) -> Vec<&'static str> {
                         || text[at..].starts_with("sk-proj-")
                         || text[at..].starts_with("sk-svcacct-")
                         || text[at..].starts_with("sk-or-"));
-                if !generic && !found.contains(&name) {
-                    found.push(name);
+                if !generic {
+                    // ключ целиком, а не только первые TAIL_MAX знаков
+                    let full = text[from..].bytes().take_while(|c| tok(*c as char)).count();
+                    found.push(Span { start: at, end: from + full, keep: prefix.len(), name, first: true });
                 }
             }
         }
     }
     found
+}
+
+/// Куски закрытого ключа: каждая строка base64 между заголовком и «-----END» (в чатах перевод строки —
+/// «\n» из двух знаков; его самого не трогаем). Без «-----END» поблизости — только первая строка.
+fn pem_spans(text: &str, header_end: usize, name: &'static str, out: &mut Vec<Span>) {
+    let rest = &text[header_end..];
+    let rb = rest.as_bytes();
+    let b64 = |c: u8| c.is_ascii_alphanumeric() || c == b'+' || c == b'/' || c == b'=';
+    let esc = |i: usize| rb[i] == b'\\' && matches!(rb.get(i + 1), Some(b'n' | b'r'));
+    let mut lim = rest.len().min(20_000);
+    while !rest.is_char_boundary(lim) {
+        lim -= 1;
+    }
+    let mut i = 0;
+    while i < lim && (matches!(rb[i], b'\r' | b'\n') || esc(i)) {
+        i += if rb[i] == b'\\' { 2 } else { 1 };
+    }
+    let end = rest[..lim].find("-----END");
+    let stop = end.unwrap_or(lim);
+    let mut first = true;
+    while i < stop {
+        if b64(rb[i]) {
+            let s = i;
+            while i < stop && b64(rb[i]) {
+                i += 1;
+            }
+            out.push(Span { start: header_end + s, end: header_end + i, keep: 0, name, first });
+            first = false;
+            if end.is_none() {
+                break;
+            }
+        } else if esc(i) {
+            i += 2;
+        } else {
+            i += 1;
+        }
+    }
 }
 
 /// В строке есть повторяющийся кусок из 8 знаков — так выглядят выдуманные примеры, не случайные ключи.
@@ -173,6 +234,12 @@ pub fn redact_for_backup(text: &str) -> String {
 
 /// Раскодировать \uXXXX (JSON) и %XX (адреса) — только если они в тексте есть; None — нечего раскодировать.
 fn decode_escapes(t: &str) -> Option<String> {
+    decode_escapes_map(t, None)
+}
+
+/// То же, а `map` (если дан) получает для каждого байта результата — откуда он в исходном тексте
+/// (плюс в конце — длину исходного): так место ключа в раскодированном тексте находится и в самом файле.
+fn decode_escapes_map(t: &str, mut map: Option<&mut Vec<usize>>) -> Option<String> {
     if !t.contains("\\u") && !t.contains('%') {
         return None;
     }
@@ -184,6 +251,7 @@ fn decode_escapes(t: &str) -> Option<String> {
         if b[i] == b'\\' && b.get(i + 1) == Some(&b'u') && i + 6 <= b.len() {
             if let Some(c) = hex(&b[i + 2..i + 6]).and_then(char::from_u32) {
                 out.push(c);
+                note(&mut map, i, c);
                 i += 6;
                 continue;
             }
@@ -191,6 +259,7 @@ fn decode_escapes(t: &str) -> Option<String> {
         if b[i] == b'%' && i + 3 <= b.len() {
             if let Some(c) = hex(&b[i + 1..i + 3]).filter(|c| *c < 0x80).and_then(char::from_u32) {
                 out.push(c);
+                note(&mut map, i, c);
                 i += 3;
                 continue;
             }
@@ -198,10 +267,33 @@ fn decode_escapes(t: &str) -> Option<String> {
         // остальное — как есть (по символам UTF-8)
         let ch = t[i..].chars().next().unwrap_or('\u{FFFD}');
         out.push(ch);
+        note(&mut map, i, ch);
         i += ch.len_utf8().max(1);
+    }
+    if let Some(m) = map {
+        m.push(t.len());
     }
     Some(out)
 }
+
+fn note(map: &mut Option<&mut Vec<usize>>, at: usize, c: char) {
+    if let Some(m) = map {
+        m.extend(std::iter::repeat_n(at, c.len_utf8()));
+    }
+}
+
+/// Папки чатов ИИ-агентов (те же, что знает модуль агентов, agents.rs) и расширение файлов в них.
+const CHAT_DIRS: [(&str, &str); 9] = [
+    (".claude/projects", ".jsonl"),
+    (".codex/sessions", ".jsonl"),
+    (".gemini/tmp", ".json"),
+    (".gemini/tmp", ".jsonl"),
+    (".qwen/tmp", ".json"),
+    (".qwen/projects", ".jsonl"),
+    (".kimi/sessions", ".jsonl"),
+    (".kimi-code", ".jsonl"),
+    (".local/share/opencode/storage", ".json"),
+];
 
 /// Поиск в файле по кускам (большие чаты не читаются целиком в память), не дольше `until`.
 /// None — не успели или не прочитать.
@@ -530,23 +622,12 @@ pub fn check() -> Vec<Check> {
     let mut capped = false; // в какой-то папке чатов файлов больше лимита
                             // те же папки, что знает модуль агентов (agents.rs); SQLite (Cursor, новый OpenCode) не разбираем — честно
                             // отмечаем, что они не просмотрены
-    let dirs = [
-        (".claude/projects", ".jsonl"),
-        (".codex/sessions", ".jsonl"),
-        (".gemini/tmp", ".json"),
-        (".gemini/tmp", ".jsonl"),
-        (".qwen/tmp", ".json"),
-        (".qwen/projects", ".jsonl"),
-        (".kimi/sessions", ".jsonl"),
-        (".kimi-code", ".jsonl"),
-        (".local/share/opencode/storage", ".json"),
-    ];
     let unsupported: Vec<&str> = [(".cursor/chats", "Cursor"), (".local/share/opencode/opencode.db", "OpenCode (база SQLite)")]
         .iter()
         .filter(|(p, _)| h.join(p).exists())
         .map(|(_, n)| *n)
         .collect();
-    for (d, ext) in dirs {
+    for (d, ext) in CHAT_DIRS {
         let (files, cut) = files_in(&h.join(d), &[ext], 3000);
         capped |= cut;
         for p in files {
@@ -583,9 +664,10 @@ pub fn check() -> Vec<Check> {
                 WARN,
                 &format!("{} · {}", crate::diag::plural(chats_with.len(), "чат", "чата", "чатов"), kinds.join(", ")),
             )
+            .fixes(vec![fx("footprint_chats", "Вымарать ключи из чатов", None)])
             .hint(&format!(
                 "Эти ключи были в переписке с ИИ: их видела модель, и они лежат открытым текстом в файлах сессий (например, {}). \
-                Замени ключи новыми у поставщика; старые сессии с ними можно удалить.{}",
+                Замени ключи новыми у поставщика; кнопка заменит их в чатах маской, сами чаты останутся читаемыми.{}",
                 chats_with.first().map(|x| x.0.as_str()).unwrap_or(""),
                 if partial { " Проверил не все чаты — продолжу в следующий раз." } else { "" }
             )),
@@ -1017,6 +1099,193 @@ pub fn fix_history() -> (bool, String) {
     )
 }
 
+/// Закрыть ключи в файле чата на месте: каждый ключ — на маску той же длины («sk-proj-» и звёздочки).
+/// Размер файла и все смещения не меняются, поэтому строки, JSON и агент, дописывающий этот чат
+/// прямо сейчас, ничего не замечают. Через временный файл и переименование нельзя: открытая сессия
+/// осталась бы с удалённым файлом. Копию не делаем — она хранила бы ключи.
+/// Ok((сколько ключей закрыто, остался ли ключ после закрытия)).
+fn mask_file(p: &Path, dry: bool) -> Result<(usize, bool), String> {
+    use std::io::{Read, Seek, SeekFrom, Write};
+    const CH: usize = 1 << 20; // сколько байт «своих» в одном проходе
+    const OV: usize = 4096; // запас справа: ключ на стыке проходов целиком виден в одном из них
+    const LEFT: usize = 8; // слева — знак перед ключом (начало слова)
+    let why = |e: std::io::Error| match e.kind() {
+        std::io::ErrorKind::PermissionDenied => "нет прав на запись".to_string(),
+        _ => e.to_string(),
+    };
+    if std::fs::symlink_metadata(p).map_err(why)?.file_type().is_symlink() {
+        return Err("это ссылка".into());
+    }
+    let mut o = std::fs::OpenOptions::new();
+    o.read(true).write(!dry);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::custom_flags(&mut o, libc::O_NONBLOCK | libc::O_NOFOLLOW);
+    let mut f = o.open(p).map_err(why)?;
+    if !f.metadata().map_err(why)?.is_file() {
+        return Err("не обычный файл".into());
+    }
+    let read_at = |f: &mut std::fs::File, at: usize, n: usize| -> std::io::Result<Vec<u8>> {
+        f.seek(SeekFrom::Start(at as u64))?;
+        let mut buf = Vec::with_capacity(n);
+        Read::by_ref(f).take(n as u64).read_to_end(&mut buf)?;
+        Ok(buf)
+    };
+    let mut keys = 0;
+    let mut base = 0usize;
+    loop {
+        let from = base.saturating_sub(LEFT);
+        let want = base - from + CH + OV;
+        let buf = read_at(&mut f, from, want).map_err(why)?;
+        let last = buf.len() < want;
+        for (s, e, first) in raw_spans(&buf) {
+            let (s, e) = (from + s, from + e);
+            if s < base || (!last && s >= base + CH) {
+                continue; // чужой проход: его найдёт соседний
+            }
+            if !last && e >= from + buf.len() {
+                return Err("ключ длиннее запаса на стыке".into());
+            }
+            if first {
+                keys += 1;
+            }
+            if dry {
+                continue;
+            }
+            // перед записью — те же байты на месте (файл мог измениться), и только тогда маска
+            let cur = read_at(&mut f, s, e - s).map_err(why)?;
+            if cur != buf[s - from..e - from] {
+                return Err("файл изменился во время работы".into());
+            }
+            f.seek(SeekFrom::Start(s as u64)).map_err(why)?;
+            f.write_all(&vec![b'*'; e - s]).map_err(why)?;
+        }
+        if last {
+            break;
+        }
+        base += CH;
+    }
+    if !dry {
+        f.flush().map_err(why)?;
+    }
+    drop(f);
+    // осталось ли что-то, что проверка всё ещё считает ключом (запись, которую не разобрали)
+    let left = !dry && keys > 0 && scan_file(p, Instant::now() + Duration::from_secs(600)).is_some_and(|k| !k.is_empty());
+    Ok((keys, left))
+}
+
+/// Байты [начало, конец) секретов в куске файла — что закрывать (`true` — начало нового ключа). Ищем и в
+/// тексте как есть, и в раскодированном (\uXXXX, %XX): место из него переводится обратно в файл. Начало
+/// ключа («sk-proj-») остаётся, закрывается остальное.
+fn raw_spans(bytes: &[u8]) -> Vec<(usize, usize, bool)> {
+    // текст как lossy, но с таблицей «байт текста → байт файла» (битые байты заменяются на 3-байтовый знак)
+    let mut text = String::with_capacity(bytes.len());
+    let mut tmap: Vec<usize> = Vec::with_capacity(bytes.len() + 1);
+    let mut at = 0;
+    for ch in bytes.utf8_chunks() {
+        for c in ch.valid().chars() {
+            tmap.extend(std::iter::repeat_n(at, c.len_utf8()));
+            at += c.len_utf8();
+            text.push(c);
+        }
+        if !ch.invalid().is_empty() {
+            tmap.extend(std::iter::repeat_n(at, '\u{FFFD}'.len_utf8()));
+            at += ch.invalid().len();
+            text.push('\u{FFFD}');
+        }
+    }
+    tmap.push(bytes.len());
+    let mut out: Vec<(usize, usize, bool)> = secret_spans(&text).iter().map(|s| (tmap[s.start + s.keep], tmap[s.end], s.first)).collect();
+    let mut dmap: Vec<usize> = Vec::new();
+    if let Some(d) = decode_escapes_map(&text, Some(&mut dmap)) {
+        out.extend(secret_spans(&d).iter().map(|s| (tmap[dmap[s.start + s.keep]], tmap[dmap[s.end]], s.first)));
+    }
+    out.retain(|x| x.0 < x.1);
+    out.sort_unstable();
+    // совпавшие и пересекающиеся куски (тот же ключ, найденный и так, и так) — в один
+    let mut merged: Vec<(usize, usize, bool)> = Vec::new();
+    for (s, e, f) in out {
+        match merged.last_mut() {
+            Some(m) if s < m.1 => {
+                m.1 = m.1.max(e);
+                m.2 |= f;
+            }
+            _ => merged.push((s, e, f)),
+        }
+    }
+    merged
+}
+
+/// Забыть память проверенных файлов: после правки чатов строка проверки должна пересчитаться.
+fn forget_seen() {
+    *SEEN.lock().unwrap_or_else(|e| e.into_inner()) = None;
+}
+
+/// Кнопка «Вымарать ключи из чатов»: во всех файлах чатов ИИ-агентов ключи заменяются маской той же длины.
+pub fn fix_chats() -> (bool, String) {
+    let Some(h) = crate::store::home_dir() else { return (false, "Не нашёл домашнюю папку.".into()) };
+    let dry = crate::fixes::dry_run();
+    let home_real = std::fs::canonicalize(&h).unwrap_or(h.clone());
+    let (mut keys, mut changed) = (0usize, 0usize);
+    // причина → сколько файлов
+    let mut failed: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    let mut seen_files = std::collections::HashSet::new();
+    for (d, ext) in CHAT_DIRS {
+        let dir = h.join(d);
+        // папка чатов должна оставаться в домашней папке (ссылка наружу — не наши файлы)
+        match std::fs::canonicalize(&dir) {
+            Ok(r) if r.starts_with(&home_real) => {}
+            Ok(_) => {
+                *failed.entry("папка чатов ведёт за пределы домашней".into()).or_default() += 1;
+                continue;
+            }
+            Err(_) => continue,
+        }
+        let (files, _) = files_in(&dir, &[ext], usize::MAX);
+        for p in files {
+            if !seen_files.insert(p.clone()) {
+                continue;
+            }
+            match mask_file(&p, dry) {
+                Ok((0, _)) => {}
+                Ok((n, left)) => {
+                    keys += n;
+                    changed += 1;
+                    if dry {
+                        crate::fixes::log_dry(&format!("закрыть ключи ({n}) в {}", p.display()));
+                    }
+                    if left {
+                        *failed.entry("ключ записан необычно и остался".into()).or_default() += 1;
+                    }
+                }
+                Err(why) => *failed.entry(why).or_default() += 1,
+            }
+        }
+    }
+    if dry {
+        return (true, format!(
+                "Пробный запуск: закрыл бы {} в {}.",
+                crate::diag::plural(keys, "ключ", "ключа", "ключей"),
+                crate::diag::plural(changed, "чате", "чатах", "чатах")
+            ));
+    }
+    forget_seen();
+    let bad: usize = failed.values().sum();
+    let reasons = failed.iter().map(|(w, n)| format!("{w} — {n}")).collect::<Vec<_>>().join("; ");
+    if keys == 0 && bad == 0 {
+        return (true, "В чатах не нашёл ключей.".into());
+    }
+    let mut m = format!(
+        "Закрыл {} в {}.",
+        crate::diag::plural(keys, "ключ", "ключа", "ключей"),
+        crate::diag::plural(changed, "чате", "чатах", "чатах")
+    );
+    if bad > 0 {
+        m += &format!(" Не удалось изменить файлов: {bad} ({reasons}) — ключи там могли остаться.");
+    }
+    m += " Модель ключи уже видела: замени их у поставщика.";
+    (bad == 0, m)
+}
+
 /// Какой файл править для пути истории: сам файл; ссылка (~/.bash_history → ~/dotfiles/…) — только если её
 /// настоящая цель внутри домашней папки и принадлежит пользователю (запись идёт в цель, ссылка остаётся).
 /// Ok(None) — файла нет; Err — почему нельзя.
@@ -1178,6 +1447,95 @@ mod tests {
             None => std::env::remove_var("XDG_CONFIG_HOME"),
         }
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    fn tmp_file(name: &str, data: &[u8]) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("aptechka_mask_{name}_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let p = d.join("chat.jsonl");
+        std::fs::write(&p, data).unwrap();
+        p
+    }
+
+    #[test]
+    fn mask_keeps_size_and_other_bytes() {
+        let (k1, k2) = (fake_key(), concat!("ghp_", "Ab3Cd5Ef7Gh9Ij1Kl3Mn5Op7Qr9St1Uv3Wx5"));
+        // два ключа в одной строке, третий — на другой, битый UTF-8 и ключ в самом конце без перевода строки
+        let mut data = format!("{{\"t\":\"a {k1} b {k2}\"}}\n{{\"t\":\"привет\"}}\n").into_bytes();
+        data.extend_from_slice(b"\xff\xfe ok\n");
+        data.extend_from_slice(format!("конец {k1}").as_bytes());
+        let p = tmp_file("a", &data);
+        let (n, left) = mask_file(&p, true).unwrap();
+        assert_eq!((n, left), (3, false));
+        assert_eq!(std::fs::read(&p).unwrap(), data, "пробный запуск ничего не меняет");
+        let (n, left) = mask_file(&p, false).unwrap();
+        assert_eq!((n, left), (3, false));
+        let after = std::fs::read(&p).unwrap();
+        assert_eq!(after.len(), data.len());
+        let text = String::from_utf8_lossy(&after);
+        assert!(text.contains("sk-proj-****") && text.contains("ghp_****"), "{text}");
+        assert!(!text.contains("Qw7Er9") && !text.contains("Ab3Cd5"));
+        assert!(secret_kinds(&text).is_empty());
+        // все байты вне ключей — как были
+        let diff: Vec<usize> = (0..data.len()).filter(|&i| data[i] != after[i]).collect();
+        assert!(diff.iter().all(|&i| after[i] == b'*'));
+        assert_eq!(diff.len(), (k1.len() - 8) * 2 + k2.len() - 4);
+        assert_eq!(mask_file(&p, false).unwrap().0, 0);
+        let _ = std::fs::remove_dir_all(p.parent().unwrap());
+    }
+
+    #[test]
+    fn mask_escaped_and_pem_and_boundary() {
+        // ключ с экранированием JSON (\u002d вместо «-»), закрытый ключ с «\n» между строками
+        let esc = fake_key().replacen('-', "\\u002d", 1);
+        let body = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKj";
+        let pem = format!("-----BEGIN PRIVATE KEY-----\\n{body}\\n{body}\\n-----END PRIVATE KEY-----");
+        let mut data = format!("{{\"a\":\"{esc}\",\"b\":\"{pem}\"}}\n").into_bytes();
+        // ключ ровно на стыке проходов (1 МБ)
+        let pad = (1 << 20) - data.len() - 20; // ключ начинается до границы, кончается после
+        data.extend(std::iter::repeat_n(b' ', pad));
+        data.extend_from_slice(format!(" {}", fake_key()).as_bytes());
+        let p = tmp_file("b", &data);
+        let (n, left) = mask_file(&p, false).unwrap();
+        assert_eq!((n, left), (3, false));
+        let after = String::from_utf8(std::fs::read(&p).unwrap()).unwrap();
+        assert_eq!(after.len(), data.len());
+        assert!(secret_kinds(&after).is_empty(), "{}", &after[..300]);
+        assert!(after.contains("-----BEGIN PRIVATE KEY-----\\n****") && after.contains("-----END PRIVATE KEY-----"));
+        assert!(!after.contains("MIIEvQ") && !after.contains("Qw7Er9"));
+        let _ = std::fs::remove_dir_all(p.parent().unwrap());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn mask_refuses_symlink() {
+        let p = tmp_file("c", fake_key().as_bytes());
+        let l = p.with_file_name("link.jsonl");
+        std::os::unix::fs::symlink(&p, &l).unwrap();
+        assert!(mask_file(&l, false).is_err());
+        assert_eq!(std::fs::read(&p).unwrap(), fake_key().as_bytes());
+        let _ = std::fs::remove_dir_all(p.parent().unwrap());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn fix_chats_on_fake_home() {
+        with_home("chats", |h| {
+            let d = h.join(".claude/projects/x");
+            std::fs::create_dir_all(&d).unwrap();
+            std::fs::write(d.join("a.jsonl"), format!("{{\"m\":\"{}\"}}\n", fake_key())).unwrap();
+            std::fs::write(d.join("b.jsonl"), "без ключей\n").unwrap();
+            crate::fixes::set_dry_run(true);
+            let (ok, msg) = fix_chats();
+            crate::fixes::set_dry_run(false);
+            assert!(ok && msg.contains("закрыл бы 1 ключ в 1 чате"), "{msg}");
+            assert!(std::fs::read_to_string(d.join("a.jsonl")).unwrap().contains("Qw7Er9"));
+            let (ok, msg) = fix_chats();
+            assert!(ok && msg.starts_with("Закрыл 1 ключ в 1 чате"), "{msg}");
+            assert!(!std::fs::read_to_string(d.join("a.jsonl")).unwrap().contains("Qw7Er9"));
+            assert_eq!(std::fs::read_to_string(d.join("b.jsonl")).unwrap(), "без ключей\n");
+        });
     }
 
     #[cfg(unix)]

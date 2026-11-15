@@ -579,12 +579,20 @@ struct SpGeo {
 }
 
 impl St {
+    /// Строки замера скорости для таблицы и итогов. «Пинг» из замера не показываем отдельной строкой, когда есть
+    /// строка «Задержка сети»: это одно и то же измерение (задержка и джиттер до сервера замера), просто сделанное
+    /// в другое время, — две строки с разными цифрами только путали. Пинг замера остаётся в строке скорости.
+    fn speed_rows(&self) -> impl Iterator<Item = &Check> {
+        let has_latency = self.checks.iter().any(|c| c.title == "Задержка сети");
+        self.speed_checks.iter().filter(move |c| !(has_latency && c.title == crate::diag::SPEED_TITLES[0]))
+    }
+
     /// Названия нынешних красных и жёлтых строк (игнорируемые уже «для сведения» — их тут нет).
     fn problem_titles(&self) -> Vec<String> {
         let mut v: Vec<String> = self
             .checks
             .iter()
-            .chain(self.speed_checks.iter())
+            .chain(self.speed_rows())
             .filter(|c| matches!(c.status.as_str(), "bad" | "warn") && unit_on(c.unit))
             .map(|c| c.title.clone())
             .collect();
@@ -1035,7 +1043,7 @@ impl Ui {
             _ => 3,
         };
         let mut rows: Vec<Check> =
-            self.st.checks.iter().chain(self.st.speed_checks.iter()).filter(|c| c.key == group && unit_on(c.unit)).cloned().collect();
+            self.st.checks.iter().chain(self.st.speed_rows()).filter(|c| c.key == group && unit_on(c.unit)).cloned().collect();
         rows.sort_by_key(|c| rank(&c.status));
         self.st.rows = rows;
         let m = self.st.scroll_max(0);
@@ -1043,7 +1051,7 @@ impl Ui {
     }
 
     fn all_checks(&self) -> impl Iterator<Item = &Check> {
-        self.st.checks.iter().chain(self.st.speed_checks.iter())
+        self.st.checks.iter().chain(self.st.speed_rows())
     }
 
     /// Пришёл новый прогон проверок. full_log — записать каждую проверку в журнал.
@@ -1497,6 +1505,7 @@ impl Ui {
         let after = self.overlay_rect();
         self.invalidate(before);
         self.invalidate(after);
+        self.invalidate_popup_anchors();
     }
 
     fn close_popup(&mut self) {
@@ -1504,10 +1513,18 @@ impl Ui {
             let before = self.overlay_rect();
             self.st.popup = Popup::None;
             self.invalidate(before);
-            let g = self.st.geo();
-            self.invalidate(g.menubar);
-            self.invalidate(g.claude);
+            self.invalidate_popup_anchors();
         }
+    }
+
+    /// Перерисовать всё, что выглядит «нажатым», пока открыт список: заголовки строки меню, кнопку «Сессии»
+    /// и кнопку «Полечить». Окно рисует только изменившиеся участки: кнопку «Полечить» здесь забывали, и после
+    /// щелчка мимо списка она оставалась вдавленной (заметили на macOS, но так было на всех системах).
+    fn invalidate_popup_anchors(&mut self) {
+        let g = self.st.geo();
+        self.invalidate(g.menubar);
+        self.invalidate(g.claude);
+        self.invalidate(g.tools[TOOL_HEAL as usize]);
     }
 
     fn set_tab(&mut self, i: u8) {
@@ -1938,6 +1955,8 @@ impl Ui {
                 let after = self.overlay_rect();
                 self.invalidate(before);
                 self.invalidate(after);
+                // меню открыли с клавиатуры поверх другого списка (например, «Полечить») — его кнопку отпустить
+                self.invalidate_popup_anchors();
                 true
             }
             None => false,
@@ -2774,7 +2793,7 @@ impl P<'_, '_> {
                     .s
                     .checks
                     .iter()
-                    .chain(self.s.speed_checks.iter())
+                    .chain(self.s.speed_rows())
                     .filter(|c| c.key == cat.key() && unit_on(c.unit) && matches!(c.status.as_str(), "bad" | "warn"))
                     .count(),
                 None => 0,
@@ -2986,7 +3005,7 @@ impl P<'_, '_> {
             // кнопка — у красных и жёлтых строк; и всегда — у действий «по просьбе» (поиск и уборка копий, эталон
             // тем, закрыть ключи от других): их строки спокойные (сведения или «в порядке»), а без кнопки
             // действие было бы недоступно
-            const ON_DEMAND: [&str; 5] = ["dupes_scan", "dupes_trash", "snapshot", "footprint_lock", "footprint_history"];
+            const ON_DEMAND: [&str; 6] = ["dupes_scan", "dupes_trash", "snapshot", "footprint_lock", "footprint_history", "footprint_chats"];
             let show_fix = !row.fixes.is_empty()
                 && (matches!(row.status.as_str(), "bad" | "warn")
                     || row.title.starts_with("Канал")
@@ -3108,11 +3127,11 @@ impl P<'_, '_> {
     // ── строка состояния ──
     fn statusbar(&mut self, g: &Geo) {
         let px = self.fs(13);
-        let real: Vec<&Check> = self.s.checks.iter().chain(self.s.speed_checks.iter()).filter(|c| c.status != "info").collect();
+        let real: Vec<&Check> = self.s.checks.iter().chain(self.s.speed_rows()).filter(|c| c.status != "info").collect();
         let ok = real.iter().filter(|c| c.status == "ok").count();
         let bad = real.iter().filter(|c| c.status == "bad").count();
         let warn = real.iter().filter(|c| c.status == "warn").count();
-        let unk = self.s.checks.iter().chain(self.s.speed_checks.iter()).filter(|c| c.unchecked).count();
+        let unk = self.s.checks.iter().chain(self.s.speed_rows()).filter(|c| c.unchecked).count();
         let s1 = if self.s.checking {
             "Проверяю…".to_string()
         } else if unk > 0 {
@@ -3681,6 +3700,30 @@ mod tests {
         u.set_checks(vec![chk("net", "B", "bad", "", &[("b", "B", None)])], false);
         let c = u.mouse_up(x, y);
         assert!(!c.iter().any(|c| matches!(c, Cmd::RunFix { id, .. } if id == "b")));
+    }
+
+    /// Открыли список «Полечить» и закрыли его щелчком мимо (или Esc): кнопка «Полечить» должна попасть в перерисовку,
+    /// иначе она остаётся нарисованной нажатой.
+    #[test]
+    fn heal_button_redrawn_when_popup_closes() {
+        let overlaps = |a: Rect, b: Rect| a.x < b.right() && b.x < a.right() && a.y < b.bottom() && b.y < a.bottom();
+        for close_by_escape in [false, true] {
+            let mut u = Ui::new(1, 300, 500);
+            u.ensure_hits();
+            let heal = u.hit_rect(Hit::Tool(TOOL_HEAL));
+            let (x, y) = (heal.x + heal.w / 2, heal.y + heal.h / 2);
+            u.mouse_down(x, y);
+            u.mouse_up(x, y);
+            assert_eq!(u.st.popup, Popup::Heal);
+            let _ = u.take_dirty();
+            if close_by_escape {
+                u.key_escape();
+            } else {
+                u.close_popup(); // то же, что делает щелчок мимо списка
+            }
+            assert_eq!(u.st.popup, Popup::None);
+            assert!(u.take_dirty().iter().any(|r| overlaps(*r, heal)), "кнопка «Полечить» не перерисована");
+        }
     }
 
     /// «Игнорировать»: у беды без починки — кнопка во всю ширину, у беды с починкой — рядом с ней (не внахлёст),

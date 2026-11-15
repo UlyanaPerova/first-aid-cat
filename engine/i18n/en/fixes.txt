@@ -787,3 +787,11 @@ en: Here a forced shell restart would close the whole session with all windows, 
 
 ru:    # не закрылась? запусти строку ещё раз или завершить принудительно через Мониторинг системы
 en:    # still running? run this line again or force quit it in Activity Monitor
+
+# fixes.rs:560
+ru: Ключи в файлах чатов ИИ-агентов заменятся маской («sk-proj-****»). Вернуть их будет нельзя. Сами чаты останутся читаемыми. Ключ всё равно замени у поставщика: модель его уже видела.
+en: Keys in AI agents' chat files will be replaced with a mask ("sk-proj-****"). This cannot be undone. The chats themselves stay readable. Still replace the key at the provider: the model has already seen it.
+
+# fixes.rs:1340
+ru: Ключи в файлах чатов ИИ заменятся маской той же длины. Вернуть их будет нельзя; чаты останутся читаемыми.
+en: Keys in AI chat files will be replaced with a same-length mask. This cannot be undone; the chats stay readable.

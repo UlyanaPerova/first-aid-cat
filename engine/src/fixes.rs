@@ -557,6 +557,7 @@ pub fn confirm_text(id: &str) -> Option<&'static str> {
     }
     match id {
         "sound_restart" => Some("Звук пропадёт на пару секунд."),
+        "footprint_chats" => Some("Ключи в файлах чатов ИИ-агентов заменятся маской («sk-proj-****»). Вернуть их будет нельзя. Сами чаты останутся читаемыми. Ключ всё равно замени у поставщика: модель его уже видела."),
         "footprint_history" => Some("Строки с ключами удалятся из истории команд насовсем. Сами ключи лучше потом заменить новыми."),
         "win_winhttp_reset" | "win_svc_restart" | "win_time_sync" => Some("Windows спросит разрешение администратора."),
         "mac_dns_flush" | "mac_audio_restart" | "mac_time_sync" => Some("macOS спросит пароль администратора."),
@@ -602,7 +603,7 @@ fn resource(id: &str) -> &str {
         "dpkg_configure" | "apt_fix" | "apt_autoremove" | "prime_nvidia" => "packages",
         "net_reconnect" | "dns_flush" | "proxy_off" | "happ_restart" | "outline_restart" | "proton_restart" | "wifi_on" | "win_proxy_off"
         | "win_dns_flush" | "win_winhttp_reset" | "mac_proxy_off" | "mac_dns_flush" => "network",
-        "env_proxy_off" | "footprint_history" | "footprint_lock" => "userfiles",
+        "env_proxy_off" | "footprint_history" | "footprint_lock" | "footprint_chats" => "userfiles",
         "theme_restore" | "win_theme_restore" | "mac_theme_restore" | "snapshot" | "ext_restart" | "ext_enable" | "dock_repair" | "kb_switch" => {
             "desktop"
         }
@@ -644,7 +645,7 @@ impl Drop for Busy {
 
 /// Выполнить починку (сбой внутри — строка «не получилось», программа не падает).
 /// Действия без аргумента (если аргумент пришёл — он не используется).
-const NO_ARG: [&str; 44] = [
+const NO_ARG: [&str; 45] = [
     "net_reconnect",
     "dns_flush",
     "proxy_off",
@@ -689,6 +690,7 @@ const NO_ARG: [&str; 44] = [
     "mac_thin_snapshots",
     "footprint_lock",
     "footprint_history",
+    "footprint_chats",
 ];
 
 /// Проверка действия и аргумента — одна для всех путей (кнопка в окне и виджете, общий файл checks.json,
@@ -851,6 +853,7 @@ fn apply_inner(id: &str, arg: Option<&str>) -> (bool, String) {
         "dupes_scan" => crate::dupes::fix_scan(),
         "footprint_lock" => crate::footprint::fix_lock(),
         "footprint_history" => crate::footprint::fix_history(),
+        "footprint_chats" => crate::footprint::fix_chats(),
         "env_proxy_off" => crate::netproxy::comment_env_line(arg.unwrap_or("")),
         "git_proxy_off" => match arg {
             Some(k) if k == "http.proxy" || k == "https.proxy" => done(sh(&["git", "config", "--global", "--unset", k], 10), "Прокси у git убран."),
@@ -1334,6 +1337,7 @@ pub fn what_happens(id: &str) -> &'static str {
     match id {
         "dns_flush" => "Забуду запомненные адреса сайтов, они узнаются заново.",
         "footprint_lock" => "Файлы с ключами и доступами станут видны только тебе (другим учётным записям — нет).",
+        "footprint_chats" => "Ключи в файлах чатов ИИ заменятся маской той же длины. Вернуть их будет нельзя; чаты останутся читаемыми.",
         "footprint_history" => "Из истории команд пропадут строки, где были ключи. Вернуть их будет нельзя — так и задумано.",
         "proxy_off" => "Интернет пойдёт напрямую, без прокси. VPN-клиент сможет включить его снова.",
         "ext_enable" => "Включу расширение обратно.",
@@ -1729,8 +1733,17 @@ pub fn log_dry(what: &str) {
 /// (Иначе на Mac с Homebrew-gsettings запускалось бы лечение GNOME.)
 pub fn for_this_os(id: &str) -> bool {
     // «snapshot» — эталон тем: на Linux (GNOME), Windows и macOS свой набор ключей (diag::capture_snapshot)
-    const COMMON: [&str; 8] =
-        ["dupes_scan", "dupes_trash", "git_proxy_off", "npm_proxy_off", "open_url", "footprint_lock", "footprint_history", "snapshot"];
+    const COMMON: [&str; 9] = [
+        "dupes_scan",
+        "dupes_trash",
+        "git_proxy_off",
+        "npm_proxy_off",
+        "open_url",
+        "footprint_lock",
+        "footprint_history",
+        "footprint_chats",
+        "snapshot",
+    ];
     // свои действия (папка custom/) сами решают, на какой системе работают
     if COMMON.contains(&id) || id.starts_with("my_") {
         true
