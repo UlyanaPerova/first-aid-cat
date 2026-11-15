@@ -1697,6 +1697,9 @@ impl ApplicationHandler<AppEvent> for App {
             let step = frame_step(self.hidden || self.minimized() || self.covered, self.focused, self.fps);
             // без анимации — раз в секунду (данные, часы на экранчиках); нажатия всё равно сразу
             let step = if self.anim { step } else { step.max(1.0) };
+            // идёт моргание или дёрг ушка — до его конца полный темп, чтобы были видны все фазы
+            let quiet = self.hidden || self.minimized() || self.covered;
+            let step = crate::life::quick_step(step, self.anim && !quiet, self.last_t, self.life.quick_until(), self.fps);
             self.next = now + Duration::from_secs_f64(step);
         }
         // во время анимации интерфейса — 60 кадров в секунду, иначе обычный темп

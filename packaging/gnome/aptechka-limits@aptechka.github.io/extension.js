@@ -22,6 +22,7 @@ const PATH = '/io/github/aptechka/Tray';
 const IFACE = `<node><interface name="io.github.aptechka.Tray">
   <method name="OpenAnalytics"/>
   <method name="PanelOpen"><arg type="b" direction="in" name="open"/></method>
+  <method name="PanelClick"><arg type="i" direction="in" name="x"/><arg type="i" direction="in" name="y"/></method>
 </interface></node>`;
 const TrayProxy = Gio.DBusProxy.makeProxyWrapper(IFACE);
 // the app updates the file every few seconds; older than this means the app is gone
@@ -87,6 +88,10 @@ class AptechkaIndicator extends PanelMenu.Button {
             this._call(proxy => proxy.OpenAnalyticsRemote(() => {}));
         } else if (inside(p.close)) {
             this.menu.close();
+        } else {
+            // anywhere else on the picture: the app decides (a click on the cat's ear makes it twitch);
+            // an app without PanelClick simply ignores the call
+            this._call(proxy => proxy.PanelClickRemote(Math.floor(x), Math.floor(y), () => {}));
         }
         return Clutter.EVENT_STOP;
     }

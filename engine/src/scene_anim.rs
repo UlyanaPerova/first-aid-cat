@@ -1,7 +1,7 @@
-// Анимация сценки плашки: что в какой миг включено (моргание, кардиограмма, огурчик, «z», хвост) и сборка картинки.
+// Анимация сценки плашки: что в какой миг включено (моргание, кардиограмма, огурчик, «z», хвост, ушко) и сборка картинки.
 // Данные кадров — scene_anim_px.rs, фон и коты — scene_px.rs. Время — целые миллисекунды от открытия плашки.
 
-use crate::scene_anim_px::{Patch, BLINK_DONE, BLINK_WRITE, ECG, PICKLE, TAIL, Z};
+use crate::scene_anim_px::{Patch, BLINK_DONE, BLINK_WRITE, EAR, EAR_AT, ECG, PICKLE, TAIL, Z};
 use crate::scene_px::{PAL, W};
 
 /// Что включено в один миг. `Frame::default()` — «без анимации»: сценка как в статике.
@@ -17,6 +17,8 @@ pub struct Frame {
     pub z: u8,
     /// хвост: 0 покой, 1–3 — всё дальше вправо
     pub tail: u8,
+    /// ушко: 0 покой, 1 наклон, 2 сложено
+    pub ear: u8,
 }
 
 const ECG_MS: u64 = 120;
@@ -28,10 +30,18 @@ const PICKLE_TL: [(u64, u8); 4] = [(1300, 0), (2800, 1), (3900, 0), (5500, 2)];
 const Z_MS: u64 = 900;
 /// хвост, как в основном окне (life.rs, TAIL): (длительность в мс, поза) — два взмаха, второй шире и с задержкой
 const TAIL_TL: [(u64, u8); 10] = [(3200, 0), (280, 1), (500, 2), (280, 1), (3600, 0), (200, 1), (220, 2), (1000, 3), (260, 2), (240, 1)];
-/// скорость хвоста по состояниям (спит, пишет, закончил), тысячные доли длительности: пишущий машет чаще, спящий — лениво
-const TAIL_SPEED: [u64; 3] = [1800, 600, 1000];
+/// скорость хвоста по состояниям (спит, пишет, закончил), тысячные доли длительности: спящий и закончивший машут
+/// как кот в основном окне, пишущий — чаще (спящий раньше махал вдвое реже, владелица попросила чаще)
+const TAIL_SPEED: [u64; 3] = [1000, 600, 1000];
 /// пауз между морганиями хватает на цикл из стольких морганий, дальше они повторяются
 const BLINKS_IN_LOOP: u64 = 16;
+
+/// ушко дёргается само: наклон, сложено, наклон — (длительность в мс, поза)
+const EAR_TL: [(u64, u8); 3] = [(70, 1), (90, 2), (80, 1)];
+const EAR_MS: u64 = 240;
+/// от нажатия ушко держится сложенным дольше: наклон, сложено почти полсекунды, наклон
+const POKE_TL: [(u64, u8); 3] = [(70, 1), (490, 2), (80, 1)];
+const EARS_IN_LOOP: u64 = 16;
 
 /// Случайное, но всегда одно и то же число по номеру (splitmix64) — моргание не выглядит механическим.
 fn hash(i: u64) -> u64 {
@@ -43,6 +53,73 @@ fn hash(i: u64) -> u64 {
 /// Пауза перед морганием номер i: от 2,5 до 6 с.
 fn pause_ms(i: u64) -> u64 {
     2500 + hash(i) % 3501
+}
+
+/// Пауза перед дёргом ушка номер i: от 5 до 12 с (как в основном окне); свои числа, не те, что у моргания.
+fn ear_pause_ms(i: u64) -> u64 {
+    5000 + hash(i + 1000) % 7001
+}
+
+fn ear_loop_ms() -> u64 {
+    (0..EARS_IN_LOOP).map(|i| ear_pause_ms(i) + EAR_MS).sum()
+}
+
+/// Поза по расписанию шагов с начала движения: поза и конец шага; None — движение кончилось.
+fn step_of(tl: &[(u64, u8)], o: u64) -> Option<(u8, u64)> {
+    let mut end = 0;
+    for &(d, pose) in tl {
+        end += d;
+        if o < end {
+            return Some((pose, end));
+        }
+    }
+    None
+}
+
+/// Ушко само по себе в миг `t`: поза и когда она кончится (мс от начала круга).
+fn ear_at(t: u64) -> (u8, u64) {
+    let mut o = t % ear_loop_ms();
+    let mut start = 0;
+    for i in 0..EARS_IN_LOOP {
+        let p = ear_pause_ms(i);
+        if o < p {
+            return (0, start + p);
+        }
+        o -= p;
+        start += p;
+        if let Some((pose, end)) = step_of(&EAR_TL, o) {
+            return (pose, start + end);
+        }
+        o -= EAR_MS;
+        start += EAR_MS;
+    }
+    (0, start)
+}
+
+/// Попало ли нажатие в ушко: `x`, `y` — клетка сценки.
+pub fn ear_hit(state: u8, x: i32, y: i32) -> bool {
+    let (x0, y0, x1, y1) = EAR_AT[usize::from(state).min(2)];
+    x >= x0 && x < x1 && y >= y0 && y < y1
+}
+
+/// Кадр с учётом нажатия на ушко в миг `poke` (мс от открытия плашки): пока идёт движение от нажатия, оно важнее
+/// собственного дёрга.
+pub fn frame_poked(state: u8, t: u64, poke: Option<u64>) -> Frame {
+    let mut f = frame(state, t);
+    if let Some((pose, _)) = poke.filter(|p| t >= *p).and_then(|p| step_of(&POKE_TL, t - p)) {
+        f.ear = pose;
+    }
+    f
+}
+
+/// Когда кадр сменится с учётом нажатия на ушко — всегда позже `t`.
+pub fn next_change_poked(state: u8, t: u64, poke: Option<u64>) -> u64 {
+    let n = next_change(state, t);
+    match poke {
+        Some(p) if t < p => n.min(p),
+        Some(p) => step_of(&POKE_TL, t - p).map_or(n, |(_, end)| n.min(p + end)),
+        None => n,
+    }
 }
 
 /// Мигаем ли только у «пишет» и «закончил» (у спящего глаза закрыты в рисунке).
@@ -108,6 +185,7 @@ pub fn frame(state: u8, t: u64) -> Frame {
         pickle: pickle_at(t).0,
         z: if state == 0 { (t / Z_MS % 3) as u8 } else { 0 },
         tail: tail_at(state, t).0,
+        ear: ear_at(t).0,
     }
 }
 
@@ -117,6 +195,7 @@ pub fn next_change(state: u8, t: u64) -> u64 {
     let lap = |len: u64, end_in_lap: u64| t / len * len + end_in_lap;
     n = n.min(lap(PICKLE_TL[3].0, pickle_at(t).1));
     n = n.min(lap(tail_loop_ms(state), tail_at(state, t).1));
+    n = n.min(lap(ear_loop_ms(), ear_at(t).1));
     if blinks(state) {
         n = n.min(lap(blink_loop_ms(), blink_at(t).1));
     }
@@ -154,6 +233,7 @@ struct Decoded {
     blink_done: Vec<Cells>,
     z: Vec<Cells>,
     tail: Vec<Vec<Cells>>,
+    ear: Vec<Vec<Cells>>,
 }
 
 fn decoded() -> &'static Decoded {
@@ -165,6 +245,7 @@ fn decoded() -> &'static Decoded {
         blink_done: BLINK_DONE.iter().map(decode).collect(),
         z: Z.iter().map(decode).collect(),
         tail: TAIL.iter().map(|s| s.iter().map(decode).collect()).collect(),
+        ear: EAR.iter().map(|s| s.iter().map(decode).collect()).collect(),
     })
 }
 
@@ -174,6 +255,9 @@ fn overlays(state: u8, f: &Frame) -> Vec<&'static Cells> {
     let mut v = Vec::new();
     if f.tail > 0 {
         v.extend(d.tail.get(usize::from(state).min(2)).and_then(|s| s.get(usize::from(f.tail) - 1)));
+    }
+    if f.ear > 0 {
+        v.extend(d.ear.get(usize::from(state).min(2)).and_then(|s| s.get(usize::from(f.ear) - 1)));
     }
     if let Some(e) = f.ecg {
         v.extend(d.ecg.get(usize::from(e)));
@@ -283,9 +367,9 @@ mod tests {
         let p = |s, t| frame(s, t).tail;
         assert_eq!([p(2, 0), p(2, 3199), p(2, 3200), p(2, 3480), p(2, 3980), p(2, 4260), p(2, 8500)], [0, 0, 1, 2, 1, 0, 3]);
         assert_eq!(tail_loop_ms(2), 9780);
-        // пишущий машет чаще, спящий — реже; порядок поз тот же
-        assert_eq!((tail_loop_ms(1), tail_loop_ms(0)), (5868, 17_604));
-        assert_eq!([p(1, 1919), p(1, 1920), p(0, 5759), p(0, 5760)], [0, 1, 0, 1]);
+        // пишущий машет чаще, спящий — как в основном окне; порядок поз тот же
+        assert_eq!((tail_loop_ms(1), tail_loop_ms(0)), (5868, 9780));
+        assert_eq!([p(1, 1919), p(1, 1920), p(0, 3199), p(0, 3200)], [0, 1, 0, 1]);
         for s in 0..3 {
             let mut seq = Vec::new();
             let mut t = 0;
@@ -320,6 +404,35 @@ mod tests {
     }
 
     #[test]
+    fn ear_twitches_by_itself_and_on_poke() {
+        // само: пауза 5–12 с, затем наклон 70 мс, сложено 90 мс, наклон 80 мс
+        for i in 0..EARS_IN_LOOP {
+            assert!((5000..=12_000).contains(&ear_pause_ms(i)));
+        }
+        let p0 = ear_pause_ms(0);
+        let e = |t| frame(2, t).ear;
+        assert_eq!([e(0), e(p0 - 1), e(p0), e(p0 + 69), e(p0 + 70), e(p0 + 159), e(p0 + 160), e(p0 + 239), e(p0 + 240)], [0, 0, 1, 1, 2, 2, 1, 1, 0]);
+        assert_eq!(e(p0 + 100 + ear_loop_ms()), 2);
+        // одинаково во всех состояниях
+        assert_eq!((frame(0, p0 + 100).ear, frame(1, p0 + 100).ear), (2, 2));
+        // нажатие в миг 1000: наклон до 1070, сложено до 1560, наклон до 1640, потом как без нажатия
+        let k = |t| frame_poked(1, t, Some(1000)).ear;
+        assert_eq!([k(999), k(1000), k(1069), k(1070), k(1559), k(1560), k(1639), k(1640)], [0, 1, 1, 2, 2, 1, 1, 0]);
+        assert_eq!(frame_poked(1, 1640, Some(1000)), frame(1, 1640));
+        assert_eq!(frame_poked(1, 500, None), frame(1, 500));
+        // будильник: до нажатия — не позже его мига, во время движения — на границах шагов
+        assert_eq!(next_change_poked(1, 990, Some(1000)), 1000);
+        assert_eq!(next_change_poked(1, 1001, Some(1000)), 1070);
+        assert_eq!(next_change_poked(1, 1500, Some(1000)), 1560);
+        assert_eq!(next_change_poked(1, 2000, Some(1000)), next_change(1, 2000));
+        // область ушка: границы из заготовки (x0, y0 входят, x1, y1 — нет)
+        assert!(ear_hit(1, 182, 15) && ear_hit(1, 209, 35));
+        assert!(!ear_hit(1, 210, 20) && !ear_hit(1, 190, 36) && !ear_hit(1, 181, 20));
+        assert!(ear_hit(0, 184, 34) && !ear_hit(0, 183, 34));
+        assert!(ear_hit(2, 190, 16) && !ear_hit(2, 190, 29));
+    }
+
+    #[test]
     fn next_change_is_a_change() {
         for state in 0..3 {
             for t in (0..30_000).step_by(37) {
@@ -334,7 +447,7 @@ mod tests {
 
     #[test]
     fn patches_inside_box() {
-        for p in ECG.iter().chain(&PICKLE).chain(&BLINK_WRITE).chain(&BLINK_DONE).chain(&Z).chain(TAIL.iter().flatten()) {
+        for p in ECG.iter().chain(&PICKLE).chain(&BLINK_WRITE).chain(&BLINK_DONE).chain(&Z).chain(TAIL.iter().flatten()).chain(EAR.iter().flatten()) {
             let (x, y, w, h, _) = *p;
             assert!(x >= 0 && y >= 0 && x + w <= W && y + h <= H);
             let c = decode(p);

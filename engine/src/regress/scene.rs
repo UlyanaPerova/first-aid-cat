@@ -23,6 +23,11 @@ const BLINK_LOOP: u64 = 71_453;
 /// Хвост: (длительность мс, поза) — таблица основного окна (life.rs, TAIL, секунды × 1000).
 const TAIL_SPEC: [(u64, u8); 10] = [(3200, 0), (280, 1), (500, 2), (280, 1), (3600, 0), (200, 1), (220, 2), (1000, 3), (260, 2), (240, 1)];
 
+/// Паузы перед дёргом ушка, мс: 5000 + splitmix64(i + 1000) % 7001 для i = 0..15 — посчитаны на Python.
+const EAR_PAUSES: [u64; 16] = [9844, 11192, 6614, 8012, 7251, 5929, 9692, 5335, 7561, 6411, 8700, 7780, 10669, 6321, 9045, 6799];
+/// Круг ушка: сумма пауз + 16 × (70 + 90 + 80 мс) = 130995 (Python).
+const EAR_LOOP: u64 = 130995;
+
 /// Наивный оракул: что включено в миг `t` (мс) — без общего кода с `scene_anim`.
 fn oracle(state: u8, t: u64) -> Frame {
     // кардиограмма: 20 кадров по 120 мс
@@ -40,8 +45,8 @@ fn oracle(state: u8, t: u64) -> Frame {
     };
     // «z» — только у спящего, три кадра по 900 мс
     let z = if state == 0 { ((t / 900) % 3) as u8 } else { 0 };
-    // хвост: длительность каждого шага = d × k / 1000 (целочисленно), k — 1800 / 600 / 1000
-    let k = [1800u64, 600, 1000][usize::from(state).min(2)];
+    // хвост: длительность каждого шага = d × k / 1000 (целочисленно), k — 1000 / 600 / 1000
+    let k = [1000u64, 600, 1000][usize::from(state).min(2)];
     let steps: Vec<(u64, u8)> = TAIL_SPEC.iter().map(|(d, p)| (d * k / 1000, *p)).collect();
     let loop_ms: u64 = steps.iter().map(|s| s.0).sum();
     let mut o = t % loop_ms;
@@ -69,7 +74,21 @@ fn oracle(state: u8, t: u64) -> Frame {
             o -= 210;
         }
     }
-    Frame { blink, ecg: Some(ecg), pickle, z, tail }
+    // ушко: пауза_i, затем наклон 70 мс (1), сложено 90 мс (2), наклон 80 мс (1) — одинаково во всех состояниях
+    let mut ear = 0;
+    let mut o = t % EAR_LOOP;
+    for p in EAR_PAUSES {
+        if o < p {
+            break;
+        }
+        o -= p;
+        if o < 240 {
+            ear = if (70..160).contains(&o) { 2 } else { 1 };
+            break;
+        }
+        o -= 240;
+    }
+    Frame { blink, ecg: Some(ecg), pickle, z, tail, ear }
 }
 
 #[test]
@@ -79,7 +98,7 @@ fn schedule_constants_match_independent_values() {
     for (i, p) in PAUSES.iter().enumerate() {
         assert_eq!(pause_ms(i as u64), *p, "пауза {i}");
     }
-    assert_eq!((tail_loop_ms(2), tail_loop_ms(1), tail_loop_ms(0)), (9780, 5868, 17_604));
+    assert_eq!((tail_loop_ms(2), tail_loop_ms(1), tail_loop_ms(0)), (9780, 5868, 9780));
     // пауза укладывается в «от 2,5 до 6 с», включительно
     assert!(PAUSES.iter().all(|p| (2500..=6000).contains(p)));
 }
@@ -198,10 +217,10 @@ fn case_frame(name: &str) -> (u8, Frame) {
         "blink" => (n(1), Frame { blink: n(2), ..Frame::default() }),
         "z" => (n(1), Frame { z: n(2), ..Frame::default() }),
         "combo" => match p[1] {
-            "a" => (1, Frame { tail: 2, ecg: Some(5), pickle: 1, blink: 2, z: 0 }),
-            "b" => (0, Frame { tail: 3, ecg: Some(11), pickle: 2, blink: 0, z: 2 }),
-            "c" => (2, Frame { tail: 1, ecg: Some(0), pickle: 1, blink: 1, z: 0 }),
-            "d" => (1, Frame { tail: 3, ecg: Some(19), pickle: 2, blink: 1, z: 0 }),
+            "a" => (1, Frame { tail: 2, ecg: Some(5), pickle: 1, blink: 2, z: 0, ear: 0 }),
+            "b" => (0, Frame { tail: 3, ecg: Some(11), pickle: 2, blink: 0, z: 2, ear: 0 }),
+            "c" => (2, Frame { tail: 1, ecg: Some(0), pickle: 1, blink: 1, z: 0, ear: 0 }),
+            "d" => (1, Frame { tail: 3, ecg: Some(19), pickle: 2, blink: 1, z: 0, ear: 0 }),
             x => panic!("неизвестный состав {x}"),
         },
         x => panic!("неизвестный кадр {x}"),
@@ -238,6 +257,7 @@ fn compose_changes_only_inside_patch_boxes_and_is_idempotent() {
             pickle: r.below(3) as u8,
             z: if state == 0 { r.below(3) as u8 } else { 0 },
             tail: r.below(4) as u8,
+            ear: r.below(3) as u8,
         };
         let out = compose(state, &s, &f);
         assert_eq!(out.len(), s.len());
@@ -245,6 +265,10 @@ fn compose_changes_only_inside_patch_boxes_and_is_idempotent() {
         let mut boxes: Vec<(i32, i32, i32, i32)> = Vec::new();
         if f.tail > 0 {
             let b = TAIL[usize::from(state)][usize::from(f.tail) - 1];
+            boxes.push((b.0, b.1, b.2, b.3));
+        }
+        if f.ear > 0 {
+            let b = crate::scene_anim_px::EAR[usize::from(state)][usize::from(f.ear) - 1];
             boxes.push((b.0, b.1, b.2, b.3));
         }
         if let Some(e) = f.ecg {
@@ -282,7 +306,7 @@ fn compose_changes_only_inside_patch_boxes_and_is_idempotent() {
 /// Короткая или пустая картинка-основа и «чужие» значения кадра: без паники, без расползания по памяти.
 #[test]
 fn compose_tolerates_bad_inputs() {
-    let f = Frame { blink: 2, ecg: Some(255), pickle: 2, z: 2, tail: 3 };
+    let f = Frame { blink: 2, ecg: Some(255), pickle: 2, z: 2, tail: 3, ear: 2 };
     for state in [0u8, 1, 2, 9] {
         let _ = compose(state, &[], &f);
         let short = vec![0u32; 1000];
@@ -291,7 +315,7 @@ fn compose_tolerates_bad_inputs() {
     }
     // номера вне диапазона просто пропускаются
     let s = still(1);
-    assert_eq!(compose(1, &s, &Frame { blink: 9, ecg: Some(200), pickle: 9, z: 9, tail: 9 }), s);
+    assert_eq!(compose(1, &s, &Frame { blink: 9, ecg: Some(200), pickle: 9, z: 9, tail: 9, ear: 9 }), s);
 }
 
 // ───────────── разжимание и целостность данных ─────────────

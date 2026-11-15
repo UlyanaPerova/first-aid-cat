@@ -23,7 +23,7 @@ MUTS = [
     ('limits.rs', 'let (today, week) = (local_day(now), local_day(now - 6 * 86_400));', 'let (today, week) = (local_day(now), local_day(now - 7 * 86_400));', 'limits::regress::usage_row_window', 'окно «7 дней» — 8 дней'),
     ('footprint.rs', "f.write_all(&vec![b'*'; e - s])", "f.write_all(&vec![b'*'; e - s - 1])", 'footprint::regress::mask_file', 'маска короче ключа на байт (размер файла «плывёт»)'),
     ('footprint.rs', 'const LEFT: usize = 8;', 'const LEFT: usize = 0;', 'footprint::regress::mask_file_word_start', 'нет запаса слева на стыке проходов'),
-    ('scene_anim.rs', 'const TAIL_SPEED: [u64; 3] = [1800, 600, 1000];', 'const TAIL_SPEED: [u64; 3] = [1800, 700, 1000];', 'scene_anim::regress', 'скорость хвоста у «пишет» другая'),
+    ('scene_anim.rs', 'const TAIL_SPEED: [u64; 3] = [1000, 600, 1000];', 'const TAIL_SPEED: [u64; 3] = [1000, 700, 1000];', 'scene_anim::regress', 'скорость хвоста у «пишет» другая'),
     ('scene_anim.rs', 'for _ in 0..=(pair[1] - b\'0\') {', 'for _ in 0..(pair[1] - b\'0\') {', 'scene_anim::regress', 'разжиматель: длина серии на единицу короче'),
     ('tray.rs', 'resets_at - now <= i64::from(minutes) * 60 / 5', 'resets_at - now <= i64::from(minutes) * 60 / 4', 'tray::regress::limit_line', 'порог «сбросится» — четверть окна'),
     ('ui.rs', 'v.sort_by_key(|p| p.1 != "bad");', 'v.sort_by_key(|p| p.1 == "bad");', 'ui::regress::problems', 'жёлтые раньше красных'),

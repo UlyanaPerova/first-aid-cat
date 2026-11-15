@@ -244,6 +244,14 @@ impl Life {
         }
     }
 
+    /// До какого мига идёт короткое движение (моргание 0,3 с, дёрг ушка): пока оно идёт, окно рисует в полном темпе,
+    /// иначе при редких кадрах (окно без фокуса — 4 кадра в секунду) из трёх фаз век попадала одна, и кот «моргал
+    /// не до конца»: видны были только полуприкрытые глаза.
+    pub fn quick_until(&self) -> f64 {
+        let ear = self.ear_t0 + if self.ear_double { 0.50 } else { 0.18 };
+        (self.blink_t0 + 0.30).max(ear)
+    }
+
     /// Дёрг ушка: случайно левое или правое, раз в 5–12 с, иногда двойной.
     /// Кадры: half 50 мс → flick 70 мс → half 60 мс. С морганием не совпадает.
     fn ear(&mut self, t: f64) -> String {
@@ -431,5 +439,60 @@ impl Life {
             let k = t - t0;
             draws[i].sway = (2.2 * (k * std::f64::consts::TAU * 1.6).sin() * (-k / 0.55).exp()) as f32;
         }
+    }
+}
+
+/// Шаг до следующего кадра с учётом короткого движения: пока оно идёт (`t < until`) — не реже полного темпа.
+pub fn quick_step(step: f64, alive: bool, t: f64, until: f64, fps: f64) -> f64 {
+    if alive && t < until {
+        step.min(1.0 / fps)
+    } else {
+        step
+    }
+}
+
+#[cfg(test)]
+mod quick_tests {
+    use super::quick_step;
+
+    /// Какие фазы век увидит человек, если окно без фокуса (кадр раз в 0,25 с при 20 кадрах/с), а моргание
+    /// начинается на первом кадре после `start`. Фазы — по расписанию моргания: полу до 0,08 с, закрыты до 0,20 с,
+    /// полу до 0,30 с (выписано здесь заново, не через Life::eyes).
+    fn seen(start: f64, quick: bool) -> Vec<u8> {
+        let (fps, slow) = (20.0, 0.25);
+        let (mut t, mut t0, mut out) = (0.0f64, f64::MAX, Vec::new());
+        while t < start + 2.0 {
+            if t0 == f64::MAX && t > start {
+                t0 = t;
+            }
+            let b = t - t0;
+            let phase = if !(0.0..0.30).contains(&b) {
+                0
+            } else if !(0.08..0.20).contains(&b) {
+                1
+            } else {
+                2
+            };
+            if out.last() != Some(&phase) {
+                out.push(phase);
+            }
+            let until = if t0 == f64::MAX { f64::MIN } else { t0 + 0.30 };
+            t += quick_step(slow, quick, t, until, fps);
+        }
+        out
+    }
+
+    #[test]
+    fn blink_shows_all_phases_at_slow_frame_rate() {
+        // с полным темпом на время моргания: открыты, полу, закрыты, полу, открыты — при любом миге начала
+        for i in 0..50 {
+            assert_eq!(seen(3.0 + f64::from(i) * 0.013, true), [0, 1, 2, 1, 0], "{i}");
+        }
+        // без него (как было): кадр раз в 0,25 с попадает только в первую фазу — «моргает не до конца»
+        assert_eq!(seen(3.0, false), [0, 1, 0]);
+        // движение кончилось или окно скрыто — шаг прежний
+        assert_eq!(quick_step(0.25, true, 5.0, 4.9, 20.0), 0.25);
+        assert_eq!(quick_step(1.0, false, 5.0, 9.0, 20.0), 1.0);
+        assert_eq!(quick_step(0.02, true, 5.0, 9.0, 20.0), 0.02);
     }
 }

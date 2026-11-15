@@ -110,6 +110,9 @@ pub enum Ev {
     /// меню расширения GNOME открылось (true) или закрылось (false): пока открыто, сценка живёт
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     PanelOpen(bool),
+    /// нажатие на картинку плашки в меню расширения GNOME (точка картинки) — мимо кнопок
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    PanelClick(i32, i32),
     /// выбрали другой значок
     Icon,
     /// файл программы обновили — перезапуститься новой версией
@@ -407,6 +410,10 @@ mod sni {
         /// меню открылось или закрылось: пока открыто, программа кладёт кадры живой сценки
         fn panel_open(&self, open: bool) {
             let _ = self.proxy.send_event(Ev::PanelOpen(open));
+        }
+        /// нажатие на картинку плашки мимо кнопок (точка картинки): по ушку кота — он им дёргает
+        fn panel_click(&self, x: i32, y: i32) {
+            let _ = self.proxy.send_event(Ev::PanelClick(x, y));
         }
     }
 
@@ -1768,6 +1775,14 @@ struct Popup {
     /// где в окне сценка и вся плашка без неё перемен — чтобы кадр анимации менял только сценку
     scene: Rect,
     cache: Vec<u32>,
+    /// когда (мс от открытия) кота тронули за ушко
+    poke: Option<u64>,
+}
+
+/// Попало ли нажатие (точка окна или картинки плашки) в ушко кота на сценке, нарисованной в `scene`.
+fn ear_at(state: u8, scene: Rect, x: i32, y: i32) -> bool {
+    let k = scene.w / crate::scene_px::W;
+    k > 0 && scene.contains(x, y) && crate::scene_anim::ear_hit(state, (x - scene.x) / k, (y - scene.y) / k)
 }
 
 struct App {
@@ -1799,6 +1814,9 @@ struct App {
     panel_shown: Option<(u8, Frame)>,
     #[cfg(target_os = "linux")]
     panel_scene: Rect,
+    /// когда (мс от открытия меню) кота тронули за ушко
+    #[cfg(target_os = "linux")]
+    panel_poke: Option<u64>,
     #[cfg(target_os = "linux")]
     strips: Vec<std::path::PathBuf>,
     /// когда пришли последние цифры
@@ -1826,7 +1844,7 @@ impl App {
             return;
         }
         let Ok(mut buf) = p.surface.buffer_mut() else { return };
-        let fr = if p.anim { crate::scene_anim::frame(icon_choice(), p.opened.elapsed().as_millis() as u64) } else { Frame::default() };
+        let fr = if p.anim { crate::scene_anim::frame_poked(icon_choice(), p.opened.elapsed().as_millis() as u64, p.poke) } else { Frame::default() };
         let (btn, close, scene) = {
             let mut c = Canvas::new(&mut buf, w as usize, w, h);
             paint(&mut self.fonts, &self.agents, self.data_t, self.tpl.as_ref().expect("шаблон готов"), &fr, &mut c)
@@ -1850,8 +1868,8 @@ impl App {
             return None;
         }
         let ms = p.opened.elapsed().as_millis() as u64;
-        let (st, fr) = (icon_choice(), crate::scene_anim::frame(icon_choice(), ms));
-        let next = p.opened + Duration::from_millis(crate::scene_anim::next_change(st, ms));
+        let (st, fr) = (icon_choice(), crate::scene_anim::frame_poked(icon_choice(), ms, p.poke));
+        let next = p.opened + Duration::from_millis(crate::scene_anim::next_change_poked(st, ms, p.poke));
         if p.shown == (st, fr) {
             return Some(next);
         }
@@ -1943,6 +1961,7 @@ impl App {
             shown: (0, Frame::default()),
             scene: Rect::new(0, 0, 0, 0),
             cache: Vec::new(),
+            poke: None,
         });
         self.draw();
     }
@@ -2027,6 +2046,7 @@ impl App {
     #[cfg(target_os = "linux")]
     fn panel_open(&mut self, open: bool) {
         self.panel_shown = None;
+        self.panel_poke = None;
         if open && crate::prefs::app_anim() && self.tray.as_ref().is_some_and(|t| t.shell_icon()) {
             self.panel_t0 = Some(Instant::now());
             self.panel_animate();
@@ -2043,6 +2063,17 @@ impl App {
         }
     }
 
+    /// Нажатие на картинку плашки в меню расширения (точка картинки): попали в ушко — кот дёргает им.
+    #[cfg(target_os = "linux")]
+    fn panel_click(&mut self, x: i32, y: i32) {
+        if let Some(t0) = self.panel_t0 {
+            if ear_at(icon_choice(), self.panel_scene, x, y) {
+                self.panel_poke = Some(t0.elapsed().as_millis() as u64);
+                self.panel_animate();
+            }
+        }
+    }
+
     /// Пока меню открыто: если кадр сценки сменился — положить новый (маленькая картинка 436×130; расширение
     /// растягивает её по точкам). Возвращает, когда проснуться в следующий раз.
     #[cfg(target_os = "linux")]
@@ -2055,8 +2086,8 @@ impl App {
             return None;
         }
         let st = icon_choice();
-        let fr = crate::scene_anim::frame(st, ms);
-        let next = t0 + Duration::from_millis(crate::scene_anim::next_change(st, ms));
+        let fr = crate::scene_anim::frame_poked(st, ms, self.panel_poke);
+        let next = t0 + Duration::from_millis(crate::scene_anim::next_change_poked(st, ms, self.panel_poke));
         if self.panel_shown == Some((st, fr)) || self.panel_scene.w == 0 {
             return Some(next);
         }
@@ -2133,6 +2164,10 @@ impl ApplicationHandler<Ev> for App {
                 #[cfg(target_os = "linux")]
                 self.panel_open(_open);
             }
+            Ev::PanelClick(_x, _y) => {
+                #[cfg(target_os = "linux")]
+                self.panel_click(_x, _y);
+            }
             Ev::Icon => {
                 #[cfg(target_os = "linux")]
                 if let Some(t) = &self.tray {
@@ -2185,7 +2220,13 @@ impl ApplicationHandler<Ev> for App {
                     if p.btn.contains(p.cursor.0, p.cursor.1) {
                         open_analytics();
                     } else if !p.close.contains(p.cursor.0, p.cursor.1) {
+                        let mut p = p;
+                        // тронули за ушко — кот дёргает им (плашка остаётся открытой)
+                        if p.anim && ear_at(icon_choice(), p.scene, p.cursor.0, p.cursor.1) {
+                            p.poke = Some(p.opened.elapsed().as_millis() as u64);
+                        }
                         self.popup = Some(p);
+                        self.animate();
                     }
                 }
             }
@@ -2384,6 +2425,8 @@ pub fn run() {
         panel_shown: None,
         #[cfg(target_os = "linux")]
         panel_scene: Rect::new(0, 0, 0, 0),
+        #[cfg(target_os = "linux")]
+        panel_poke: None,
         #[cfg(target_os = "linux")]
         strips: Vec::new(),
     };
