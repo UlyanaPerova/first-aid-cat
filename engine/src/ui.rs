@@ -1444,6 +1444,10 @@ impl Ui {
                     | Some(Hit::Menu(_))
                     | Some(Hit::SessionsBtn)
                     | Some(Hit::Tool(TOOL_HEAL))
+                    // список проблем у реплики кота: его пункты и сама кнопка «…» (без них нажатие на пункт
+                    // считалось «мимо списка»: список закрывался, а переход не срабатывал)
+                    | Some(Hit::Problem(_))
+                    | Some(Hit::BalloonMore)
             );
             if !inside {
                 self.close_popup();
@@ -2799,7 +2803,13 @@ impl P<'_, '_> {
         } else {
             self.c.raised(close, if self.hover(Hit::BalloonMore) { 0xDCD8D0 } else { FACE })
         }
-        self.text_c(close, "…", BLACK, self.fs(13), true);
+        // три точки рисуем сами, ровно по середине кнопки: знак «…» из шрифта сидит у нижнего края строки
+        let (dot, gap) = (self.u(2).max(2), self.u(2).max(1));
+        let (x0, y0) = (close.x + (close.w - 3 * dot - 2 * gap) / 2, close.y + (close.h - dot) / 2);
+        let shift = i32::from(down); // нажатая кнопка — содержимое на точку вправо-вниз, как у остальных
+        for i in 0..3 {
+            self.c.fill(Rect::new(x0 + i * (dot + gap) + shift, y0 + shift, dot, dot), BLACK);
+        }
     }
 
     /// Кнопка «⋯» в правом верхнем углу реплики кота.
@@ -3805,16 +3815,33 @@ mod tests {
         u.set_checks(vec![chk("net", "Жёлтое", "warn", "", &[]), chk("sys", "Красное", "bad", "", &[]), chk("net", "Хорошее", "ok", "", &[])], false);
         let titles: Vec<String> = u.st.problems().into_iter().map(|p| p.0).collect();
         assert_eq!(titles, ["Красное", "Жёлтое"]);
-        u.ensure_hits();
-        let b = u.hit_rect(Hit::BalloonMore);
-        u.mouse_down(b.x + b.w / 2, b.y + b.h / 2);
-        u.mouse_up(b.x + b.w / 2, b.y + b.h / 2);
+        // всё — настоящими нажатиями мыши (первый вариант теста звал действие напрямую и не заметил,
+        // что нажатие на пункт просто закрывало список)
+        let click = |u: &mut Ui, h: Hit| {
+            u.ensure_hits();
+            let r = u.hit_rect(h);
+            assert!(!r.is_empty(), "{h:?} не найден на экране");
+            let (x, y) = (r.x + r.w / 2, r.y + r.h / 2);
+            u.mouse_move(x, y);
+            u.mouse_down(x, y);
+            u.mouse_up(x, y);
+        };
+        let net = CATS.iter().position(|c| c.key() == "net").unwrap() as u8;
+        u.set_tab(net);
+        click(&mut u, Hit::BalloonMore);
         assert_eq!(u.st.popup, Popup::Problems);
         assert!(u.st.balloon_visible());
-        u.activate(Hit::Problem(0));
+        click(&mut u, Hit::Problem(0));
         assert_eq!(u.st.popup, Popup::None);
         assert_eq!(CATS.get(u.st.tab as usize).map(|c| c.key()), Some("sys"));
         assert!(u.st.balloon_visible());
+        // второй пункт — обратно на «Сеть»; повторное нажатие на «…» при открытом списке закрывает его
+        click(&mut u, Hit::BalloonMore);
+        click(&mut u, Hit::Problem(1));
+        assert_eq!(u.st.tab, net);
+        click(&mut u, Hit::BalloonMore);
+        click(&mut u, Hit::BalloonMore);
+        assert_eq!(u.st.popup, Popup::None);
     }
 
     /// «Игнорировать»: у беды без починки — кнопка во всю ширину, у беды с починкой — рядом с ней (не внахлёст),
