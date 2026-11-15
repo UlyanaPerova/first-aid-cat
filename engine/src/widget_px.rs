@@ -404,10 +404,9 @@ fn window(size: Size, d: &TplData, pc: &Pieces, f: &mut Fonts, fill: Option<(i32
             let x0 = pic.right() + 1 + 5;
             // строки делят высоту поровну (в виджете Мака холст выше — строки выше)
             let rh = ((h - pic_y - bot - 2 * (ROWS as i32 - 1)) / ROWS as i32).max(14);
-            for i in 0..ROWS {
+            for (i, (txt, st)) in d.rows.iter().enumerate().take(ROWS) {
                 let b = Rect::new(x0, pic_y - 1 + i as i32 * (rh + 2), row_w, rh);
                 p.panel(b, 2, line, beige2, beige2);
-                let (txt, st) = &d.rows[i];
                 if i < 3 {
                     status_icon(&mut p, st, b.x + 3, b.y + (rh - 11) / 2);
                 } else {
@@ -579,10 +578,9 @@ fn glass(size: Size, d: &TplData, pc: &Pieces, f: &mut Fonts, show_close: bool) 
             let x0 = cat_r.right() + 4;
             let rh = 16;
             let gap = (h - 10 - rh * ROWS as i32) / (ROWS as i32 - 1);
-            for i in 0..ROWS {
+            for (i, (txt, st)) in d.rows.iter().enumerate().take(ROWS) {
                 let b = Rect::new(x0, 5 + i as i32 * (rh + gap), w - 8 - x0, rh);
                 pill(&mut p, b, 8);
-                let (txt, st) = &d.rows[i];
                 let c = match st.as_str() {
                     "bad" => 0xE5534B,
                     "warn" => 0xF08A1C,

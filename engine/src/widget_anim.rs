@@ -252,8 +252,8 @@ impl Anim {
         if caps.bubble {
             a.bubble = bubble_px(t, bubble_amp(cs));
         }
-        for i in 0..caps.sparks {
-            a.spark[i] = spark_level(t, i);
+        for (i, s) in a.spark.iter_mut().enumerate().take(caps.sparks) {
+            *s = spark_level(t, i);
         }
         if caps.breath {
             a.breath = breath_px(t);
@@ -264,8 +264,8 @@ impl Anim {
         if caps.sway > 0 {
             a.sway = sway_step(t, caps.sway as f64 / 1000.0);
         }
-        for i in 0..caps.loops {
-            if loop_on(t, caps.loop_t[i]) {
+        for (i, lt) in caps.loop_t.iter().enumerate().take(caps.loops) {
+            if loop_on(t, *lt) {
                 a.loops |= 1 << i;
             }
         }
