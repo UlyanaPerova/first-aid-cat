@@ -351,7 +351,21 @@ fn translate(t: &Table, s: &str, depth: u8) -> String {
     }
     for tp in &t.tpls {
         if let Some(vals) = capture(&tp.pieces, s) {
+            // шаблон из одной связки посередине («{} из {}») не тянется через границу предложений: иначе он разрезает
+            // склеенную фразу посреди чужих слов, и куски остаются непереведёнными
+            let infix_only = tp.pieces.first().is_some_and(String::is_empty) && tp.pieces.last().is_some_and(String::is_empty);
+            if infix_only && vals.iter().any(|v| v.contains(". ") || v.contains('\n') || v.contains(" — ")) {
+                continue;
+            }
+            // подстановка не разрывает кавычки: «Нажми «Gemini CLI» + «…сессии»» — признак, что шаблон лёг поперёк чужой фразы
+            if vals.iter().any(|v| v.matches('«').count() != v.matches('»').count()) {
+                continue;
+            }
             let vals: Vec<String> = vals.iter().map(|v| translate(t, v, depth + 1)).collect();
+            // одна связка между непереведёнными словами («Журнал VPN by роутере») хуже, чем фраза целиком по-русски
+            if infix_only && vals.iter().any(|v| has_cyr(v)) {
+                continue;
+            }
             return fill(&tp.en, &vals);
         }
     }
@@ -455,6 +469,29 @@ mod tests {
         assert_eq!(translate(&t, "Пусто {x}", 0), "Empty {x}");
         assert_eq!(translate(&t, "Не переведено", 0), "Не переведено");
         assert_eq!(translate(&t, "plain latin", 0), "plain latin");
+    }
+
+    /// Связка посередине не режет склеенную фразу: «Нажми «Убрать ключи из истории»» остаётся целым названием.
+    #[test]
+    fn infix_template_stays_inside_a_sentence() {
+        let t = tb("ru: {} из {}\nen: {} of {}\n\
+                    ru: Нажми «{}»\nen: Press “{}”\n\
+                    ru: Убрать ключи из истории\nen: Remove keys from history\n\
+                    ru: И ещё {}\nen: And {} more\n");
+        assert_eq!(translate(&t, "3 из 5", 0), "3 of 5");
+        // слова по краям связки не переведены — фраза остаётся как была, без помеси двух языков
+        assert_eq!(translate(&t, "Журнал из роутера", 0), "Журнал из роутера");
+        assert_eq!(translate(&t, "GitHub. Нажми «Убрать ключи из истории». И ещё 5", 0), "GitHub. Press “Remove keys from history”. And 5 more");
+    }
+
+    /// Любая фраза из таблицы, вставленная в «Нажми «…»», переводится целиком: реплика кота о беде строится так
+    /// для каждого названия лечения.
+    #[test]
+    fn every_shipped_phrase_survives_inside_press() {
+        let t = table();
+        let bad: Vec<String> =
+            t.exact.iter().filter(|(_, en)| !has_cyr(en)).map(|(ru, _)| translate(t, &format!("Нажми «{ru}»"), 0)).filter(|v| has_cyr(v)).collect();
+        assert!(bad.is_empty(), "{} фраз остались с русским, например: {:?}", bad.len(), &bad[..bad.len().min(5)]);
     }
 
     #[test]

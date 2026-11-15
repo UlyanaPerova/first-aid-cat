@@ -1123,8 +1123,6 @@ impl Ui {
         for st in ["bad", "warn"] {
             let items: Vec<&&Check> = all.iter().filter(|r| r.status == st).collect();
             if let Some(r) = items.first() {
-                let more = if items.len() > 1 { format!(" И ещё {}.", items.len() - 1) } else { String::new() };
-                let act = r.fixes.first().map(|f| format!(" Нажми «{}».", f.label)).unwrap_or_default();
                 let pre = if st == "bad" { "Мур! Беда:" } else { "Хм…" };
                 // «Системный прокси» → «системный прокси», но названия (OBS, VPN, Firefox) не трогаем
                 let mut name = r.title.chars();
@@ -1138,7 +1136,7 @@ impl Ui {
                 } else {
                     r.title.clone()
                 };
-                let msg = format!("{pre} {lower} — {}.{act}{more}", r.value);
+                let msg = mood_phrase(pre, &lower, &r.value, r.fixes.first().map(|f| f.label.as_str()), items.len() - 1);
                 self.say(&msg);
                 return;
             }
@@ -3648,6 +3646,21 @@ fn chk(key: &'static str, title: &str, status: &str, value: &str, fixes: &[(&str
         unit: "",
         unchecked: false,
     }
+}
+
+/// Реплика кота о беде: «Хм… <название> — <значение>. Нажми «<лечение>». И ещё N.» Каждая часть переводится сама и
+/// уже готовой вставляется в фразу. Раньше переводилась склеенная фраза целиком, и общий шаблон «{} из {}» разрезал её
+/// посреди названия лечения («Нажми «Убрать ключи of истории»») — половина оставалась по-русски.
+fn mood_phrase(pre: &str, title: &str, value: &str, fix: Option<&str>, more: usize) -> String {
+    use crate::i18n::t;
+    let mut s = format!("{} {} — {}.", t(pre), t(title), t(value));
+    if let Some(label) = fix {
+        s += &format!(" {}.", t(&format!("Нажми «{label}»")));
+    }
+    if more > 0 {
+        s += &format!(" {}.", t(&format!("И ещё {more}")));
+    }
+    s
 }
 
 /// UI_FAKE=ok — всё хорошо, UI_FAKE=fix — с поломками и кнопками «полечить».
