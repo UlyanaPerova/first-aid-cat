@@ -18,7 +18,7 @@ T = os.path.join(prev, '2026-11-15_хвост_по_методике', 'рабо�
 src = open(os.path.join(root, 'engine/src/scene_px.rs'), encoding='utf-8').read()
 
 W = int(re.search(r'pub const W: i32 = (\d+)', src)[1]); H = int(re.search(r'pub const H: i32 = (\d+)', src)[1])
-PAL = [int(x, 16) for x in re.search(r'PAL: \[u32; \d+\] = \[([^\]]*)\]', src)[1].replace('0x', '').split(', ')]
+PAL = [int(x, 16) for x in re.search(r'PAL: \[u32; \d+\] = \[([^\]]*)\]', src)[1].replace('0x', '').replace(',', ' ').split()]
 
 def unrle(s, n):
     # пары «символ значения, символ длины»: значение = код - 48, длина = код - 48 + 1; всё, что меньше '0', — переводы строк
@@ -32,7 +32,7 @@ def unrle(s, n):
 BG = unrle(re.search(r'pub const BG: &str = r"(.*?)";', src, re.S)[1], W * H)
 LAYERS = {}
 for name, st in (('SLEEP', 0), ('WRITE', 1), ('DONE', 2)):
-    m = re.search(rf'pub const {name}: Layer = \((\d+), (\d+), (\d+), (\d+), r"(.*?)"\);', src, re.S)
+    m = re.search(rf'pub const {name}: Layer = \(\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+),\s*r"(.*?)",?\s*\);', src, re.S)
     x, y, w, h = map(int, m.groups()[:4])
     LAYERS[st] = (x, y, w, h, unrle(m[5], w * h))
 
