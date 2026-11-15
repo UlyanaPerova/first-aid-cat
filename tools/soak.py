@@ -23,6 +23,8 @@ import argparse, hashlib, json, os, random, resource, shutil, signal, struct, su
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+for _s in (sys.stdout, sys.stderr):  # консоль Windows (cp1252) не печатает кириллицу — падать из-за этого нельзя
+    _s.reconfigure(encoding='utf-8', errors='replace')
 from regress_isolation import isolated_env, require  # noqa: E402
 
 BIN = os.path.join(ROOT, 'engine', 'target', 'release', 'aptechka')

@@ -14,6 +14,8 @@ import json, os, shutil, stat, subprocess, sys, tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+for _s in (sys.stdout, sys.stderr):  # консоль Windows (cp1252) не печатает кириллицу — падать из-за этого нельзя
+    _s.reconfigure(encoding='utf-8', errors='replace')
 from regress_isolation import isolated_env, preflight  # noqa: E402
 
 BIN = os.path.join(ROOT, 'engine', 'target', 'release', 'aptechka' + ('.exe' if os.name == 'nt' else ''))
