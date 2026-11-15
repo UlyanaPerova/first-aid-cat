@@ -717,12 +717,46 @@ impl Analytics {
     /// Прочитать журналы (первый раз — около секунды: звать не из потока окна).
     pub fn load() -> Analytics {
         use crate::limits::*;
+        // UI_FAKE — образец данных (для снимков: свои расходы не светим)
+        if std::env::var_os("UI_FAKE").is_some() {
+            return Analytics::sample(crate::ui::now_secs());
+        }
         let agents =
             vec![("Claude Code", claude_limits(), claude_usage(), claude_projects()), ("Codex", codex_limits(), codex_usage(), codex_projects())]
                 .into_iter()
                 .filter(|(n, l, u, _)| crate::tray::shown(n) && (l.is_some() || !u.is_empty()))
                 .collect();
         Analytics { agents, now: crate::ui::now_secs(), ready: true }
+    }
+}
+
+impl Analytics {
+    /// Образец данных: два агента, 30 дней; есть пустые дни и один очень тяжёлый (как бывает с чтением кэша).
+    pub fn sample(now: i64) -> Analytics {
+        use crate::limits::{local_day, Tok, DAYS};
+        let mut agents = Vec::new();
+        for (n, (name, seed)) in [("Claude Code", 7u64), ("Codex", 3u64)].into_iter().enumerate() {
+            let (mut us, mut pr) = (crate::limits::Usage::new(), crate::limits::Projects::new());
+            for i in 0..DAYS {
+                let h = (i as u64 + 1).wrapping_mul(2_654_435_761).wrapping_mul(seed) >> 7;
+                let v = match h % 9 {
+                    0 | 1 => 0,
+                    2 => 90_000_000 * (n as u64 + 1),
+                    r => r * r * 600_000 * (h % 5 + 1),
+                };
+                if v == 0 {
+                    continue;
+                }
+                let d = local_day(now - i * 86_400);
+                us.insert(
+                    (d, "sample-model".to_string()),
+                    Tok { input: v / 50, output: v / 25, cache_read: v * 9 / 10, cache_write: v - v / 50 - v / 25 - v * 9 / 10 },
+                );
+                pr.insert((d, "first_aid_cat".to_string()), v);
+            }
+            agents.push((name, None, us, pr));
+        }
+        Analytics { agents, now, ready: true }
     }
 }
 
@@ -882,6 +916,14 @@ pub fn analytics_layout(fonts: &mut Fonts, a: &Analytics, pw: i32) -> Page {
         b.rule(1, 16);
     }
     if a.ready && !a.agents.is_empty() {
+        let mut total: BTreeMap<i32, u64> = BTreeMap::new();
+        for (_, _, us, _) in &a.agents {
+            for (d, v) in day_totals(us) {
+                *total.entry(d).or_default() += v;
+            }
+        }
+        let first = local_day(a.now - (crate::limits::DAYS - 1) * 86_400);
+        calendar(&mut b, &total, first, local_day(a.now));
         b.text(
             "Почти весь объём — чтение из кэша: на каждом ответе агент заново читает начало разговора, и это считается \
              токенами, хотя стоит намного дешевле новых. Сколько написала сама модель — колонка «из них ответы».",
@@ -895,6 +937,176 @@ pub fn analytics_layout(fonts: &mut Fonts, a: &Analytics, pw: i32) -> Page {
     let h = b.y + b.l(M / 2);
     let items = std::mem::take(&mut b.items);
     Page { items, w: pw, h, scale: s }
+}
+
+// ───────────────────────────── календарь трат ─────────────────────────────
+
+/// Токены по дням (ГГГГММДД) из расхода по (день, модель).
+fn day_totals(us: &crate::limits::Usage) -> BTreeMap<i32, u64> {
+    let mut m = BTreeMap::new();
+    for ((d, _), t) in us {
+        *m.entry(*d).or_default() += t.total();
+    }
+    m
+}
+
+/// Дней от 1970-01-01 до даты (алгоритм Хиннанта).
+fn days_from_civil(y: i32, m: i32, d: i32) -> i64 {
+    let y = (if m <= 2 { y - 1 } else { y }) as i64;
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) as i64 + 2) / 5 + d as i64 - 1;
+    era * 146_097 + yoe * 365 + yoe / 4 - yoe / 100 + doy - 719_468
+}
+
+/// Сколько дней в месяце m года y.
+fn days_in_month(y: i32, m: i32) -> i32 {
+    match m {
+        2 if (y % 4 == 0 && y % 100 != 0) || y % 400 == 0 => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    }
+}
+
+/// Месяц по неделям с понедельника: в клетке — число месяца, вне месяца — None.
+fn month_weeks(y: i32, m: i32) -> Vec<[Option<i32>; 7]> {
+    // 1970-01-01 — четверг: (дни + 3) mod 7 даёт 0 для понедельника
+    let lead = (days_from_civil(y, m, 1) + 3).rem_euclid(7) as usize;
+    let n = days_in_month(y, m);
+    let mut rows = Vec::new();
+    let mut d = 1 - lead as i32;
+    while d <= n {
+        let mut row = [None; 7];
+        for (i, c) in row.iter_mut().enumerate() {
+            let x = d + i as i32;
+            if (1..=n).contains(&x) {
+                *c = Some(x);
+            }
+        }
+        rows.push(row);
+        d += 7;
+    }
+    rows
+}
+
+/// Месяцы (год, месяц), которых касается отрезок дней first..=last (ГГГГММДД), от нового к старому.
+fn months_between(first: i32, last: i32) -> Vec<(i32, i32)> {
+    let (mut y, mut m) = (last / 10_000, last / 100 % 100);
+    let mut v = Vec::new();
+    while y * 100 + m >= first / 100 {
+        v.push((y, m));
+        if m == 1 {
+            (y, m) = (y - 1, 12);
+        } else {
+            m -= 1;
+        }
+    }
+    v
+}
+
+/// Ступень цвета клетки: 0 — не тратили; 1..=5 — чем больше, тем темнее. Шкала по корню от доли максимального
+/// дня: токенов за день — от тысяч до сотен миллионов (чтение кэша), на линейной шкале один тяжёлый день
+/// делал бы все остальные одинаково бледными. Границы: v/max > (k/5)^2 = 4 %, 16 %, 36 %, 64 %.
+fn heat_level(v: u64, max: u64) -> u8 {
+    if v == 0 || max == 0 {
+        return 0;
+    }
+    1 + (1..=4u128).filter(|k| v as u128 * 25 > max as u128 * k * k).count() as u8
+}
+
+/// Цвета ступеней: нейтральная клетка и пять красных, от светлой к тёмной.
+const HEAT: [u32; 6] = [0xE9E5D8, 0xF6CFC6, 0xEFA597, 0xE0705F, 0xB83227, 0x7F1D1D];
+
+const MONTHS: [&str; 12] = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+
+/// Календарь трат: клетка тем краснее, чем больше токенов за день. total — токены по дням (все агенты),
+/// first..=today — дни, за которые есть история; раньше — «нет данных», позже — «ещё не наступил».
+fn calendar(b: &mut B, total: &BTreeMap<i32, u64>, first: i32, today: i32) {
+    use crate::limits::fmt_tokens;
+    let left = Align::Left;
+    b.text("Календарь трат", 19, true, INK, left, 4);
+    b.text("Чем темнее красный, тем больше токенов потрачено за день, по всем агентам вместе.", 12, false, GREY, left, 8);
+    let max = total.range(first..=today).map(|(_, v)| *v).max().unwrap_or(0);
+    let (cw, gap, ch) = (b.l(96), b.l(4), b.l(44));
+    let gw = 7 * cw + 6 * gap;
+    let x0 = b.l(M) + (b.l(W - 2 * M) - gw) / 2;
+    let (p12, p11) = (b.l(12).max(1) as u16, b.l(11).max(1) as u16);
+    for (y, m) in months_between(first, today) {
+        let rows: Vec<_> =
+            month_weeks(y, m).into_iter().filter(|r| r.iter().flatten().any(|d| (first..=today).contains(&(y * 10_000 + m * 100 + d)))).collect();
+        let sum: u64 = total.range(first.max(y * 10_000 + m * 100)..=today.min(y * 10_000 + m * 100 + 31)).map(|(_, v)| *v).sum();
+        // заголовок месяца: слева «Ноябрь 2026», справа сумма за показанные дни
+        let title = format!("{} {y}", crate::i18n::t(MONTHS[m as usize - 1]));
+        let p15 = b.l(15).max(1) as u16;
+        let base = b.fonts.center_base(b.y, b.l(22), p15);
+        b.items.push(Item::Text { x: x0, base, s: title, col: INK, px: p15, bold: true });
+        let st = crate::i18n::t(&fmt_tokens(sum));
+        let sw = b.fonts.width(&st, p12, false);
+        b.items.push(Item::Text { x: x0 + gw - sw, base, s: st, col: GREY, px: p12, bold: false });
+        b.y += b.l(24);
+        // подписи дней недели
+        let base = b.fonts.center_base(b.y, b.l(16), p12);
+        for (i, n) in ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].into_iter().enumerate() {
+            let t = crate::i18n::t(n);
+            let tw = b.fonts.width(&t, p12, false);
+            b.items.push(Item::Text { x: x0 + i as i32 * (cw + gap) + (cw - tw) / 2, base, s: t, col: GREY, px: p12, bold: false });
+        }
+        b.y += b.l(18);
+        for row in rows {
+            for (i, cell) in row.iter().enumerate() {
+                let Some(d) = *cell else { continue };
+                let day = y * 10_000 + m * 100 + d;
+                let (cx, cy) = (x0 + i as i32 * (cw + gap), b.y);
+                let known = (first..=today).contains(&day);
+                let v = total.get(&day).copied().unwrap_or(0);
+                let lv = heat_level(v, max) as usize;
+                let (fill, border, numc) = if known {
+                    (HEAT[lv], if lv == 0 { 0xCFCABA } else { HEAT[lv] }, if lv >= 4 { 0xFFFFFF } else { INK })
+                } else {
+                    (PAPER, 0xD9D5C8, 0xA9A596)
+                };
+                let ring = if day == today { b.l(2).max(2) } else { b.l(1).max(1) };
+                let ring_col = if day == today { BLUE_INK } else { border };
+                b.items.push(Item::Box { x: cx, y: cy, w: cw, h: ch, col: ring_col });
+                b.items.push(Item::Box { x: cx + ring, y: cy + ring, w: cw - 2 * ring, h: ch - 2 * ring, col: fill });
+                let base = b.fonts.center_base(cy + b.l(4), b.l(14), p12);
+                b.items.push(Item::Text { x: cx + b.l(7), base, s: d.to_string(), col: numc, px: p12, bold: day == today });
+                // под числом — сколько токенов («—» — нет данных; у будущих дней пусто)
+                let note = if known && v > 0 {
+                    Some(crate::i18n::t(&fmt_tokens(v)))
+                } else if !known && day < first {
+                    Some("—".to_string())
+                } else {
+                    None
+                };
+                if let Some(t) = note {
+                    let tw = b.fonts.width(&t, p11, false);
+                    let base = b.fonts.center_base(cy + ch - b.l(19), b.l(14), p11);
+                    b.items.push(Item::Text { x: cx + cw - b.l(7) - tw, base, s: t, col: numc, px: p11, bold: false });
+                }
+            }
+            b.y += ch + gap;
+        }
+        b.y += b.l(10);
+    }
+    // легенда: меньше [нейтральная, 5 ступеней] больше; слева — про пустые клетки
+    let sq = b.l(14);
+    let (l_less, l_more) = (crate::i18n::t("меньше"), crate::i18n::t("больше"));
+    let (wl, wm) = (b.fonts.width(&l_less, p12, false), b.fonts.width(&l_more, p12, false));
+    let total_w = wl + wm + 6 * (sq + b.l(3)) + 2 * b.l(6);
+    let mut x = b.l(W - M) - total_w - (b.l(W - 2 * M) - gw) / 2;
+    let base = b.fonts.center_base(b.y, sq, p12);
+    b.items.push(Item::Text { x, base, s: l_less, col: GREY, px: p12, bold: false });
+    x += wl + b.l(6);
+    for col in HEAT {
+        b.items.push(Item::Box { x, y: b.y, w: sq, h: sq, col: 0xCFCABA });
+        b.items.push(Item::Box { x: x + 1, y: b.y + 1, w: sq - 2, h: sq - 2, col });
+        x += sq + b.l(3);
+    }
+    b.items.push(Item::Text { x: x + b.l(3), base, s: l_more, col: GREY, px: p12, bold: false });
+    b.y += sq + b.l(6);
+    b.text("Пустые клетки: за эти дни записей нет (раньше, чем хранит история, или день ещё не настал).", 12, false, GREY, left, 12);
 }
 
 // ───────────────────────────── рисование ─────────────────────────────
@@ -1078,5 +1290,107 @@ mod unchecked_tests {
             }
         }
         crate::i18n::TEST_LANG.with(|l| l.set(crate::i18n::Lang::Ru));
+    }
+}
+
+#[cfg(test)]
+mod calendar_tests {
+    use super::*;
+    use crate::limits::{Tok, Usage};
+
+    fn rows(y: i32, m: i32) -> Vec<Vec<i32>> {
+        month_weeks(y, m).iter().map(|r| r.iter().map(|c| c.unwrap_or(0)).collect()).collect()
+    }
+
+    /// Ноябрь 2026: 1 ноября — воскресенье (по календарю), 30 дней: первая неделя — шесть пустых и «1».
+    #[test]
+    fn november_2026_starts_on_sunday() {
+        let r = rows(2026, 11);
+        assert_eq!(r.len(), 6);
+        assert_eq!(r[0], vec![0, 0, 0, 0, 0, 0, 1]);
+        assert_eq!(r[1], vec![2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(r[4], vec![23, 24, 25, 26, 27, 28, 29]);
+        assert_eq!(r[5], vec![30, 0, 0, 0, 0, 0, 0]);
+    }
+
+    /// Февраль 2028 — високосный, 29 дней; 1 февраля 2028 — вторник. Февраль 2026: 28 дней, 1-е — воскресенье
+    /// (ровно четыре недели не получается: начинается в воскресенье, значит пять строк).
+    #[test]
+    fn february_lengths_and_leap_years() {
+        let r = rows(2028, 2);
+        assert_eq!(r[0], vec![0, 1, 2, 3, 4, 5, 6]);
+        assert_eq!(r.last().unwrap(), &vec![28, 29, 0, 0, 0, 0, 0]);
+        assert_eq!(rows(2026, 2).len(), 5);
+        // 2100 — не високосный (делится на 100), 2000 — високосный (делится на 400)
+        assert_eq!((days_in_month(2100, 2), days_in_month(2000, 2), days_in_month(2027, 2)), (28, 29, 28));
+        assert_eq!((days_in_month(2026, 4), days_in_month(2026, 12)), (30, 31));
+    }
+
+    /// Февраль 2027 начинается в понедельник и в нём 28 дней — ровно четыре полных недели.
+    #[test]
+    fn four_full_weeks() {
+        let r = rows(2027, 2);
+        assert_eq!(r.len(), 4);
+        assert_eq!(r[0], vec![1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(r[3], vec![22, 23, 24, 25, 26, 27, 28]);
+    }
+
+    #[test]
+    fn months_of_a_window() {
+        assert_eq!(months_between(20261017, 20261115), vec![(2026, 11), (2026, 10)]);
+        assert_eq!(months_between(20261102, 20261201), vec![(2026, 12), (2026, 11)]);
+        // 30 дней могут задеть три месяца: 31 января … 1 марта
+        assert_eq!(months_between(20270131, 20270301), vec![(2027, 3), (2027, 2), (2027, 1)]);
+        assert_eq!(months_between(20261201, 20270105), vec![(2027, 1), (2026, 12)]);
+    }
+
+    /// Границы ступеней при максимуме 10000: 4 % = 400, 16 % = 1600, 36 % = 3600, 64 % = 6400 (граница — в нижней ступени).
+    #[test]
+    fn heat_level_boundaries() {
+        let l = |v| heat_level(v, 10_000);
+        assert_eq!(l(0), 0);
+        assert_eq!(l(1), 1);
+        assert_eq!((l(400), l(401)), (1, 2));
+        assert_eq!((l(1600), l(1601)), (2, 3));
+        assert_eq!((l(3600), l(3601)), (3, 4));
+        assert_eq!((l(6400), l(6401)), (4, 5));
+        assert_eq!((l(10_000), heat_level(1, 1), heat_level(0, 0)), (5, 5, 0));
+        // огромные числа не переполняются
+        assert_eq!(heat_level(u64::MAX, u64::MAX), 5);
+    }
+
+    /// Сумма клеток календаря за период совпадает с «За 30 дней», которые показывает Медкарта (sum от первого дня).
+    #[test]
+    fn calendar_sum_matches_card() {
+        let now = 1_794_000_000; // середина ноября 2026
+        let a = Analytics::sample(now);
+        let first = crate::limits::local_day(now - (crate::limits::DAYS - 1) * 86_400);
+        let today = crate::limits::local_day(now);
+        let mut cal = 0u64;
+        let mut card = 0u64;
+        for (_, _, us, _) in &a.agents {
+            let per_day = day_totals(us);
+            // как в analytics_layout: sum(days[0]) — всё, что не раньше первого дня
+            card += per_day.range(first..).map(|(_, v)| *v).sum::<u64>();
+            // как в календаре: по клеткам месяцев, попавшим в отрезок
+            for (y, m) in months_between(first, today) {
+                for d in month_weeks(y, m).iter().flatten().flatten() {
+                    let day = y * 10_000 + m * 100 + d;
+                    if (first..=today).contains(&day) {
+                        cal += per_day.get(&day).copied().unwrap_or(0);
+                    }
+                }
+            }
+        }
+        assert!(card > 0);
+        assert_eq!(cal, card);
+    }
+
+    #[test]
+    fn day_totals_sum_models() {
+        let mut u = Usage::new();
+        u.insert((20261105, "a".into()), Tok { input: 1, output: 2, cache_read: 3, cache_write: 4 });
+        u.insert((20261105, "b".into()), Tok { input: 10, ..Default::default() });
+        assert_eq!(day_totals(&u).get(&20261105), Some(&20));
     }
 }

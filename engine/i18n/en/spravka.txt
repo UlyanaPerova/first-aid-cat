@@ -471,3 +471,99 @@ en: Close extra tabs and programs; to see who is eating memory, use Task Manager
 
 ru: Очистите Загрузки и корзину; что занимает место, покажет «Параметры → Система → Память».
 en: Empty Downloads and the Recycle Bin; Settings → System → Storage will show what takes the space.
+
+# spravka.rs:1021
+ru: Январь
+en: January
+
+# spravka.rs:1021
+ru: Февраль
+en: February
+
+# spravka.rs:1021
+ru: Март
+en: March
+
+# spravka.rs:1021
+ru: Апрель
+en: April
+
+# spravka.rs:1021
+ru: Май
+en: May
+
+# spravka.rs:1021
+ru: Июнь
+en: June
+
+# spravka.rs:1021
+ru: Июль
+en: July
+
+# spravka.rs:1021
+ru: Август
+en: August
+
+# spravka.rs:1021
+ru: Сентябрь
+en: September
+
+# spravka.rs:1021
+ru: Октябрь
+en: October
+
+# spravka.rs:1021
+ru: Ноябрь
+en: November
+
+# spravka.rs:1021
+ru: Декабрь
+en: December
+
+# spravka.rs:1028
+ru: Календарь трат
+en: Spending calendar
+
+# spravka.rs:1029
+ru: Чем темнее красный, тем больше токенов потрачено за день, по всем агентам вместе.
+en: The darker the red, the more tokens were spent that day, all agents together.
+
+# spravka.rs:1050
+ru: Пн
+en: Mon
+
+# spravka.rs:1050
+ru: Вт
+en: Tue
+
+# spravka.rs:1050
+ru: Ср
+en: Wed
+
+# spravka.rs:1050
+ru: Чт
+en: Thu
+
+# spravka.rs:1050
+ru: Пт
+en: Fri
+
+# spravka.rs:1050
+ru: Сб
+en: Sat
+
+# spravka.rs:1050
+ru: Вс
+en: Sun
+
+# spravka.rs:1095
+ru: меньше
+en: less
+
+# spravka.rs:1095
+ru: больше
+en: more
+
+# spravka.rs:1109
+ru: Пустые клетки: за эти дни записей нет (раньше, чем хранит история, или день ещё не настал).
+en: Empty cells: no records for these days (earlier than the history goes back, or the day has not come yet).
