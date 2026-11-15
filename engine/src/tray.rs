@@ -1252,11 +1252,9 @@ struct WinState {
     pct: f64,
     /// о каком пороге уже сказали в этом окне (0, 80, 95)
     alerted: u8,
-    /// (когда, %) за последний час — для темпа
-    samples: std::collections::VecDeque<(i64, f64)>,
 }
 
-/// Слежение за лимитами: уведомления (80 %, 95 %, «снова свободен») и прогноз «когда кончится».
+/// Слежение за лимитами: уведомления (80 %, 95 %, «снова свободен»).
 #[derive(Default)]
 pub struct Watch {
     w: std::collections::HashMap<(String, u8), WinState>,
@@ -1290,12 +1288,9 @@ impl Watch {
             for (which, win) in [(0u8, l.five), (1u8, l.week)] {
                 let Some(win) = win else { continue };
                 let pct = win.now_pct(now);
-                let at = if l.at > 0 { l.at } else { now };
                 let key = (a.name.to_string(), which);
                 let Some(st) = self.w.get_mut(&key) else {
-                    let mut st = WinState { resets_at: win.resets_at, pct, alerted: level(pct), ..Default::default() };
-                    st.samples.push_back((at, pct));
-                    self.w.insert(key, st);
+                    self.w.insert(key, WinState { resets_at: win.resets_at, pct, alerted: level(pct) });
                     continue;
                 };
                 // окно сбросилось: процент заметно упал (новое время сброса или старое уже прошло)
@@ -1304,7 +1299,6 @@ impl Watch {
                         out.push((format!("{}: лимит {} снова свободен", a.name, win_name(which)), "Можно работать дальше.".to_string()));
                     }
                     st.alerted = 0;
-                    st.samples.clear();
                 }
                 st.resets_at = win.resets_at;
                 let lv = level(pct);
@@ -1314,28 +1308,9 @@ impl Watch {
                 }
                 st.alerted = st.alerted.max(lv);
                 st.pct = pct;
-                if st.samples.back().is_none_or(|s| s.0 != at) {
-                    st.samples.push_back((at, pct));
-                }
-                while st.samples.front().is_some_and(|s| at - s.0 > 3600) {
-                    st.samples.pop_front();
-                }
             }
         }
         out
-    }
-
-    /// Когда кончится лимит при нынешнем темпе (за последний час, не меньше 10 минут наблюдений);
-    /// None — темп не известен или до сброса хватит.
-    pub fn runs_out(&self, name: &str, which: u8) -> Option<i64> {
-        let st = self.w.get(&(name.to_string(), which))?;
-        let (&(t0, p0), &(t1, p1)) = (st.samples.front()?, st.samples.back()?);
-        if t1 - t0 < 600 || p1 <= p0 || p1 >= 100.0 {
-            return None;
-        }
-        let rate = (p1 - p0) / (t1 - t0) as f64;
-        let eta = t1 + ((100.0 - p1) / rate) as i64;
-        (st.resets_at == 0 || eta < st.resets_at).then_some(eta)
     }
 }
 
@@ -1661,7 +1636,7 @@ fn paint_button(f: &mut Fonts, t: &Tpl, c: &mut Canvas, r: Rect, label: &str) {
 }
 
 /// Нарисовать плашку (окно — кодом, сценка — пиксель-арт); возвращает места кнопок «Медкарта расхода» и «×».
-fn paint(f: &mut Fonts, agents: &[Agent], watch: &Watch, data_t: i64, t: &Tpl, fr: &Frame, c: &mut Canvas) -> (Rect, Rect, Rect) {
+fn paint(f: &mut Fonts, agents: &[Agent], data_t: i64, t: &Tpl, fr: &Frame, c: &mut Canvas) -> (Rect, Rect, Rect) {
     let now = crate::ui::now_secs();
     let d = |v: i32| t.d(v);
     let (w, h) = t.size(agents.len());
@@ -1687,7 +1662,7 @@ fn paint(f: &mut Fonts, agents: &[Agent], watch: &Watch, data_t: i64, t: &Tpl, f
                 [(0u8, "5 часов", lim.five), (1u8, "неделя", lim.week)].into_iter().filter_map(|(w, s, x)| x.map(|x| (w, s, x))).collect();
             // кольца — на равном расстоянии от середины (278 + 610 = 888)
             let centers: &[i32] = if wins.len() == 2 { &[278, 610] } else { &[444] };
-            for ((which, what, win), cx) in wins.iter().zip(centers) {
+            for ((_, what, win), cx) in wins.iter().zip(centers) {
                 let pct = win.now_pct(now);
                 let (cx, cy) = (d(*cx), gy + d(167));
                 crate::gfx::ring(c, cx, cy, d(90) as f32, d(87) as f32, 1.0, 0xFCFBFC, 0xFCFBFC);
@@ -1700,7 +1675,7 @@ fn paint(f: &mut Fonts, agents: &[Agent], watch: &Watch, data_t: i64, t: &Tpl, f
                 f.draw(c, cx - lw / 2, gy + d(285), what, INK, t.font(29), false);
                 // подпись сброса — в две строки по центру кольца (слово и время): одной строкой «сбросится сегодня в 14:00»
                 // выходила вдвое шире кольца и выпирала вбок
-                let (word, time, col) = limit_line(watch.runs_out(a.name, *which), win.resets_at, win.minutes, now);
+                let (word, time, col) = limit_line(win.resets_at, win.minutes, now);
                 for (text, y) in [(&word, 316), (&time, 342)] {
                     let rw = f.width(text, t.font(22), false);
                     f.draw(c, cx - rw / 2, gy + d(y), text, col, t.font(22), false);
@@ -1755,19 +1730,20 @@ fn paint(f: &mut Fonts, agents: &[Agent], watch: &Watch, data_t: i64, t: &Tpl, f
 
 /// Подпись под кольцом лимита — слово и время отдельными строками — и её цвет.
 /// Скорый сброс — хорошая новость: зелёное «сбросится …» (осталась пятая часть окна или меньше: час для
-/// 5-часового, около полутора суток для недельного). Красное «хватит до ≈ …» — только когда лимит при нынешнем
-/// темпе кончится заметно раньше сброса (больше чем за 10 минут до него): прогноз впритык к сбросу — не беда.
-fn limit_line(runs_out: Option<i64>, resets_at: i64, minutes: u32, now: i64) -> (String, String, u32) {
-    const RED: u32 = 0xB3001B;
+/// 5-часового, около полутора суток для недельного). Прогнозов «хватит до» здесь нет: под кольцом всегда настоящее
+/// время сброса (владелица: из-за прогноза не было видно, когда сброс на самом деле).
+fn limit_line(resets_at: i64, minutes: u32, now: i64) -> (String, String, u32) {
     const GREEN: u32 = 0x0B7A0B;
     // длинное окно (неделя) — всегда с днём: «в 14:00» без дня непонятно
     let when = |t| if minutes >= 24 * 60 { crate::limits::when_day(t, now) } else { crate::limits::when(t, now) };
-    let (word, time, col) = match runs_out {
-        Some(eta) if resets_at <= now || eta + 600 < resets_at => ("хватит до ≈", when(eta), RED),
-        _ if resets_at > now && resets_at - now <= i64::from(minutes) * 60 / 5 => ("сбросится", when(resets_at), GREEN),
-        _ if resets_at > now => ("сброс", when(resets_at), GREY),
-        _ if resets_at > 0 => ("уже сброшен", String::new(), GREY),
-        _ => ("", String::new(), GREY),
+    let (word, time, col) = if resets_at > now && resets_at - now <= i64::from(minutes) * 60 / 5 {
+        ("сбросится", when(resets_at), GREEN)
+    } else if resets_at > now {
+        ("сброс", when(resets_at), GREY)
+    } else if resets_at > 0 {
+        ("уже сброшен", String::new(), GREY)
+    } else {
+        ("", String::new(), GREY)
     };
     (word.to_string(), time, col)
 }
@@ -1853,7 +1829,7 @@ impl App {
         let fr = if p.anim { crate::scene_anim::frame(icon_choice(), p.opened.elapsed().as_millis() as u64) } else { Frame::default() };
         let (btn, close, scene) = {
             let mut c = Canvas::new(&mut buf, w as usize, w, h);
-            paint(&mut self.fonts, &self.agents, &self.watch, self.data_t, self.tpl.as_ref().expect("шаблон готов"), &fr, &mut c)
+            paint(&mut self.fonts, &self.agents, self.data_t, self.tpl.as_ref().expect("шаблон готов"), &fr, &mut c)
         };
         p.btn = btn;
         p.close = close;
@@ -2020,7 +1996,7 @@ impl App {
         let mut buf = vec![0u32; (w * h) as usize];
         let (btn, close, scene) = {
             let mut c = Canvas::new(&mut buf, w as usize, w, h);
-            paint(&mut self.fonts, &self.agents, &self.watch, self.data_t, self.tpl.as_ref().expect("шаблон готов"), &Frame::default(), &mut c)
+            paint(&mut self.fonts, &self.agents, self.data_t, self.tpl.as_ref().expect("шаблон готов"), &Frame::default(), &mut c)
         };
         self.panel_scene = scene;
         // плашка перерисована (другое состояние кота) — кадр сценки положить заново
@@ -2277,7 +2253,7 @@ pub fn shot(path: &str) {
         .map_or(Frame::default(), |s| crate::scene_anim::frame(icon_choice(), (s.max(0.0) * 1000.0).round() as u64));
     {
         let mut c = Canvas::new(&mut buf, w as usize, w, h);
-        paint(&mut Fonts::new(), &agents, &Watch::default(), crate::ui::now_secs(), &t, &fr, &mut c);
+        paint(&mut Fonts::new(), &agents, crate::ui::now_secs(), &t, &fr, &mut c);
     }
     let rgb: Vec<u8> = buf.iter().flat_map(|p| [(p >> 16) as u8, (p >> 8) as u8, *p as u8]).collect();
     let Ok(f) = std::fs::File::create(path) else { return };
@@ -2424,23 +2400,18 @@ mod tests {
     #[test]
     fn limit_line_good_and_bad_news() {
         let (now, five) = (1_000_000, 300);
-        // до сброса 40 минут — хорошая новость, зелёным; прогноз впритык к сбросу (за 5 минут до него) её не портит
-        let (w, t, c) = limit_line(None, now + 40 * 60, five, now);
+        // до сброса 40 минут — хорошая новость, зелёным
+        let (w, t, c) = limit_line(now + 40 * 60, five, now);
         assert_eq!(w, "сбросится");
         assert!(t.starts_with("в ") || t.starts_with("завтра в "), "{t}");
         assert_eq!(c, 0x0B7A0B);
-        assert_eq!(limit_line(Some(now + 35 * 60), now + 40 * 60, five, now).0, "сбросится");
-        // лимит кончится задолго до сброса — плохая новость, красным, даже если сброс скоро
-        let (w, _, c) = limit_line(Some(now + 10 * 60), now + 40 * 60, five, now);
-        assert_eq!(w, "хватит до ≈");
-        assert_eq!(c, 0xB3001B);
-        // до сброса далеко и прогноза нет — спокойное серое «сброс»
-        let (w, _, c) = limit_line(None, now + 4 * 3600, five, now);
+        // до сброса далеко — спокойное серое «сброс»
+        let (w, _, c) = limit_line(now + 4 * 3600, five, now);
         assert_eq!((w.as_str(), c), ("сброс", GREY));
-        assert_eq!(limit_line(None, now - 5, five, now), ("уже сброшен".to_string(), String::new(), GREY));
-        assert_eq!(limit_line(None, 0, five, now).0, "");
+        assert_eq!(limit_line(now - 5, five, now), ("уже сброшен".to_string(), String::new(), GREY));
+        assert_eq!(limit_line(0, five, now).0, "");
         // недельное окно — время всегда с днём
-        let (_, t, _) = limit_line(None, now + 3600, 7 * 24 * 60, now);
+        let (_, t, _) = limit_line(now + 3600, 7 * 24 * 60, now);
         assert!(t.starts_with("сегодня в ") || t.starts_with("завтра в "), "{t}");
     }
     use crate::limits::{Limits, Window as Win};
@@ -2495,20 +2466,6 @@ mod tests {
         // в новом окне пороги снова работают
         let n = w.update(&[agent(81.0, 28_000, 12_000)], 12_000);
         assert!(n[0].0.contains("81%"), "{n:?}");
-    }
-
-    #[test]
-    fn watch_forecast() {
-        let mut w = Watch::default();
-        // 10 % за 20 минут: от 50 % до 100 % — ещё 100 минут; сброс через 3 часа — не хватит
-        w.update(&[agent(40.0, 20_000, 1_000)], 1_000);
-        w.update(&[agent(50.0, 20_000, 2_200)], 2_200);
-        assert_eq!(w.runs_out("Claude Code", 0), Some(2_200 + 6_000));
-        // сброс раньше — хватит
-        let mut w = Watch::default();
-        w.update(&[agent(40.0, 3_000, 1_000)], 1_000);
-        w.update(&[agent(50.0, 3_000, 2_200)], 2_200);
-        assert_eq!(w.runs_out("Claude Code", 0), None);
     }
 
     #[test]

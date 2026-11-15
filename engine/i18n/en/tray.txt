@@ -57,9 +57,6 @@ en: Resets {}.
 ru: {}: занято {}% лимита {}
 en: {}: {}% of the limit {} used
 
-ru: хватит до ≈
-en: lasts until ≈
-
 ru: сбросится
 en: will reset
 

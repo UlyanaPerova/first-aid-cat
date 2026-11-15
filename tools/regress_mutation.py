@@ -26,7 +26,6 @@ MUTS = [
     ('scene_anim.rs', 'const TAIL_SPEED: [u64; 3] = [1800, 600, 1000];', 'const TAIL_SPEED: [u64; 3] = [1800, 700, 1000];', 'scene_anim::regress', 'скорость хвоста у «пишет» другая'),
     ('scene_anim.rs', 'for _ in 0..=(pair[1] - b\'0\') {', 'for _ in 0..(pair[1] - b\'0\') {', 'scene_anim::regress', 'разжиматель: длина серии на единицу короче'),
     ('tray.rs', 'resets_at - now <= i64::from(minutes) * 60 / 5', 'resets_at - now <= i64::from(minutes) * 60 / 4', 'tray::regress::limit_line', 'порог «сбросится» — четверть окна'),
-    ('tray.rs', 'if t1 - t0 < 600 || p1 <= p0', 'if t1 - t0 < 60 || p1 <= p0', 'tray::regress::watch_forecast', 'прогноз по 1 минуте наблюдений'),
     ('ui.rs', 'v.sort_by_key(|p| p.1 != "bad");', 'v.sort_by_key(|p| p.1 == "bad");', 'ui::regress::problems', 'жёлтые раньше красных'),
     ('fixes.rs', 'active && fails_session', 'active || fails_session', 'fixes::regress', 'отказ при любом одном признаке'),
 ]

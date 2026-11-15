@@ -1,4 +1,4 @@
-//! Регрессионные тесты плашки лимитов и значка (`tray.rs`): подписи «сбросится / хватит до», выбор агента и окна,
+//! Регрессионные тесты плашки лимитов и значка (`tray.rs`): подписи «сбросится / сброс», выбор агента и окна,
 //! подписи рядом со значком, слежение (уведомления и прогноз), разжимание сцены. Дочерний модуль `tray::regress`.
 //!
 //! Не покрыто здесь (нужны настоящая панель, D-Bus и расширение GNOME или macOS): обмен с расширением
@@ -9,7 +9,6 @@ use super::*;
 use crate::limits::{Limits, Window as Win};
 use crate::regress_common::*;
 
-const RED: u32 = 0xB3001B;
 const GREEN: u32 = 0x0B7A0B;
 
 // ───────────── limit_line ─────────────
@@ -19,7 +18,7 @@ const GREEN: u32 = 0x0B7A0B;
 #[test]
 fn limit_line_good_news_boundaries() {
     let now = 1_800_000_000;
-    let w = |dt: i64, min: u32| limit_line(None, now + dt, min, now);
+    let w = |dt: i64, min: u32| limit_line(now + dt, min, now);
     assert_eq!(w(3600, 300).0, "сбросится");
     assert_eq!(w(3601, 300).0, "сброс");
     assert_eq!(w(1, 300).0, "сбросится");
@@ -32,39 +31,24 @@ fn limit_line_good_news_boundaries() {
     assert_eq!(w(7200, 300).2, GREY);
 }
 
-/// Граница «хватит до ≈»: красным — только если лимит кончится БОЛЬШЕ ЧЕМ за 10 минут до сброса.
+/// Прогноза под кольцом нет (убран по просьбе владелицы): пока сброс впереди, подпись — всегда настоящее время сброса,
+/// после сброса — «уже сброшен», без времени. Выкладка: до сброса 5 ч > 3600 с → «сброс»; 60 с назад → «уже сброшен».
 #[test]
-fn limit_line_bad_news_boundary_ten_minutes() {
+fn limit_line_shows_only_the_real_reset() {
     let now = 1_800_000_000;
-    let resets = now + 5 * 3600;
-    // eta + 600 == resets → не красное (строго меньше)
-    assert_ne!(limit_line(Some(resets - 600), resets, 300, now).0, "хватит до ≈");
-    // eta + 601 < resets не выполнено: resets − 601 + 600 < resets → true → красное
-    let (w, t, c) = limit_line(Some(resets - 601), resets, 300, now);
-    assert_eq!((w.as_str(), c), ("хватит до ≈", RED));
-    assert!(!t.is_empty());
-    // красное важнее «сбросится»: сброс через 30 минут, а лимит кончится через 5
-    assert_eq!(limit_line(Some(now + 300), now + 1800, 300, now).0, "хватит до ≈");
-    // время сброса неизвестно (0) и есть прогноз — красное
-    assert_eq!(limit_line(Some(now + 300), 0, 300, now).0, "хватит до ≈");
-}
-
-/// Окно уже сбросилось и новых данных ещё нет: старый прогноз «хватит до ≈ <прошедшее время>» красным не должен
-/// показываться — окно свободно. Между сбросом и следующим обновлением данных (десятки секунд) плашка так и рисуется:
-/// `limit_line` не сверяет прогноз с моментом сброса.
-#[test]
-#[ignore = "известная ошибка: после сброса окна (resets_at ≤ now) прогноз ещё красным «хватит до ≈ …» вместо «уже сброшен» до следующего обновления данных"]
-fn limit_line_stale_forecast_after_reset_is_not_red() {
-    let now = 1_800_000_000;
-    let (w, t, c) = limit_line(Some(now - 7200), now - 60, 300, now);
+    let (w, t, c) = limit_line(now + 5 * 3600, 300, now);
+    assert_eq!((w.as_str(), c), ("сброс", GREY));
+    assert!(t.starts_with("в ") || t.starts_with("завтра в "), "{t}");
+    let (w, t, c) = limit_line(now - 60, 300, now);
     assert_eq!((w.as_str(), t.as_str(), c), ("уже сброшен", "", GREY));
+    assert_eq!(limit_line(0, 300, now), (String::new(), String::new(), GREY));
 }
 
 #[test]
 fn limit_line_week_time_always_names_the_day() {
     let now = 1_800_000_000;
     for dt in [100, 3 * 3600, 30 * 3600, 5 * 86_400] {
-        let (_, t, _) = limit_line(None, now + dt, 10_080, now);
+        let (_, t, _) = limit_line(now + dt, 10_080, now);
         assert!(
             t.starts_with("сегодня в ")
                 || t.starts_with("завтра в ")
@@ -121,16 +105,14 @@ fn watch_alerts_each_level_once_per_window() {
     });
 }
 
-/// Метаморфическое: повтор тех же цифр (то же время) не даёт ни одного нового уведомления и не меняет прогноз.
+/// Метаморфическое: повтор тех же цифр (то же время) не даёт ни одного нового уведомления.
 #[test]
 fn watch_update_is_idempotent_for_repeated_data() {
     let mut w = Watch::default();
     w.update(&[ag("Claude Code", Some((40.0, 99_999)), 1_000)], 1_000);
     w.update(&[ag("Claude Code", Some((90.0, 99_999)), 2_200)], 2_200);
-    let eta = w.runs_out("Claude Code", 0);
     for _ in 0..5 {
         assert!(w.update(&[ag("Claude Code", Some((90.0, 99_999)), 2_200)], 2_200).is_empty());
-        assert_eq!(w.runs_out("Claude Code", 0), eta);
     }
 }
 
@@ -150,51 +132,6 @@ fn watch_reset_detection_thresholds() {
     let mut w = Watch::default();
     w.update(&[ag("B", Some((30.0, 10_000)), 100)], 100);
     assert!(w.update(&[ag("B", Some((1.0, 50_000)), 200)], 200).is_empty());
-}
-
-/// Прогноз «когда кончится»: ручной расчёт. 40% → 50% за 1200 с: темп 10/1200 %/с; до 100% осталось 50 → 6000 с.
-/// Нужно ≥ 10 минут наблюдений, рост, и чтобы кончилось ДО сброса.
-#[test]
-fn watch_forecast_hand_calculation_and_guards() {
-    let mut w = Watch::default();
-    w.update(&[ag("A", Some((40.0, 100_000)), 1_000)], 1_000);
-    w.update(&[ag("A", Some((50.0, 100_000)), 2_200)], 2_200);
-    assert_eq!(w.runs_out("A", 0), Some(2_200 + 6_000));
-    // меньше 10 минут наблюдений — прогноза нет
-    let mut w = Watch::default();
-    w.update(&[ag("A", Some((40.0, 100_000)), 1_000)], 1_000);
-    w.update(&[ag("A", Some((50.0, 100_000)), 1_599)], 1_599);
-    assert_eq!(w.runs_out("A", 0), None);
-    // ровно 600 с — уже есть
-    w.update(&[ag("A", Some((50.0, 100_000)), 1_600)], 1_600);
-    assert!(w.runs_out("A", 0).is_some());
-    // темпа нет (не растёт) и 100% — прогноза нет
-    let mut w = Watch::default();
-    w.update(&[ag("A", Some((50.0, 100_000)), 1_000)], 1_000);
-    w.update(&[ag("A", Some((50.0, 100_000)), 5_000)], 5_000);
-    assert_eq!(w.runs_out("A", 0), None);
-    let mut w = Watch::default();
-    w.update(&[ag("A", Some((90.0, 100_000)), 1_000)], 1_000);
-    w.update(&[ag("A", Some((100.0, 100_000)), 5_000)], 5_000);
-    assert_eq!(w.runs_out("A", 0), None);
-    // неизвестный агент / окно
-    assert_eq!(w.runs_out("нет", 0), None);
-    assert_eq!(w.runs_out("A", 1), None);
-}
-
-/// Бесконечно малый рост за час: темп ≈ 2·10⁻¹⁸ %/с, «до 100%» → 2,5·10¹⁹ с — больше i64. В релизной сборке сложение
-/// переполняется и прогноз становится далёким ПРОШЛЫМ (красная надпись «хватит до ≈ 1969…»).
-#[test]
-#[ignore = "известная ошибка: runs_out при ничтожном росте переполняет i64 (eta < t1), показывая красный прогноз из прошлого"]
-fn watch_forecast_tiny_growth_does_not_overflow() {
-    let mut w = Watch::default();
-    let p1 = f64::from_bits(50.0f64.to_bits() + 1); // следующее число после 50,0
-    w.update(&[ag("A", Some((50.0, 0)), 0)], 0);
-    w.update(&[ag("A", Some((p1, 0)), 3_600)], 3_600);
-    match w.runs_out("A", 0) {
-        None => {}
-        Some(eta) => assert!(eta > 3_600, "прогноз из прошлого: {eta}"),
-    }
 }
 
 /// Случайные последовательности без паники: время идёт назад, агенты исчезают и появляются, окна без процента.
@@ -219,13 +156,6 @@ fn watch_update_random_sequences_never_panic() {
                 }
             }
             let _ = w.update(&v, now);
-            for name in ["Claude Code", "Codex"] {
-                for which in 0..2 {
-                    if let Some(eta) = w.runs_out(name, which) {
-                        let _ = limit_line(Some(eta), now + 100, 300, now);
-                    }
-                }
-            }
         }
     });
 }
@@ -514,7 +444,7 @@ fn soak_tray_template_and_frames() {
         {
             let mut c = Canvas::new(&mut buf, w as usize, w, h);
             let fr = crate::scene_anim::frame((n % 3) as u8, n * 120);
-            paint(&mut fonts, &agents, &Watch::default(), crate::ui::now_secs(), &tpl, &fr, &mut c);
+            paint(&mut fonts, &agents, crate::ui::now_secs(), &tpl, &fr, &mut c);
         }
         worst = worst.max(s.elapsed().as_millis());
         assert!(buf.iter().any(|p| *p != 0), "плашка нарисована пустой");

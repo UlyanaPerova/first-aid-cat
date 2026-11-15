@@ -127,7 +127,7 @@ On **macOS** the widget is a native WidgetKit widget (small and medium). Add it 
 
 If you use Claude Code or Codex, a small white cat appears in the top panel with the fullest subscription limit next to it, for example **42%**. The cat shows what your agents are doing: it **walks** while an agent is working, **sits** when the work is done and the session waits for you, and **sleeps** when no agent is open.
 
-One click on it opens the panel, the next click closes it. For each agent the panel shows rings for the 5-hour and weekly limits with their reset times, and bars of tokens per day for two weeks. At the bottom the same cat sits at his desk: asleep, writing with his leek, or done. When the pace so far would use up a limit before it resets, the ring says when it runs out.
+One click on it opens the panel, the next click closes it. For each agent the panel shows rings for the 5-hour and weekly limits with their reset times, and bars of tokens per day for two weeks. At the bottom the same cat sits at his desk: asleep, writing with his leek, or done.
 
 **Usage chart…** opens the usage chart in the app (also **AI limits → AI usage chart**): limit bars with "resets in 1 h 56 min", tokens per day and per model for 30 days, and which projects used the most.
 
