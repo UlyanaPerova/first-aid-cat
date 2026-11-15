@@ -29,6 +29,25 @@ def check(name, ok, info=''):
     print(('ok    ' if ok else 'ОШИБКА'), name, info)
 
 
+def real_files():
+    """Настоящие файлы лимитов человека (папка сеанса и копия в настройках) — их проверки трогать не должны.
+
+    2026-11-15 ранняя версия этого скрипта на macOS не подменяла TMPDIR, и выдуманные лимиты (12,5 % и 40 %, сброс в 2100 году)
+    попали в настоящую папку сеанса: программа показала их человеку. Поэтому снимок «до» сверяется с «после»."""
+    h = os.path.expanduser('~')
+    dirs = [os.path.join(os.environ.get('TMPDIR', '/tmp'), 'aptechka'), os.path.join(h, 'Library/Application Support/aptechka'),
+            os.path.join(os.environ.get('XDG_RUNTIME_DIR', '/nonexistent'), 'aptechka'),
+            os.path.join(os.environ.get('XDG_CONFIG_HOME', os.path.join(h, '.config')), 'aptechka')]
+    out = {}
+    for d in dirs:
+        p = os.path.join(d, 'claude_limits.json')
+        try:
+            out[p] = open(p, 'rb').read()
+        except OSError:
+            out[p] = None
+    return out
+
+
 def mk():
     root = tempfile.mkdtemp(prefix='aptechka_e2e_')
     run = os.path.join(root, 'run')
@@ -153,9 +172,12 @@ def main():
                 bad.append(os.path.relpath(p, root))
         check('--diag: выдуманные ключи не в файлах настроек и сеанса', not bad, ', '.join(bad))
         shutil.rmtree(root, ignore_errors=True)
+    touched = [p for p, v in real_files().items() if v != BEFORE[p] and (v is None or b'4102444800' in v)]
+    check('настоящие файлы лимитов человека не тронуты', not touched, ', '.join(os.path.basename(os.path.dirname(os.path.dirname(p))) for p in touched))
     n_bad = sum(1 for r in results if not r[1])
     print(f'\nпроверок {len(results)}, ошибок {n_bad}')
     sys.exit(1 if n_bad else 0)
 
 
+BEFORE = real_files()
 main()
