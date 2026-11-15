@@ -3511,7 +3511,8 @@ mod tests {
                 acc.push(b[0]);
             }
             let head = String::from_utf8_lossy(&acc).into_owned();
-            let bytes: usize = head.split("bytes=").nth(1).and_then(|t| t.split(|ch: char| !ch.is_ascii_digit()).next()).and_then(|n| n.parse().ok()).unwrap_or(0);
+            let bytes: usize =
+                head.split("bytes=").nth(1).and_then(|t| t.split(|ch: char| !ch.is_ascii_digit()).next()).and_then(|n| n.parse().ok()).unwrap_or(0);
             if bytes > 10_000_000 {
                 let _ = c.write_all(b"HTTP/1.1 429 Too Many Requests\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
                 return;

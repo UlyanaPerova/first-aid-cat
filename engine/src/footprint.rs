@@ -1262,11 +1262,14 @@ pub fn fix_chats() -> (bool, String) {
         }
     }
     if dry {
-        return (true, format!(
+        return (
+            true,
+            format!(
                 "Пробный запуск: закрыл бы {} в {}.",
                 crate::diag::plural(keys, "ключ", "ключа", "ключей"),
                 crate::diag::plural(changed, "чате", "чатах", "чатах")
-            ));
+            ),
+        );
     }
     forget_seen();
     let bad: usize = failed.values().sum();
@@ -1274,11 +1277,8 @@ pub fn fix_chats() -> (bool, String) {
     if keys == 0 && bad == 0 {
         return (true, "В чатах не нашёл ключей.".into());
     }
-    let mut m = format!(
-        "Закрыл {} в {}.",
-        crate::diag::plural(keys, "ключ", "ключа", "ключей"),
-        crate::diag::plural(changed, "чате", "чатах", "чатах")
-    );
+    let mut m =
+        format!("Закрыл {} в {}.", crate::diag::plural(keys, "ключ", "ключа", "ключей"), crate::diag::plural(changed, "чате", "чатах", "чатах"));
     if bad > 0 {
         m += &format!(" Не удалось изменить файлов: {bad} ({reasons}) — ключи там могли остаться.");
     }

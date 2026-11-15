@@ -221,11 +221,11 @@ pub fn check() -> Vec<Check> {
         }
         out.push(Check::new("theme", k.title, OK, &shown_now));
     }
-    out.push(Check::new("theme", "Эталон", INFO, &crate::diag::snapshot_time_shown(&snap.time)).hint("С этим состоянием сравниваются темы.").fixes(vec![fx(
-        "snapshot",
-        "Запомнить текущее как норму",
-        None,
-    )]));
+    out.push(
+        Check::new("theme", "Эталон", INFO, &crate::diag::snapshot_time_shown(&snap.time))
+            .hint("С этим состоянием сравниваются темы.")
+            .fixes(vec![fx("snapshot", "Запомнить текущее как норму", None)]),
+    );
     out
 }
 

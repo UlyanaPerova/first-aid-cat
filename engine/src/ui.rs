@@ -317,11 +317,7 @@ fn menus() -> Vec<(&'static str, Vec<(String, MenuAct)>)> {
     let mut m = vec![
         (
             "Файл",
-            vec![
-                ("Текстовый режим (таблица в терминале)".into(), MenuAct::TextMode),
-                (String::new(), MenuAct::Sep),
-                ("Выход".into(), MenuAct::Quit),
-            ],
+            vec![("Текстовый режим (таблица в терминале)".into(), MenuAct::TextMode), (String::new(), MenuAct::Sep), ("Выход".into(), MenuAct::Quit)],
         ),
         (
             "Проверки",
@@ -1061,8 +1057,7 @@ impl Ui {
             "ok" => 2,
             _ => 3,
         };
-        let mut rows: Vec<Check> =
-            self.st.checks.iter().chain(self.st.speed_rows()).filter(|c| c.key == group && unit_on(c.unit)).cloned().collect();
+        let mut rows: Vec<Check> = self.st.checks.iter().chain(self.st.speed_rows()).filter(|c| c.key == group && unit_on(c.unit)).cloned().collect();
         rows.sort_by_key(|c| rank(&c.status));
         self.st.rows = rows;
         let m = self.st.scroll_max(0);

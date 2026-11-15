@@ -907,8 +907,10 @@ mod tests {
     #[test]
     fn claude_limits_parse_and_reset() {
         // так лимиты лежат в файле строки состояния (и в его копии в папке настроек)
-        let l = parse_claude_limits(r#"{"rate_limits":{"five_hour":{"used_percentage":5,"resets_at":1000},"seven_day":{"used_percentage":21,"resets_at":9000}},"at":500}"#)
-            .unwrap();
+        let l = parse_claude_limits(
+            r#"{"rate_limits":{"five_hour":{"used_percentage":5,"resets_at":1000},"seven_day":{"used_percentage":21,"resets_at":9000}},"at":500}"#,
+        )
+        .unwrap();
         // после перезагрузки показываем сохранённое: 5-часовое окно уже сбросилось — 0, недельное ещё идёт — 21
         assert_eq!(l.five.unwrap().now_pct(2000), 0.0);
         assert_eq!(l.week.unwrap().now_pct(2000), 21.0);
@@ -959,7 +961,8 @@ mod tests {
                 "info": {"last_token_usage": {"input_tokens": 100, "cached_input_tokens": 60, "output_tokens": 7}},
                 "rate_limits": {"primary": {"used_percent": 85.0, "window_minutes": 300, "resets_at": 1_793_847_719_i64},
                     "secondary": {"used_percent": 13.0, "window_minutes": 10080, "resets_at": 1_794_434_519_i64}}}}),
-            &mut st, &mut HashSet::new()
+            &mut st,
+            &mut HashSet::new(),
         );
         let l = st.limits.unwrap();
         assert_eq!(l.five.unwrap().pct, 85.0);

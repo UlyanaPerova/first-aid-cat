@@ -1956,8 +1956,12 @@ impl App {
         #[cfg(target_os = "macos")]
         mac::activate();
         window.focus_window();
-        self.popup =
-            Some(Popup { window, surface, btn: Rect::new(0, 0, 0, 0), close: Rect::new(0, 0, 0, 0), cursor: (0, 0),
+        self.popup = Some(Popup {
+            window,
+            surface,
+            btn: Rect::new(0, 0, 0, 0),
+            close: Rect::new(0, 0, 0, 0),
+            cursor: (0, 0),
             opened: Instant::now(),
             anim: crate::prefs::app_anim(),
             shown: (0, Frame::default()),
@@ -2119,7 +2123,9 @@ impl App {
         #[cfg(target_os = "macos")]
         if let Some(t) = &self.tray {
             // значок — силуэт кота по состоянию агентов (ARGB → PNG), число — текстом рядом, как на Linux
-            let png = icon_rgba(44).map(|(n, px)| png_rgba(n, n, &px.iter().flat_map(|p| [p[1], p[2], p[3], p[0]]).collect::<Vec<u8>>())).unwrap_or_default();
+            let png = icon_rgba(44)
+                .map(|(n, px)| png_rgba(n, n, &px.iter().flat_map(|p| [p[1], p[2], p[3], p[0]]).collect::<Vec<u8>>()))
+                .unwrap_or_default();
             t.set(&label(&self.agents, now), &png, &crate::i18n::t(&tooltip(&self.agents, now)));
         }
         let _ = now;

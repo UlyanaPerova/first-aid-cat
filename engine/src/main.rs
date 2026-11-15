@@ -38,10 +38,6 @@ mod tray;
 #[cfg(test)]
 pub(crate) static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 mod agents;
-/// Независимая регрессионная проверка (REGRESSION_TESTS.md): общие помощники; сами тесты — дочерние модули `regress` проверяемых модулей.
-#[cfg(test)]
-#[path = "regress/common.rs"]
-mod regress_common;
 mod art;
 mod catalog;
 mod colorman;
@@ -67,6 +63,10 @@ mod procs;
 mod proxyaddr;
 mod quips;
 mod reach;
+/// Независимая регрессионная проверка (REGRESSION_TESTS.md): общие помощники; сами тесты — дочерние модули `regress` проверяемых модулей.
+#[cfg(test)]
+#[path = "regress/common.rs"]
+mod regress_common;
 mod scene;
 mod scene_anim;
 mod scene_anim_px;
