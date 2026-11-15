@@ -406,14 +406,52 @@ fn parse_claude_limits_variants() {
     }
 }
 
-/// Единицы: «resets_at» — секунды Unix. Значение в миллисекундах принимается без проверки и даёт «через 20 млн дней»;
-/// ложного «сбросилось» нет, но и ошибка единиц не замечается — это граница допущения, а не защита.
+/// Неправдоподобное время сброса отбрасывается вместе с окном: сброс не может быть дальше длины окна от мига получения
+/// данных (+10 минут на расхождение часов). Выкладка для 5 ч, at = 1 000 000: предел 1 000 000 + 18 000 + 600 = 1 018 600;
+/// для недели: 1 000 000 + 604 800 + 600 = 1 605 400. Так в плашку попал «сброс через 26709 дн» (пробные данные
+/// проверки: 4102444800 — 1 января 2100 года) — такое должно читаться как «неизвестно».
 #[test]
-fn resets_at_milliseconds_not_validated_documented() {
-    let l = parse_claude_limits(r#"{"rate_limits":{"five_hour":{"used_percentage":10,"resets_at":1794700800000}}}"#).unwrap();
-    let w = l.five.unwrap();
-    assert_eq!(w.resets_at, 1_794_700_800_000);
-    assert!(until(w.resets_at, 1_794_700_800).starts_with("через 20751228 дн"), "{}", until(w.resets_at, 1_794_700_800));
+fn implausible_reset_time_drops_the_window() {
+    let w = |reset: i64, minutes: u32| Window { pct: 12.5, resets_at: reset, minutes };
+    let l = |five: i64, week: i64| Limits { five: Some(w(five, 300)), week: Some(w(week, 10_080)), at: 1_000_000 };
+    // на пределе — ещё годится, на секунду дальше — уже нет (каждое окно само по себе)
+    assert_eq!(l(1_018_600, 1_605_400).checked(0), Some(l(1_018_600, 1_605_400)));
+    let got = l(1_018_601, 1_605_400).checked(0).unwrap();
+    assert_eq!((got.five, got.week.map(|x| x.resets_at)), (None, Some(1_605_400)));
+    let got = l(1_018_600, 1_605_401).checked(0).unwrap();
+    assert_eq!((got.five.map(|x| x.resets_at), got.week), (Some(1_018_600), None));
+    // пробные данные проверки (2100 год), миллисекунды вместо секунд, отрицательное — окна нет вовсе
+    for bad in [4_102_444_800, 1_794_700_800_000, -1, i64::MAX] {
+        assert_eq!(l(bad, bad).checked(0), None, "{bad}");
+    }
+    // время сброса неизвестно (0) и уже прошедшее — допустимы
+    assert!(l(0, 0).checked(0).is_some());
+    assert!(l(999_000, 5).checked(0).is_some());
+    // миг получения неизвестен (at = 0) — меряем от «сейчас»
+    let no_at = Limits { five: Some(w(2_000_000, 300)), week: None, at: 0 };
+    assert!(no_at.checked(1_990_000).is_some());
+    assert_eq!(no_at.checked(1_000_000), None);
+    // длина окна неизвестна (Codex без window_minutes) — предел 8 суток: 1 000 000 + 691 200 + 600
+    let unk = |reset: i64| Limits { five: Some(w(reset, 0)), week: None, at: 1_000_000 };
+    assert!(unk(1_691_800).checked(0).is_some());
+    assert_eq!(unk(1_691_801).checked(0), None);
+}
+
+/// То же сквозь чтение файлов: в папке сеанса лежат пробные данные с невозможным сбросом — программа не показывает их,
+/// а берёт правдоподобную сохранённую копию; если и та невозможна — честное «неизвестно».
+#[test]
+fn implausible_limits_file_is_not_shown() {
+    with_fake_home("cl_bad", |_| {
+        let now = crate::ui::now_secs();
+        let body =
+            |p: u32, reset: i64| format!("{{\"rate_limits\":{{\"five_hour\":{{\"used_percentage\":{p},\"resets_at\":{reset}}}}},\"at\":{now}}}");
+        crate::store::write_private_quick(&claude_limits_path(), body(12, 4_102_444_800).as_bytes()).unwrap();
+        assert_eq!(claude_limits(), None);
+        crate::store::write_private_quick(&claude_limits_saved_path(), body(33, now + 3_600).as_bytes()).unwrap();
+        assert_eq!(claude_limits().unwrap().five.unwrap().pct, 33.0);
+        crate::store::write_private_quick(&claude_limits_saved_path(), body(33, now + 86_400).as_bytes()).unwrap();
+        assert_eq!(claude_limits(), None);
+    });
 }
 
 #[test]
@@ -881,8 +919,8 @@ fn codex_schema_input_includes_cache() {
     let t = Tmp::new("cx");
     std::fs::create_dir_all(t.p("sessions/2026/11/15")).unwrap();
     let mut b = cx_ctx("gpt-x", "/w/proj");
-    b += &cx_tok(&ts_ago(500), 1000, 600, 50, 1000, 50, 10.0, 5.0, 9_000_000_000, 9_100_000_000);
-    b += &cx_tok(&ts_ago(400), 2000, 1500, 70, 3000, 120, 12.0, 6.0, 9_000_000_000, 9_100_000_000);
+    b += &cx_tok(&ts_ago(500), 1000, 600, 50, 1000, 50, 10.0, 5.0, crate::ui::now_secs() + 3_000, crate::ui::now_secs() + 80_000);
+    b += &cx_tok(&ts_ago(400), 2000, 1500, 70, 3000, 120, 12.0, 6.0, crate::ui::now_secs() + 3_000, crate::ui::now_secs() + 80_000);
     std::fs::write(t.p("sessions/2026/11/15/r.jsonl"), b).unwrap();
     let st = new_state();
     scan_codex(&st, &t.0);
@@ -916,7 +954,7 @@ fn codex_cached_larger_than_input_saturates() {
 fn codex_repeated_token_count_event_counts_once() {
     let t = Tmp::new("cx_dup");
     std::fs::create_dir_all(t.p("sessions/a")).unwrap();
-    let e = cx_tok(&ts_ago(100), 1000, 0, 100, 1000, 100, 1.0, 1.0, 9_000_000_000, 9_100_000_000);
+    let e = cx_tok(&ts_ago(100), 1000, 0, 100, 1000, 100, 1.0, 1.0, crate::ui::now_secs() + 3_000, crate::ui::now_secs() + 80_000);
     std::fs::write(t.p("sessions/a/r.jsonl"), format!("{e}{e}")).unwrap();
     let st = new_state();
     scan_codex(&st, &t.0);
@@ -928,8 +966,8 @@ fn codex_repeated_token_count_event_counts_once() {
 fn codex_limits_latest_by_timestamp_not_file_order() {
     let t = Tmp::new("cx_lim");
     std::fs::create_dir_all(t.p("sessions/a")).unwrap();
-    let mut b = cx_tok(&ts_ago(100), 1, 0, 1, 1, 1, 50.0, 10.0, 9_000_000_000, 9_100_000_000);
-    b += &cx_tok(&ts_ago(5000), 1, 0, 1, 2, 2, 99.0, 99.0, 9_000_000_000, 9_100_000_000);
+    let mut b = cx_tok(&ts_ago(100), 1, 0, 1, 1, 1, 50.0, 10.0, crate::ui::now_secs() + 3_000, crate::ui::now_secs() + 80_000);
+    b += &cx_tok(&ts_ago(5000), 1, 0, 1, 2, 2, 99.0, 99.0, crate::ui::now_secs() + 3_000, crate::ui::now_secs() + 80_000);
     std::fs::write(t.p("sessions/a/r.jsonl"), b).unwrap();
     let st = new_state();
     scan_codex(&st, &t.0);
@@ -942,7 +980,7 @@ fn codex_limits_latest_by_timestamp_not_file_order() {
 #[test]
 fn claude_limits_saved_copy_fallback_chain() {
     with_fake_home("cl_lim", |_| {
-        let body = |p: u32| format!("{{\"rate_limits\":{{\"five_hour\":{{\"used_percentage\":{p},\"resets_at\":4102444800}}}},\"at\":7}}");
+        let body = |p: u32| format!("{{\"rate_limits\":{{\"five_hour\":{{\"used_percentage\":{p},\"resets_at\":1000}}}},\"at\":7}}");
         // ни сессии, ни копии
         assert_eq!(claude_limits(), None);
         // только копия (после перезагрузки папка сеанса пуста)

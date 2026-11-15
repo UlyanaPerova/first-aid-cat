@@ -14,6 +14,11 @@ pub fn config_dir() -> PathBuf {
     if let Some(x) = std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from).filter(|p| p.is_absolute()) {
         return x.join("aptechka");
     }
+    // тест не подменил папку — всё равно не настоящая: своя временная на этот запуск тестов (на любой системе)
+    #[cfg(test)]
+    if true {
+        return std::env::temp_dir().join(format!("aptechka-test-{}", std::process::id()));
+    }
     // без домашней папки — личная папка сеанса ($XDG_RUNTIME_DIR, 0700), а не общий /tmp (там её мог бы
     // заранее занять другой пользователь)
     let home = || {

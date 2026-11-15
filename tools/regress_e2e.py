@@ -13,7 +13,10 @@
 import json, os, shutil, stat, subprocess, sys, tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BIN = os.path.join(ROOT, 'engine', 'target', 'release', 'aptechka')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from regress_isolation import isolated_env, preflight  # noqa: E402
+
+BIN = os.path.join(ROOT, 'engine', 'target', 'release', 'aptechka' + ('.exe' if os.name == 'nt' else ''))
 if '--bin' in sys.argv:
     BIN = sys.argv[sys.argv.index('--bin') + 1]
 NET = '--no-net' not in sys.argv
@@ -29,37 +32,9 @@ def check(name, ok, info=''):
     print(('ok    ' if ok else 'ОШИБКА'), name, info)
 
 
-def real_files():
-    """Настоящие файлы лимитов человека (папка сеанса и копия в настройках) — их проверки трогать не должны.
-
-    2026-11-15 ранняя версия этого скрипта на macOS не подменяла TMPDIR, и выдуманные лимиты (12,5 % и 40 %, сброс в 2100 году)
-    попали в настоящую папку сеанса: программа показала их человеку. Поэтому снимок «до» сверяется с «после»."""
-    h = os.path.expanduser('~')
-    dirs = [os.path.join(os.environ.get('TMPDIR', '/tmp'), 'aptechka'), os.path.join(h, 'Library/Application Support/aptechka'),
-            os.path.join(os.environ.get('XDG_RUNTIME_DIR', '/nonexistent'), 'aptechka'),
-            os.path.join(os.environ.get('XDG_CONFIG_HOME', os.path.join(h, '.config')), 'aptechka')]
-    out = {}
-    for d in dirs:
-        p = os.path.join(d, 'claude_limits.json')
-        try:
-            out[p] = open(p, 'rb').read()
-        except OSError:
-            out[p] = None
-    return out
-
-
 def mk():
     root = tempfile.mkdtemp(prefix='aptechka_e2e_')
-    run = os.path.join(root, 'run')
-    os.makedirs(run, mode=0o700)
-    env = dict(os.environ)
-    for k in list(env):
-        if k.startswith(('TRAY_', 'UI_', 'WIDGET_', 'FRAMES', 'DRY_RUN', 'SPEED_BUSY', 'CLAUDE_')):
-            del env[k]
-    tmp = os.path.join(root, 'tmp')
-    os.makedirs(tmp)
-    # TMPDIR — для macOS (папка сеанса там берётся из неё), XDG_RUNTIME_DIR — для Linux
-    env.update(HOME=root, XDG_CONFIG_HOME=os.path.join(root, '.config'), XDG_RUNTIME_DIR=run, TMPDIR=tmp, APTECHKA_LANG='ru')
+    env = isolated_env(root)
     return root, env
 
 
@@ -77,6 +52,13 @@ def tree(root):
 def main():
     if not os.access(BIN, os.X_OK):
         sys.exit(f'нет бинарника {BIN}')
+    # ---------------- 0. изоляция: программа пишет только во временную папку ----------------
+    root, env = mk()
+    bad = preflight(BIN, env, root)
+    check('изоляция: пробная запись осталась во временной папке, настоящие папки человека не тронуты', bad is None, bad or '')
+    shutil.rmtree(root, ignore_errors=True)
+    if bad or '--isolation-only' in sys.argv:
+        sys.exit(1 if bad else 0)
     # ---------------- 1. строка состояния ----------------
     root, env = mk()
     sess = (os.path.join(root, 'run'), os.path.join(root, 'tmp'))
@@ -172,12 +154,9 @@ def main():
                 bad.append(os.path.relpath(p, root))
         check('--diag: выдуманные ключи не в файлах настроек и сеанса', not bad, ', '.join(bad))
         shutil.rmtree(root, ignore_errors=True)
-    touched = [p for p, v in real_files().items() if v != BEFORE[p] and (v is None or b'4102444800' in v)]
-    check('настоящие файлы лимитов человека не тронуты', not touched, ', '.join(os.path.basename(os.path.dirname(os.path.dirname(p))) for p in touched))
     n_bad = sum(1 for r in results if not r[1])
     print(f'\nпроверок {len(results)}, ошибок {n_bad}')
     sys.exit(1 if n_bad else 0)
 
 
-BEFORE = real_files()
 main()

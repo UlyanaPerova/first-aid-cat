@@ -47,7 +47,22 @@ impl Window {
     }
 }
 
+/// Правдоподобно ли окно, полученное в миг `at`: сброс не может быть дальше длины самого окна (плюс 10 минут на
+/// расхождение часов; длина неизвестна — не дальше 8 суток) и не может быть отрицательным. Иначе это мусор в файле:
+/// так в плашку попал «сброс через 26709 дн» из пробных данных. Время сброса 0 — «неизвестно», это допустимо.
+fn plausible(w: &Window, at: i64) -> bool {
+    let len = if w.minutes > 0 { i64::from(w.minutes) * 60 } else { 8 * 86_400 };
+    w.resets_at >= 0 && w.resets_at <= at.saturating_add(len).saturating_add(600)
+}
+
 impl Limits {
+    /// Убрать неправдоподобные окна (см. `plausible`); None — не осталось ни одного. `at` 0 — миг неизвестен, меряем от «сейчас».
+    fn checked(self, now: i64) -> Option<Limits> {
+        let at = if self.at > 0 { self.at } else { now };
+        let l = Limits { five: self.five.filter(|w| plausible(w, at)), week: self.week.filter(|w| plausible(w, at)), at: self.at };
+        (l.five.is_some() || l.week.is_some()).then_some(l)
+    }
+
     /// Самый заполненный лимит сейчас (для значка в панели; на macOS значка пока нет).
     #[cfg_attr(target_os = "macos", allow(dead_code))]
     pub fn top(&self, now: i64) -> Option<f64> {
@@ -372,6 +387,8 @@ fn claude_limits_saved_path() -> PathBuf {
 /// последние сохранённые (None — Claude Code с нашей строкой состояния ещё ни разу не отвечал).
 pub fn claude_limits() -> Option<Limits> {
     let read = |p: PathBuf| crate::store::read_capped(&p, 4096).ok().and_then(|t| parse_claude_limits(&t));
+    let now = crate::ui::now_secs();
+    let read = |p| read(p).and_then(|l: Limits| l.checked(now));
     read(claude_limits_path()).or_else(|| read(claude_limits_saved_path()))
 }
 
@@ -429,7 +446,7 @@ fn codex_line(v: &serde_json::Value, st: &mut FileState, _seen: &mut HashSet<u64
             week: window(rl.get("secondary"), "used_percent", mins(rl.get("secondary"))),
             at: t,
         };
-        if (l.five.is_some() || l.week.is_some()) && st.limits.is_none_or(|old| old.at <= t) {
+        if let Some(l) = l.checked(t).filter(|_| st.limits.is_none_or(|old| old.at <= t)) {
             st.limits = Some(l);
         }
     }

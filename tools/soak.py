@@ -22,6 +22,9 @@ FRAMES даёт ровно N файлов; убитый запуск не ост
 import argparse, hashlib, json, os, random, resource, shutil, signal, struct, subprocess, sys, tempfile, time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from regress_isolation import isolated_env, require  # noqa: E402
+
 BIN = os.path.join(ROOT, 'engine', 'target', 'release', 'aptechka')
 
 
@@ -68,14 +71,9 @@ def count_files(d):
 class Env:
     def __init__(self):
         self.root = tempfile.mkdtemp(prefix='aptechka_soak_')
-        self.run = os.path.join(self.root, 'run')
-        os.makedirs(self.run, mode=0o700)
-        self.env = dict(os.environ)
-        for k in list(self.env):
-            if k.startswith(('TRAY_', 'UI_', 'WIDGET_', 'FRAMES', 'DRY_RUN', 'SPEED_BUSY')):
-                del self.env[k]
-        self.env.update(HOME=self.root, XDG_CONFIG_HOME=os.path.join(self.root, 'cfg'), XDG_RUNTIME_DIR=self.run,
-                        XDG_CACHE_HOME=os.path.join(self.root, 'cache'), APTECHKA_LANG='ru', NODIAG='1')
+        self.env = isolated_env(self.root)
+        self.env.update(XDG_CONFIG_HOME=os.path.join(self.root, 'cfg'), NODIAG='1')
+        self.run = self.env['XDG_RUNTIME_DIR']
 
     def close(self):
         shutil.rmtree(self.root, ignore_errors=True)
@@ -131,6 +129,7 @@ def main():
         sys.exit(f'нет бинарника {BIN}: cargo build --release в engine/')
     rnd = random.Random(a.seed)
     env = Env()
+    require(BIN, env.env, env.root)  # программа пишет только во временную папку — иначе не начинаем
     rust = None
     if a.rust:
         e = dict(os.environ, REGRESS_SOAK_SECS=str(int(a.minutes * 60)), REGRESS_CSV=a.csv + '.rust.csv')
