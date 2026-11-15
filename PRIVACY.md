@@ -32,7 +32,7 @@ Checks for AI tools you don't have installed are skipped. Every check can be swi
 
 ## What it stores
 
-The app keeps no long-term history of measurements: no speed log, no scan cache in your settings. While it runs, though, the latest results are written to a temporary folder (below). On some systems that folder is on disk, so results can stay there for a while, for example after a crash. This section says exactly where and for how long.
+The app keeps no long-term history of measurements, with one exception, the history of your external IP address (below): no speed log, no scan cache in your settings. While it runs, though, the latest results are written to a temporary folder (below). On some systems that folder is on disk, so results can stay there for a while, for example after a crash. This section says exactly where and for how long.
 
 **In the settings folder** (permanent, owner-only: `0600` files in a `0700` folder, written atomically):
 
@@ -43,6 +43,8 @@ The app keeps no long-term history of measurements: no speed log, no scan cache 
 | `фразы_кота.txt` (only if you create it) | your own phrases for the cat; read once at start, never written | until you delete it |
 | `snapshot.json` | your themes and extensions as you saved them (to notice when something breaks); written only when you press "Save current as baseline" | until you save again |
 | `backups/` | a copy of a config file before the app edits it (for example before removing a proxy line), for undo. Lines that look like secrets are masked | 7 days, at most 10 copies |
+| `ip_history.json` | your external IP address over time: each address, its country code, when it was first and last seen. Shown in the tooltip of "My external IP" so you can see how stable the address is. Never sent anywhere | 30 days, at most 300 records; delete the file to erase it |
+| `claude_limits.json` | the last known Claude Code limits (percentages and reset times), so the rings survive a reboot | overwritten by each new answer |
 | `widget.json` (macOS) | the few short rows the WidgetKit widget shows | overwritten each run |
 
 **In the temporary session folder** (a `0700` folder owned by you, not a symlink, not shared with other users). The window and the widget are separate processes, and this folder is how they share results:

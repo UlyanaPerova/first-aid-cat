@@ -3295,7 +3295,9 @@ impl P<'_, '_> {
         let tip = s.tip.as_ref()?;
         let k = s.k;
         let px = self.fs(12);
-        let lines = self.g.fonts.wrap(&tip.text, 340 * k, px, false, 8);
+        // подсказка из нескольких строк (история внешнего IP) — шире и длиннее обычной: запись не должна рваться пополам
+        let (maxw, max_lines) = if tip.text.contains('\n') { (560, 10) } else { (340, 8) };
+        let lines = self.g.fonts.wrap(&tip.text, maxw * k, px, false, max_lines);
         let mut w = 0;
         for l in &lines {
             w = w.max(self.g.fonts.width(l, px, false));

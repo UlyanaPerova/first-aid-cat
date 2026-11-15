@@ -701,7 +701,11 @@ pub(crate) fn vpn_summary_full(up: &[String], installed: bool, apps: &[String], 
     let (ip, exit, org) = where_am_i(&sig);
     if let Some(ip) = &ip {
         let c = exit.as_ref().map(|c| format!("· {c}")).unwrap_or_default();
-        out.push(Check::new("net", "Мой внешний IP", INFO, &format!("{ip} {c}")).hint(&trunc(&org, 60)));
+        // подсказка: провайдер и история адреса — когда менялся, на что и сколько держался (iphist.rs)
+        let mut tip = vec![trunc(&org, 60)];
+        tip.extend(crate::iphist::note(ip, exit.as_deref().unwrap_or(""), crate::ui::now_secs()));
+        tip.retain(|l| !l.is_empty());
+        out.push(Check::new("net", "Мой внешний IP", INFO, &format!("{ip} {c}")).hint(&tip.join("\n")));
     }
     let home_s = home.clone().unwrap_or_else(|| "?".into());
     let c = match (exit.as_deref(), home.as_deref()) {

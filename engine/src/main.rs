@@ -49,6 +49,7 @@ mod fixes;
 mod footprint;
 mod gfx;
 mod i18n;
+mod iphist;
 mod licenses;
 mod life;
 mod limits;

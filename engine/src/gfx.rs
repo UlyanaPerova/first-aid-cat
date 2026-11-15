@@ -461,7 +461,13 @@ impl Fonts {
         let s = crate::i18n::tr(s);
         let mut lines: Vec<String> = Vec::new();
         let mut cur = String::new();
-        for word in s.split_whitespace() {
+        // перевод строки в тексте — начало новой строки (подсказка с историей: по записи на строку)
+        for (n, word) in
+            s.split('\n').enumerate().flat_map(|(n, para)| para.split_whitespace().enumerate().map(move |(i, w)| (if i == 0 { n } else { 0 }, w)))
+        {
+            if n > 0 && !cur.is_empty() {
+                lines.push(std::mem::take(&mut cur));
+            }
             let cand = if cur.is_empty() { word.to_string() } else { format!("{cur} {word}") };
             if self.width(&cand, px, bold) <= maxw {
                 cur = cand;
