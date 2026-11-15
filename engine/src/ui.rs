@@ -161,7 +161,10 @@ pub enum Hit {
     SessionsBtn,
     SessionCopy(u8),
     SessionOpen(u8),
-    BalloonClose,
+    /// «⋯» у реплики кота: список нынешних проблем
+    BalloonMore,
+    /// пункт этого списка: перейти к проблеме (номер в `St::problems`)
+    Problem(u8),
     Fix(u16),
     /// «Игнорировать» / «Не игнорировать» у строки
     Ignore(u16),
@@ -220,6 +223,8 @@ enum Popup {
     Menu(u8),
     Heal,
     Sessions,
+    /// список проблем от кнопки «⋯» у реплики кота
+    Problems,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -472,6 +477,9 @@ struct SpravkaState {
     analytics: Option<spravka::Analytics>,
 }
 
+/// Строка списка «⋯» у реплики, когда бед нет.
+const NO_PROBLEMS: &str = "Проблем нет — всё в порядке";
+
 /// Всплывающая подсказка: текст и где стояла мышь.
 struct Tip {
     text: String,
@@ -521,7 +529,6 @@ struct St {
     speed_vals: [Option<f64>; 3], // вниз, вверх, пинг
     speed_live: Option<SpeedLive>,
     balloon: String,
-    balloon_closed: Option<String>,
     avatar: Option<Pixmap>,
     log: Vec<String>,
     log_vis: bool,
@@ -588,6 +595,20 @@ impl St {
     }
 
     /// Названия нынешних красных и жёлтых строк (игнорируемые уже «для сведения» — их тут нет).
+    /// Нынешние беды для списка «⋯» у реплики: (название, статус, раздел), красные раньше жёлтых.
+    fn problems(&self) -> Vec<(String, String, &'static str)> {
+        let mut v: Vec<(String, String, &'static str)> = self
+            .checks
+            .iter()
+            .chain(self.speed_rows())
+            .filter(|c| matches!(c.status.as_str(), "bad" | "warn") && unit_on(c.unit) && !self.ignored.contains(&c.title))
+            .map(|c| (c.title.clone(), c.status.clone(), c.key))
+            .collect();
+        v.sort_by_key(|p| p.1 != "bad");
+        v.dedup_by(|a, b| a.0 == b.0);
+        v
+    }
+
     fn problem_titles(&self) -> Vec<String> {
         let mut v: Vec<String> = self
             .checks
@@ -689,7 +710,7 @@ impl St {
     }
 
     fn balloon_visible(&self) -> bool {
-        !self.balloon.is_empty() && self.balloon_closed.as_deref() != Some(self.balloon.as_str())
+        !self.balloon.is_empty()
     }
 
     fn main_session(&self) -> Option<&Session> {
@@ -831,7 +852,6 @@ impl Ui {
             speed_vals: [None; 3],
             speed_live: None,
             balloon: "Проверяю…".into(),
-            balloon_closed: None,
             avatar: None,
             // журнал прошлых запусков — сверху, чтобы действия не терялись при перезапуске (например, после обновления)
             log: {
@@ -1002,7 +1022,6 @@ impl Ui {
             Some((_, prev, shown)) if self.st.balloon == shown => prev,
             _ => self.st.balloon.clone(),
         };
-        self.st.balloon_closed = None;
         self.say(text);
         self.quip = Some((Instant::now(), prev, text.to_string()));
     }
@@ -1525,6 +1544,7 @@ impl Ui {
         self.invalidate(g.menubar);
         self.invalidate(g.claude);
         self.invalidate(g.tools[TOOL_HEAL as usize]);
+        self.invalidate(g.balloon);
     }
 
     fn set_tab(&mut self, i: u8) {
@@ -1623,9 +1643,22 @@ impl Ui {
                     self.close_popup();
                 }
             }
-            Hit::BalloonClose => {
-                self.st.balloon_closed = Some(self.st.balloon.clone());
-                self.invalidate_right();
+            // раньше тут был «×»: он прятал и реплику, и кота до следующей проверки — владелица: «крестик там не нужен»
+            Hit::BalloonMore => self.toggle_popup(Popup::Problems),
+            Hit::Problem(i) => {
+                let p = self.st.problems().into_iter().nth(i as usize);
+                self.close_popup();
+                if let Some((title, _, key)) = p {
+                    // на вкладку этой проблемы; строки там идут от бед к порядку, так что она наверху
+                    if let Some(t) = CATS.iter().position(|c| c.key() == key) {
+                        self.set_tab(t as u8);
+                    }
+                    let found = self.st.checks.iter().chain(self.st.speed_rows()).find(|c| c.title == title).cloned();
+                    if let Some(c) = found {
+                        let msg = format!("{}: {}.{}", c.title, c.value, if c.detail.is_empty() { String::new() } else { format!(" {}", c.detail) });
+                        self.say(&msg);
+                    }
+                }
             }
             Hit::Fix(i) => {
                 if let Some(f) = self.st.rows.get(i as usize).and_then(|r| r.fixes.first().cloned()) {
@@ -2056,7 +2089,7 @@ impl Ui {
         }
         // облачко кота (что сейчас происходит) — текстом
         let g = self.st.geo();
-        if !self.st.balloon.is_empty() && self.st.balloon_closed.is_none() {
+        if !self.st.balloon.is_empty() {
             out.push(A11yNode {
                 id: 1,
                 role: A11yRole::Label,
@@ -2181,7 +2214,8 @@ impl Ui {
             Hit::Check => Some("Проверить всё заново".into()),
             Hit::Speed => Some("Скорость интернета. Нажми, чтобы измерить заново".into()),
             Hit::CopyResume => Some("Скопировать команду, чтобы продолжить эту сессию".into()),
-            Hit::BalloonClose => Some("Скрыть подсказку".into()),
+            Hit::BalloonMore => Some("Список проблем".into()),
+            Hit::Problem(_) => None,
             Hit::Fix(i) => row(i).and_then(|r| r.fixes.first()).map(|f| f.label.clone()),
             Hit::IgnoreAll => Some(if self.st.problem_titles().is_empty() {
                 "Снова считать бедой всё, что игнорируется".into()
@@ -2273,7 +2307,7 @@ impl Ui {
                 "check" => Some(Hit::Check),
                 "speed" => Some(Hit::Speed),
                 "copy" => Some(Hit::CopyResume),
-                "bclose" => Some(Hit::BalloonClose),
+                "bmore" => Some(Hit::BalloonMore),
                 _ => n
                     .strip_prefix("tool")
                     .and_then(|v| v.parse().ok())
@@ -2314,6 +2348,8 @@ impl Ui {
             self.st.popup = Popup::Sessions;
         } else if what == "heal" {
             self.st.popup = Popup::Heal;
+        } else if what == "problems" {
+            self.st.popup = Popup::Problems;
         } else if what == "about" {
             cmds.extend(self.menu_act(MenuAct::About));
         } else if let Some(n) = what.strip_prefix("hover") {
@@ -2736,8 +2772,8 @@ impl P<'_, '_> {
             }
         }
         let b = Rect::new(r.x + av + self.u(8), r.y, r.w - av - self.u(8), r.h);
-        let close = Rect::new(b.right() - self.u(22), b.y + self.u(5), self.u(17), self.u(17));
-        self.hit(close, Hit::BalloonClose);
+        let close = self.balloon_more_rect(g);
+        self.hit(close, Hit::BalloonMore);
         if !self.painting(r) {
             return;
         }
@@ -2756,13 +2792,20 @@ impl P<'_, '_> {
             self.text(b.x + self.u(10), base, l, BLACK, px, false);
             y += lh;
         }
-        let down = self.down(Hit::BalloonClose);
+        // «⋯» — список проблем; пока список открыт, кнопка нажата
+        let down = self.down(Hit::BalloonMore) || self.s.popup == Popup::Problems;
         if down {
             self.c.pressed(close, FACE)
         } else {
-            self.c.raised(close, if self.hover(Hit::BalloonClose) { 0xDCD8D0 } else { FACE })
+            self.c.raised(close, if self.hover(Hit::BalloonMore) { 0xDCD8D0 } else { FACE })
         }
-        self.text_c(close, "×", BLACK, self.fs(13), false);
+        self.text_c(close, "…", BLACK, self.fs(13), true);
+    }
+
+    /// Кнопка «⋯» в правом верхнем углу реплики кота.
+    fn balloon_more_rect(&self, g: &Geo) -> Rect {
+        let r = g.balloon;
+        Rect::new(r.right() - self.u(22), r.y + self.u(5), self.u(17), self.u(17))
     }
 
     // ── вкладки ──
@@ -3326,6 +3369,17 @@ impl P<'_, '_> {
                 let x = (sr.right() - w).max(4 * k);
                 Rect::new(x, sr.bottom() + 2 * k, w, n * 40 * k + 8 * k)
             }
+            Popup::Problems => {
+                // под кнопкой «⋯», правым краем к ней
+                let list = self.s.problems();
+                let mut w = self.width(NO_PROBLEMS, px, false);
+                for (t, _, _) in &list {
+                    w = w.max(self.width(t, px, false));
+                }
+                let b = self.balloon_more_rect(&self.geo.clone());
+                let w = (w + 44 * k).min(self.s.w - 8 * k);
+                Rect::new((b.right() - w).max(4 * k), b.bottom() + 2 * k, w, list.len().max(1) as i32 * 24 * k + 6 * k)
+            }
         }
     }
 
@@ -3392,6 +3446,23 @@ impl P<'_, '_> {
                 }
             }
             Popup::Sessions => self.sessions_list(r),
+            Popup::Problems => {
+                let list = self.s.problems();
+                if list.is_empty() {
+                    self.text_l(Rect::new(r.x + 3 * k, r.y + 3 * k, r.w - 6 * k, 24 * k), 10 * k, NO_PROBLEMS, BLACK, px, false);
+                }
+                for (i, (title, status, _)) in list.iter().enumerate().take(250) {
+                    let ir = Rect::new(r.x + 3 * k, r.y + 3 * k + i as i32 * 24 * k, r.w - 6 * k, 24 * k);
+                    let h = Hit::Problem(i as u8);
+                    self.hit(ir, h);
+                    let hov = self.hover(h);
+                    if hov {
+                        self.c.fill(ir, SELECT);
+                    }
+                    self.status_icon(status, ir.x + 5 * k, ir.y + 6 * k, 12 * k, true);
+                    self.text_l(ir, 22 * k, title, if hov { WHITE } else { BLACK }, px, false);
+                }
+            }
             Popup::None => {}
         }
     }
@@ -3724,6 +3795,26 @@ mod tests {
             assert_eq!(u.st.popup, Popup::None);
             assert!(u.take_dirty().iter().any(|r| overlaps(*r, heal)), "кнопка «Полечить» не перерисована");
         }
+    }
+
+    /// «⋯» у реплики кота: открывает список бед (красные раньше жёлтых), щелчок по пункту ведёт на вкладку этой беды.
+    /// Реплика при этом никуда не пропадает (раньше там был «×», прятавший кота до следующей проверки).
+    #[test]
+    fn balloon_more_lists_problems_and_jumps() {
+        let mut u = Ui::new(1, 300, 500);
+        u.set_checks(vec![chk("net", "Жёлтое", "warn", "", &[]), chk("sys", "Красное", "bad", "", &[]), chk("net", "Хорошее", "ok", "", &[])], false);
+        let titles: Vec<String> = u.st.problems().into_iter().map(|p| p.0).collect();
+        assert_eq!(titles, ["Красное", "Жёлтое"]);
+        u.ensure_hits();
+        let b = u.hit_rect(Hit::BalloonMore);
+        u.mouse_down(b.x + b.w / 2, b.y + b.h / 2);
+        u.mouse_up(b.x + b.w / 2, b.y + b.h / 2);
+        assert_eq!(u.st.popup, Popup::Problems);
+        assert!(u.st.balloon_visible());
+        u.activate(Hit::Problem(0));
+        assert_eq!(u.st.popup, Popup::None);
+        assert_eq!(CATS.get(u.st.tab as usize).map(|c| c.key()), Some("sys"));
+        assert!(u.st.balloon_visible());
     }
 
     /// «Игнорировать»: у беды без починки — кнопка во всю ширину, у беды с починкой — рядом с ней (не внахлёст),

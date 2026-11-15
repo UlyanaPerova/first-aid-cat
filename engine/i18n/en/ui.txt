@@ -1000,3 +1000,9 @@ en: Current time
 
 ru: Время последней проверки
 en: Time of the last check
+
+ru: Список проблем
+en: List of problems
+
+ru: Проблем нет — всё в порядке
+en: No problems — all is well
