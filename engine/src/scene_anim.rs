@@ -1,7 +1,7 @@
 // Анимация сценки плашки: что в какой миг включено (моргание, кардиограмма, огурчик, «z», хвост, ушко) и сборка картинки.
 // Данные кадров — scene_anim_px.rs, фон и коты — scene_px.rs. Время — целые миллисекунды от открытия плашки.
 
-use crate::scene_anim_px::{Patch, BLINK_DONE, BLINK_WRITE, EAR, EAR_AT, ECG, PICKLE, TAIL, Z};
+use crate::scene_anim_px::{Patch, BLINK_DONE, BLINK_WRITE, EAR, EAR_AT, ECG, PICKLE, SHY, TAIL, Z};
 use crate::scene_px::{PAL, W};
 
 /// Что включено в один миг. `Frame::default()` — «без анимации»: сценка как в статике.
@@ -19,6 +19,8 @@ pub struct Frame {
     pub tail: u8,
     /// ушко: 0 покой, 1 наклон, 2 сложено
     pub ear: u8,
+    /// смущён (после нажатия на ушко): румянец, у бодрствующего — зажмуренные глаза
+    pub shy: bool,
 }
 
 const ECG_MS: u64 = 120;
@@ -41,6 +43,9 @@ const EAR_TL: [(u64, u8); 3] = [(70, 1), (90, 2), (80, 1)];
 const EAR_MS: u64 = 240;
 /// от нажатия ушко держится сложенным дольше: наклон, сложено почти полсекунды, наклон
 const POKE_TL: [(u64, u8); 3] = [(70, 1), (490, 2), (80, 1)];
+/// смущение от нажатия: появляется, когда ушко сложилось, и держится ещё полторы секунды после его возврата
+const SHY_FROM: u64 = 70;
+const SHY_TO: u64 = 640 + 1500;
 const EARS_IN_LOOP: u64 = 16;
 
 /// Случайное, но всегда одно и то же число по номеру (splitmix64) — моргание не выглядит механическим.
@@ -109,6 +114,7 @@ pub fn frame_poked(state: u8, t: u64, poke: Option<u64>) -> Frame {
     if let Some((pose, _)) = poke.filter(|p| t >= *p).and_then(|p| step_of(&POKE_TL, t - p)) {
         f.ear = pose;
     }
+    f.shy = poke.is_some_and(|p| t >= p + SHY_FROM && t < p + SHY_TO);
     f
 }
 
@@ -117,7 +123,8 @@ pub fn next_change_poked(state: u8, t: u64, poke: Option<u64>) -> u64 {
     let n = next_change(state, t);
     match poke {
         Some(p) if t < p => n.min(p),
-        Some(p) => step_of(&POKE_TL, t - p).map_or(n, |(_, end)| n.min(p + end)),
+        Some(p) if t < p + SHY_TO => step_of(&POKE_TL, t - p).map_or(n.min(p + SHY_TO), |(_, end)| n.min(p + end)),
+        Some(_) => n,
         None => n,
     }
 }
@@ -186,6 +193,7 @@ pub fn frame(state: u8, t: u64) -> Frame {
         z: if state == 0 { (t / Z_MS % 3) as u8 } else { 0 },
         tail: tail_at(state, t).0,
         ear: ear_at(t).0,
+        shy: false,
     }
 }
 
@@ -234,6 +242,7 @@ struct Decoded {
     z: Vec<Cells>,
     tail: Vec<Vec<Cells>>,
     ear: Vec<Vec<Cells>>,
+    shy: Vec<Option<Cells>>,
 }
 
 fn decoded() -> &'static Decoded {
@@ -246,6 +255,7 @@ fn decoded() -> &'static Decoded {
         z: Z.iter().map(decode).collect(),
         tail: TAIL.iter().map(|s| s.iter().map(decode).collect()).collect(),
         ear: EAR.iter().map(|s| s.iter().map(decode).collect()).collect(),
+        shy: SHY.iter().map(|p| p.as_ref().map(decode)).collect(),
     })
 }
 
@@ -273,6 +283,10 @@ fn overlays(state: u8, f: &Frame) -> Vec<&'static Cells> {
         if blinks(state) {
             v.extend(b.get(usize::from(f.blink) - 1));
         }
+    }
+    // смущение — поверх моргания: глаза остаются зажмуренными
+    if f.shy {
+        v.extend(d.shy.get(usize::from(state).min(2)).and_then(Option::as_ref));
     }
     v
 }
@@ -418,7 +432,18 @@ mod tests {
         // нажатие в миг 1000: наклон до 1070, сложено до 1560, наклон до 1640, потом как без нажатия
         let k = |t| frame_poked(1, t, Some(1000)).ear;
         assert_eq!([k(999), k(1000), k(1069), k(1070), k(1559), k(1560), k(1639), k(1640)], [0, 1, 1, 2, 2, 1, 1, 0]);
-        assert_eq!(frame_poked(1, 1640, Some(1000)), frame(1, 1640));
+        // смущение: с мига, когда ушко сложилось (1070), и ещё 1,5 с после его возврата (до 3140)
+        let s = |t| frame_poked(2, t, Some(1000)).shy;
+        assert_eq!([s(1069), s(1070), s(1640), s(3139), s(3140)], [false, true, true, true, false]);
+        assert!(!frame(2, 1500).shy && !frame_poked(2, 1500, None).shy);
+        assert_eq!(next_change_poked(2, 3100, Some(1000)).min(3140), next_change(2, 3100).min(3140));
+        assert_eq!(frame_poked(1, 3140, Some(1000)), frame(1, 3140));
+        // у «пишет» лица ещё нет: картинка от смущения не меняется; у «спит» и «закончил» — меняется
+        let still: Vec<u32> = vec![0x0100_0000; (W * crate::scene_px::H) as usize];
+        let shy = Frame { shy: true, ..Frame::default() };
+        assert_eq!(compose(1, &still, &shy), still);
+        assert_ne!(compose(0, &still, &shy), still);
+        assert_ne!(compose(2, &still, &shy), still);
         assert_eq!(frame_poked(1, 500, None), frame(1, 500));
         // будильник: до нажатия — не позже его мига, во время движения — на границах шагов
         assert_eq!(next_change_poked(1, 990, Some(1000)), 1000);
@@ -447,7 +472,16 @@ mod tests {
 
     #[test]
     fn patches_inside_box() {
-        for p in ECG.iter().chain(&PICKLE).chain(&BLINK_WRITE).chain(&BLINK_DONE).chain(&Z).chain(TAIL.iter().flatten()).chain(EAR.iter().flatten()) {
+        for p in ECG
+            .iter()
+            .chain(&PICKLE)
+            .chain(&BLINK_WRITE)
+            .chain(&BLINK_DONE)
+            .chain(&Z)
+            .chain(TAIL.iter().flatten())
+            .chain(EAR.iter().flatten())
+            .chain(SHY.iter().flatten())
+        {
             let (x, y, w, h, _) = *p;
             assert!(x >= 0 && y >= 0 && x + w <= W && y + h <= H);
             let c = decode(p);

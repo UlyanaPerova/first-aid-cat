@@ -88,7 +88,7 @@ fn oracle(state: u8, t: u64) -> Frame {
         }
         o -= 240;
     }
-    Frame { blink, ecg: Some(ecg), pickle, z, tail, ear }
+    Frame { blink, ecg: Some(ecg), pickle, z, tail, ear, shy: false }
 }
 
 #[test]
@@ -217,10 +217,10 @@ fn case_frame(name: &str) -> (u8, Frame) {
         "blink" => (n(1), Frame { blink: n(2), ..Frame::default() }),
         "z" => (n(1), Frame { z: n(2), ..Frame::default() }),
         "combo" => match p[1] {
-            "a" => (1, Frame { tail: 2, ecg: Some(5), pickle: 1, blink: 2, z: 0, ear: 0 }),
-            "b" => (0, Frame { tail: 3, ecg: Some(11), pickle: 2, blink: 0, z: 2, ear: 0 }),
-            "c" => (2, Frame { tail: 1, ecg: Some(0), pickle: 1, blink: 1, z: 0, ear: 0 }),
-            "d" => (1, Frame { tail: 3, ecg: Some(19), pickle: 2, blink: 1, z: 0, ear: 0 }),
+            "a" => (1, Frame { tail: 2, ecg: Some(5), pickle: 1, blink: 2, z: 0, ear: 0, shy: false }),
+            "b" => (0, Frame { tail: 3, ecg: Some(11), pickle: 2, blink: 0, z: 2, ear: 0, shy: false }),
+            "c" => (2, Frame { tail: 1, ecg: Some(0), pickle: 1, blink: 1, z: 0, ear: 0, shy: false }),
+            "d" => (1, Frame { tail: 3, ecg: Some(19), pickle: 2, blink: 1, z: 0, ear: 0, shy: false }),
             x => panic!("неизвестный состав {x}"),
         },
         x => panic!("неизвестный кадр {x}"),
@@ -258,6 +258,7 @@ fn compose_changes_only_inside_patch_boxes_and_is_idempotent() {
             z: if state == 0 { r.below(3) as u8 } else { 0 },
             tail: r.below(4) as u8,
             ear: r.below(3) as u8,
+            shy: false,
         };
         let out = compose(state, &s, &f);
         assert_eq!(out.len(), s.len());
@@ -306,7 +307,7 @@ fn compose_changes_only_inside_patch_boxes_and_is_idempotent() {
 /// Короткая или пустая картинка-основа и «чужие» значения кадра: без паники, без расползания по памяти.
 #[test]
 fn compose_tolerates_bad_inputs() {
-    let f = Frame { blink: 2, ecg: Some(255), pickle: 2, z: 2, tail: 3, ear: 2 };
+    let f = Frame { blink: 2, ecg: Some(255), pickle: 2, z: 2, tail: 3, ear: 2, shy: true };
     for state in [0u8, 1, 2, 9] {
         let _ = compose(state, &[], &f);
         let short = vec![0u32; 1000];
@@ -315,7 +316,7 @@ fn compose_tolerates_bad_inputs() {
     }
     // номера вне диапазона просто пропускаются
     let s = still(1);
-    assert_eq!(compose(1, &s, &Frame { blink: 9, ecg: Some(200), pickle: 9, z: 9, tail: 9, ear: 9 }), s);
+    assert_eq!(compose(1, &s, &Frame { blink: 9, ecg: Some(200), pickle: 9, z: 9, tail: 9, ear: 9, shy: false }), s);
 }
 
 // ───────────── разжимание и целостность данных ─────────────

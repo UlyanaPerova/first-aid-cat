@@ -2287,11 +2287,10 @@ pub fn shot(path: &str) {
     let t = Tpl::new(k);
     let (w, h) = t.size(agents.len());
     let mut buf = vec![0u32; (w * h) as usize];
-    // TRAY_T=секунды — кадр анимации сценки в этот миг от открытия плашки; без него — статичная сценка
-    let fr = std::env::var("TRAY_T")
-        .ok()
-        .and_then(|v| v.parse::<f64>().ok())
-        .map_or(Frame::default(), |s| crate::scene_anim::frame(icon_choice(), (s.max(0.0) * 1000.0).round() as u64));
+    // TRAY_T=секунды — кадр анимации сценки в этот миг от открытия плашки; без него — статичная сценка.
+    // TRAY_POKE=секунды — в этот миг кота тронули за ушко
+    let secs = |k: &str| std::env::var(k).ok().and_then(|v| v.parse::<f64>().ok()).map(|s| (s.max(0.0) * 1000.0).round() as u64);
+    let fr = secs("TRAY_T").map_or(Frame::default(), |ms| crate::scene_anim::frame_poked(icon_choice(), ms, secs("TRAY_POKE")));
     {
         let mut c = Canvas::new(&mut buf, w as usize, w, h);
         paint(&mut Fonts::new(), &agents, crate::ui::now_secs(), &t, &fr, &mut c);
