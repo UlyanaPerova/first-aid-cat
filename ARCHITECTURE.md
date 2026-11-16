@@ -70,7 +70,10 @@ First Aid Cat is one Rust crate (`engine/`) that builds a single binary, `aptech
 | `notify.rs` | Desktop notification when a new problem appears in a category where something is ignored |
 | `single.rs` | One instance per user; a second launch asks the first to show its window (the widget has its own lock, `widget.lock`) |
 | `limits.rs` | AI subscription limits and token usage: Codex limits and tokens from its session logs, Claude Code limits from its status line (`--statusline`, connected in `~/.claude/settings.json`), Claude tokens from its logs; logs are read incrementally |
-| `tray.rs` | The AI limits icon in the panel (`--tray`): StatusNotifierItem over D-Bus on Linux, a notification-area icon with the number drawn on it on Windows; the popup with limits; its own autostart entry |
+| `tray.rs` | The AI limits icon in the panel (`--tray`): StatusNotifierItem over D-Bus on Linux (with the app's own GNOME Shell extension where there is one), a notification-area icon with the number drawn on it on Windows, a menu-bar item on macOS; the popup with limits; its own autostart entry |
+| `scene.rs`, `scene_px.rs`, `scene_anim.rs`, `scene_anim_px.rs` | The cat at his desk at the bottom of the limits popup: three poses and their animation (blink, tail, ears, writing, the reaction to a click on an ear), stored as pixel data generated from the artwork |
+| `iphist.rs` | History of the external IP address (30 days, in the settings folder), shown in the tooltip of "My external IP" |
+| `xplat.rs` | Checks shared by macOS and Windows that Linux does in `diag.rs`: connection, Wi-Fi, load and memory, VPN client restarts |
 | `clip.rs` | Clipboard without GTK |
 | `i18n.rs` | Interface language (see below) |
 | `quips.rs` | What the cat says in the balloon and the widget |

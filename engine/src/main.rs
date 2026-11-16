@@ -1956,6 +1956,10 @@ fn main() {
         limits::sync_with(Some(want));
         return;
     }
+    if let Ok(path) = std::env::var("TRAY_ICON_SHOT") {
+        tray::icon_shot(&path);
+        return;
+    }
     if let Ok(path) = std::env::var("TRAY_SHOT") {
         tray::shot(&path);
         return;

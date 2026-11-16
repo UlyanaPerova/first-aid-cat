@@ -5,7 +5,7 @@
 //! раз в 30 секунд и читают журналы по кусочку. Один на пользователя (замок tray.lock).
 //! Linux — StatusNotifierItem по D-Bus (в GNOME его показывает расширение AppIndicator, текст рядом со
 //! значком — свойство XAyatanaLabel; в KDE текста нет, только значок и подсказка).
-// macOS: значка в строке меню пока нет (следующий шаг) — общие части модуля там пока не используются
+//! macOS — значок в строке меню (tray_mac.rs), Windows — значок с числом в области уведомлений.
 #![cfg_attr(target_os = "macos", allow(dead_code))]
 
 use std::num::NonZeroU32;
@@ -2335,6 +2335,42 @@ pub fn shot(path: &str) {
     {
         let mut c = Canvas::new(&mut buf, w as usize, w, h);
         paint(&mut Fonts::new(), &agents, crate::ui::now_secs(), &t, &fr, &mut c);
+    }
+    let rgb: Vec<u8> = buf.iter().flat_map(|p| [(p >> 16) as u8, (p >> 8) as u8, *p as u8]).collect();
+    let Ok(f) = std::fs::File::create(path) else { return };
+    let mut e = png::Encoder::new(f, w as u32, h as u32);
+    e.set_color(png::ColorType::Rgb);
+    if let Ok(mut wr) = e.write_header() {
+        let _ = wr.write_image_data(&rgb);
+    }
+}
+
+/// TRAY_ICON_SHOT=файл.png — значок с числом, как он выглядит в тёмной верхней панели (для README);
+/// TRAY_SCENE=0/1/2 — спит, идёт, сидит; число — из образца данных; UI_K — масштаб.
+pub fn icon_shot(path: &str) {
+    let k: i32 = std::env::var("UI_K").ok().and_then(|v| v.parse().ok()).unwrap_or(1).clamp(1, 4);
+    if let Some(st) = std::env::var("TRAY_SCENE").ok().and_then(|v| v.parse::<u8>().ok()) {
+        STATE.store(st.min(2), std::sync::atomic::Ordering::Relaxed);
+    }
+    let text = label_with(&sample_agents(), crate::ui::now_secs(), 0, 0);
+    let text = text.trim();
+    let (side, pad, px) = (22 * k, 10 * k, (14 * k) as u16);
+    let mut fonts = Fonts::new();
+    let (w, h) = (pad + side + 6 * k + fonts.width(text, px, true) + pad, 32 * k);
+    let mut buf = vec![0x1D1D1Du32; (w * h) as usize];
+    if let Some((n, icon)) = icon_rgba(side as u32) {
+        let (x0, y0) = (pad as usize, ((h - side) / 2) as usize);
+        for (i, p) in icon.iter().enumerate() {
+            let (x, y) = (x0 + i % n as usize, y0 + i / n as usize);
+            let a = p[0] as u32;
+            let mix = |v: u8, bg: u32| (v as u32 * a + bg * (255 - a)) / 255;
+            buf[y * w as usize + x] = (mix(p[1], 0x1D) << 16) | (mix(p[2], 0x1D) << 8) | mix(p[3], 0x1D);
+        }
+    }
+    {
+        let mut c = Canvas::new(&mut buf, w as usize, w, h);
+        let base = fonts.center_base(0, h, px);
+        fonts.draw(&mut c, pad + side + 6 * k, base, text, 0xF2F2F2, px, true);
     }
     let rgb: Vec<u8> = buf.iter().flat_map(|p| [(p >> 16) as u8, (p >> 8) as u8, *p as u8]).collect();
     let Ok(f) = std::fs::File::create(path) else { return };

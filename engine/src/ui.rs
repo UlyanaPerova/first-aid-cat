@@ -3672,6 +3672,7 @@ pub fn demo_checks(kind: &str) -> Vec<Check> {
         chk("ai", "Связь с Claude API", "ok", "750 мс", &[]),
         chk("ai", "Связь с claude.ai", "ok", "635 мс", &[]),
         chk("net", "Мой локальный IP", "info", "192.168.1.23", &[]),
+        hinted(chk("net", "Мой внешний IP", "info", "203.0.113.47 · CA", &[]), &demo_ip_history()),
         chk("net", "Канал Happ", if fix { "warn" } else { "info" }, "выключен", &[("happ_restart", "Перезапустить Happ", None)]),
         chk("net", "Канал Outline", "info", "выключен", &[("outline_restart", "Перезапустить Outline", None)]),
         chk("gpu", "Видеокарта", "ok", "41°C · загрузка 2 %", &[]),
@@ -3709,6 +3710,26 @@ pub fn demo_checks(kind: &str) -> Vec<Check> {
 fn hinted(mut c: Check, hint: &str) -> Check {
     c.detail = hint.to_string();
     c
+}
+
+/// Образец истории внешнего адреса (адреса — из диапазонов для документации).
+fn demo_ip_history() -> String {
+    let now = now_secs();
+    let stay = |ip: &str, c: &str, from_h: i64, to_h: i64| crate::iphist::Stay {
+        ip: ip.into(),
+        country: c.into(),
+        from: now - from_h * 3600,
+        to: now - to_h * 3600,
+    };
+    let h = [
+        stay("198.51.100.12", "DE", 96, 53),
+        stay("203.0.113.47", "CA", 53, 30),
+        stay("198.51.100.80", "NL", 30, 29),
+        stay("203.0.113.47", "CA", 29, 0),
+    ];
+    let mut tip = vec!["Example Networks Ltd".to_string()];
+    tip.extend(crate::iphist::summary(&h, now));
+    tip.join("\n")
 }
 
 /// Образец замера скорости (UI_FAKE).
