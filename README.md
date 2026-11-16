@@ -75,7 +75,7 @@ A speed test (download, upload, ping) runs only when you ask for it.
   <img src="docs/screenshots/sessions_resume.png" alt="The list of AI agent sessions with buttons to copy the resume command and to resume" width="606">
 </p>
 
-The top of the window shows which agents are running in your terminals and what the latest session was about. **Sessions** lists the recent ones with their first request and folder. Next to each there are two buttons: one copies the command that resumes it, the other opens a terminal and resumes it right there. A terminal that closed by accident no longer costs you the conversation.
+The top of the window shows which agents are running in your terminals and what the latest session was about. **Sessions** lists the recent ones with their first request and folder. Next to each there are two buttons: one copies the command that resumes it, the other opens a terminal and resumes it right there. 
 
 ### External IP history
 
