@@ -5,6 +5,14 @@
   <img alt="Windows" src="https://img.shields.io/badge/Windows-supported-1565c0?logo=windows&logoColor=white">
   <img alt="macOS" src="https://img.shields.io/badge/macOS-supported-424242?logo=apple&logoColor=white">
   <img alt="License: Apache-2.0" src="https://img.shields.io/badge/code-Apache--2.0-6a1b9a">
+  <a href="../../releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/UlyanaPerova/first-aid-cat?label=release&color=c2185b"></a>
+</p>
+
+<p align="center">
+  <img alt="Languages: English, Русский" src="https://img.shields.io/badge/languages-English%20%7C%20%D0%A0%D1%83%D1%81%D1%81%D0%BA%D0%B8%D0%B9-00838f">
+  <img alt="Claude Code: limits tracked" src="https://img.shields.io/badge/Claude%20Code-limits%20tracked-d97757?logo=claude&logoColor=white">
+  <img alt="Codex: limits tracked" src="https://img.shields.io/badge/Codex-limits%20tracked-10a37f">
+  <a href="PRIVACY.md"><img alt="No telemetry" src="https://img.shields.io/badge/telemetry-none-2e7d32"></a>
 </p>
 
 <p align="center">
