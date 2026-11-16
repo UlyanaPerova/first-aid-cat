@@ -1186,7 +1186,10 @@ mod mac {
                         send_int(self.button, c"setImagePosition:", 2); // NSImageLeft: значок слева от числа
                     }
                 }
-                send1(self.button, c"setTitle:", nsstring(label.trim_start()));
+                // между котом и числом — пробел шириной в полкегля (как на Linux): вплотную число липло к значку
+                let text = label.trim_start();
+                let title = if text.is_empty() { String::new() } else { format!("\u{2002}{text}") };
+                send1(self.button, c"setTitle:", nsstring(&title));
                 send1(self.button, c"setToolTip:", nsstring(tip));
             }
         }
