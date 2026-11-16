@@ -113,7 +113,6 @@ fn iso_secs_rejects_garbage() {
 /// Невозможные поля времени и даты принимаются молча (час 24..99, 31 февраля): такая строка журнала
 /// попала бы не в тот день. Реальные журналы пишут настоящее время, так что практически не страшно.
 #[test]
-#[ignore = "известная ошибка: iso_secs принимает час 25, минуту 99 и 31 февраля (дата «перетекает» в март)"]
 fn iso_secs_rejects_impossible_fields() {
     assert_eq!(iso_secs("2026-11-04T25:00:00Z"), None);
     assert_eq!(iso_secs("2026-11-04T23:99:00Z"), None);
@@ -251,7 +250,6 @@ fn fmt_tokens_reference_table_from_python() {
 /// 999 950 000 … 999 999 999 токенов выводятся как «1000,0 млн» вместо «1,0 млрд» (округление до 0,1 переносит
 /// значение через границу разряда). Видно в строках расхода и в подсказке плашки.
 #[test]
-#[ignore = "известная ошибка: fmt_tokens(999_999_999) даёт «1000,0 млн», а не «1,0 млрд»"]
 fn fmt_tokens_never_shows_thousand_millions() {
     for n in [999_950_000u64, 999_999_000, 999_999_999] {
         let s = fmt_tokens(n);
@@ -477,17 +475,16 @@ fn limit_row_status_and_text() {
     // округление процента: 0,5 → «0» или «1» (так считает format!), но не «NaN»
     assert!(!limit_row("A", "x", &w(0.5, 0, 300), now, now).value.contains("NaN"));
     // подпись окна
-    assert_eq!(what_of(&w(1.0, 5, 300)), "на 5 ч");
-    assert_eq!(what_of(&w(1.0, 5, 10_080)), "на неделю");
+    assert_eq!(what_of(&w(1.0, 5, 300), true), "на 5 ч");
+    assert_eq!(what_of(&w(1.0, 5, 10_080), false), "на неделю");
 }
 
 /// Окно «5 часов» без минут и без времени сброса подписывается «на неделю» (формула `what_of`): у Codex, если в
 /// журнале нет ни window_minutes, ни resets_at, первичное окно получит чужую подпись.
 #[test]
-#[ignore = "известная ошибка: what_of подписывает окно без минут и без сброса «на неделю» даже для первичного (5-часового) окна"]
 fn what_of_unknown_primary_is_not_week() {
     let primary_unknown = Window { pct: 10.0, resets_at: 0, minutes: 0 };
-    assert_eq!(what_of(&primary_unknown), "на 5 ч");
+    assert_eq!(what_of(&primary_unknown, true), "на 5 ч");
 }
 
 // ───────────── учёт токенов (журналы) ─────────────
@@ -691,7 +688,6 @@ fn claude_odd_token_field_types_count_as_zero() {
 /// Переполнение: два ответа по u64::MAX токенов. Сумма не должна «обернуться» в маленькое число (в релизной сборке
 /// `+` не проверяется и оборачивается; в отладочной — паника).
 #[test]
-#[ignore = "известная ошибка: Tok::add / Tok::total складывают u64 без насыщения (в релизе значение оборачивается по модулю 2^64)"]
 fn tok_add_does_not_wrap() {
     let mut a = Tok { input: u64::MAX, ..Default::default() };
     a.add(&Tok { input: 2, ..Default::default() });

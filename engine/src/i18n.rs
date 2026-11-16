@@ -32,7 +32,7 @@ impl Lang {
             Lang::En => "en",
         }
     }
-    fn from_id(s: &str) -> Option<Lang> {
+    pub(crate) fn from_id(s: &str) -> Option<Lang> {
         match s {
             "ru" => Some(Lang::Ru),
             "en" => Some(Lang::En),

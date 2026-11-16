@@ -385,8 +385,8 @@ en: last 30 days · from the agents' logs on this computer
 ru: Считаю… (читаю журналы агентов)
 en: Counting… (reading the agents' logs)
 
-ru: Нет данных: Claude Code и Codex на этом компьютере ещё не работали.
-en: No data: Claude Code and Codex have not run on this computer yet.
+ru: Данных пока нет: они появятся после первого ответа Claude Code или Codex
+en: No data yet: it will appear after the first answer from Claude Code or Codex
 
 ru: Лимит на 5 ч
 en: 5-hour limit

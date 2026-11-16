@@ -71,8 +71,8 @@ ru: записал бы найденные копии в кэш
 en: would write the found copies to the cache
 
 # dupes.rs:580
-ru: Копий не нашёл (искал {} с{}).
-en: No copies found (searched {} s{}).
+ru: Копий не нашёл (искал {} с в папках: {}{}).
+en: No copies found (searched {} s in folders: {}{}).
 
 # dupes.rs:580
 ru: , успел посмотреть не всё

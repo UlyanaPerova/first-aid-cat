@@ -81,13 +81,14 @@ pub struct Tok {
 
 impl Tok {
     pub fn total(&self) -> u64 {
-        self.input + self.output + self.cache_read + self.cache_write
+        // с насыщением: испорченная строка журнала не должна «обернуть» сумму в маленькое число
+        self.input.saturating_add(self.output).saturating_add(self.cache_read).saturating_add(self.cache_write)
     }
     pub fn add(&mut self, o: &Tok) {
-        self.input += o.input;
-        self.output += o.output;
-        self.cache_read += o.cache_read;
-        self.cache_write += o.cache_write;
+        self.input = self.input.saturating_add(o.input);
+        self.output = self.output.saturating_add(o.output);
+        self.cache_read = self.cache_read.saturating_add(o.cache_read);
+        self.cache_write = self.cache_write.saturating_add(o.cache_write);
     }
 }
 
@@ -144,7 +145,15 @@ fn iso_secs(s: &str) -> Option<i64> {
     }
     let n = |a: usize, l: usize| s.get(a..a + l)?.parse::<i64>().ok();
     let (y, m, d, hh, mm, ss) = (n(0, 4)?, n(5, 2)?, n(8, 2)?, n(11, 2)?, n(14, 2)?, n(17, 2)?);
-    if !(1..=12).contains(&m) || !(1..=31).contains(&d) {
+    let leap = y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
+    let days = match m {
+        2 if leap => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    };
+    // невозможные поля (час 25, 31 февраля) — не время: иначе строка журнала попала бы не в тот день
+    if !(1..=12).contains(&m) || !(1..=days).contains(&d) || !(0..=23).contains(&hh) || !(0..=59).contains(&mm) || !(0..=60).contains(&ss) {
         return None;
     }
     // дни от 1970-01-01 (алгоритм Хиннанта «days_from_civil»)
@@ -391,7 +400,8 @@ fn claude_line(v: &serde_json::Value, st: &mut FileState, seen: &mut HashSet<u64
     if st.cwd.is_empty() {
         st.cwd = v.get("cwd").and_then(|x| x.as_str()).unwrap_or("").to_string();
     }
-    *st.projects.entry((local_day(t), project_name(&st.cwd))).or_default() += tok.total();
+    let e = st.projects.entry((local_day(t), project_name(&st.cwd))).or_default();
+    *e = e.saturating_add(tok.total());
 }
 
 /// Расход Claude Code за DAYS дней.
@@ -487,7 +497,8 @@ fn codex_line(v: &serde_json::Value, st: &mut FileState, _seen: &mut HashSet<u64
         };
         let model = if st.model.is_empty() { "codex".to_string() } else { st.model.clone() };
         st.usage.entry((local_day(t), model)).or_default().add(&tok);
-        *st.projects.entry((local_day(t), project_name(&st.cwd))).or_default() += tok.total();
+        let e = st.projects.entry((local_day(t), project_name(&st.cwd))).or_default();
+        *e = e.saturating_add(tok.total());
     }
     if let Some(rl) = p.get("rate_limits") {
         let mins = |w: Option<&serde_json::Value>| w.and_then(|w| w.get("window_minutes")).and_then(|x| x.as_u64()).unwrap_or(0) as u32;
@@ -572,7 +583,8 @@ pub fn fmt_tokens(n: u64) -> String {
             s
         }
     };
-    if n >= 1_000_000_000 {
+    // граница разряда — по округлённому до 0,1 значению: 999 950 000 — это уже «1,0 млрд», а не «1000,0 млн»
+    if n >= 999_950_000 {
         format!("{} млрд", dec(n as f64 / 1e9))
     } else if n >= 1_000_000 {
         format!("{} млн", dec(n as f64 / 1e6))
@@ -673,8 +685,9 @@ pub(crate) fn ago(s: i64) -> String {
     }
 }
 
-fn what_of(w: &Window) -> &'static str {
-    if w.minutes >= 24 * 60 || w.minutes == 0 && w.resets_at == 0 {
+/// Подпись окна: по его длине, а когда длина неизвестна — по месту (первичное окно — пятичасовое, второе — недельное).
+fn what_of(w: &Window, primary: bool) -> &'static str {
+    if w.minutes >= 24 * 60 || w.minutes == 0 && !primary {
         "на неделю"
     } else {
         "на 5 ч"
@@ -715,13 +728,54 @@ pub fn check() -> Vec<Check> {
     let mut out = Vec::new();
     for (agent, lim, us) in [("Claude Code", claude_limits(), claude_usage()), ("Codex", codex_limits(), codex_usage())] {
         if let Some(l) = lim {
-            for w in [l.five, l.week].iter().flatten() {
-                out.push(limit_row(agent, what_of(w), w, l.at, now));
+            for (w, primary) in [(l.five, true), (l.week, false)] {
+                if let Some(w) = w {
+                    out.push(limit_row(agent, what_of(&w, primary), &w, l.at, now));
+                }
             }
         }
         out.extend(usage_row(agent, &us, now));
     }
+    out.extend(no_limits_yet_rows());
+    out.extend(missing_agents_row(&missing_agent_names()));
     out
+}
+
+fn claude_installed() -> bool {
+    claude_dir().is_some() || crate::procs::which("claude").is_some()
+}
+
+/// Claude Code или Codex установлены, а лимитов от них ещё не было: без строки непонятно, почему колец и процентов нет.
+fn no_limits_yet_rows() -> Vec<Check> {
+    let mut out = Vec::new();
+    let codex = crate::agents::find("codex").is_some_and(|a| a.installed());
+    for (name, installed, has) in [("Claude Code", claude_installed(), claude_limits().is_some()), ("Codex", codex, codex_limits().is_some())] {
+        if installed && !has {
+            out.push(
+                Check::new("ai", &format!("{name}: лимиты"), INFO, "пока нет данных")
+                    .hint("Лимиты появятся после первого ответа агента: программа берёт их из его ответов."),
+            );
+        }
+    }
+    out
+}
+
+/// Агенты, которых нет на этом компьютере, но чьи проверки включены в «Показателях».
+fn missing_agent_names() -> Vec<&'static str> {
+    let mut v = Vec::new();
+    if crate::prefs::unit_enabled("claude", true) && !claude_installed() {
+        v.push("Claude Code");
+    }
+    v.extend(crate::agents::AGENTS.iter().filter(|a| crate::prefs::unit_enabled(a.id, true) && !a.installed()).map(|a| a.name));
+    v
+}
+
+/// Одна сжатая строка вместо молчания: почему на вкладке нет строк про этих агентов.
+fn missing_agents_row(names: &[&str]) -> Option<Check> {
+    if names.is_empty() {
+        return None;
+    }
+    Some(Check::new("ai", "Агенты не найдены", INFO, &names.join(", ")).hint("Их проверки появятся здесь, когда агент будет установлен."))
 }
 
 // ───────────────────────────── строка состояния Claude Code ─────────────────────────────
@@ -950,6 +1004,14 @@ mod tests {
         // папки нет — пусто
         assert!(claude_dirs_from(Some(base.join("нет")), Some(home), None).is_empty());
         let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn missing_agents_row_lists_names() {
+        assert!(missing_agents_row(&[]).is_none());
+        let c = missing_agents_row(&["Gemini CLI", "Qwen Code"]).unwrap();
+        assert_eq!(c.value, "Gemini CLI, Qwen Code");
+        assert_eq!(c.status, INFO);
     }
 
     #[test]

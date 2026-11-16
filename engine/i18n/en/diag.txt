@@ -904,3 +904,26 @@ en: speed test: the server asks to wait — a lighter second attempt
 
 ru: тест скорости: измерено системным networkQuality
 en: speed test: measured with the system networkQuality
+
+# diag.rs:log_t
+ru: запускаю проверки ({} из {}) параллельно
+en: running checks ({} of {}) in parallel
+
+# diag.rs:log_t
+ru: проверка {} не уложилась в 30 с
+en: check {} didn't finish in 30 s
+
+# diag.rs:log_t
+ru: проверка {} упала
+en: check {} crashed
+
+# diag.rs:log_t
+ru: проверки завершены за {} с, итог: {}
+en: checks finished in {} s, result: {}
+
+# diag.rs:log_t
+ru: эталон тем записан: {}
+en: theme baseline saved: {}
+
+ru: соединение оборвано при отдаче
+en: the connection was cut during the upload

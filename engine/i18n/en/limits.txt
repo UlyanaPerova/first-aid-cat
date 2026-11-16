@@ -95,3 +95,23 @@ en: Sat
 
 ru: вс
 en: Sun
+
+# limits.rs:no_limits_yet_rows
+ru: {}: лимиты
+en: {}: limits
+
+# limits.rs:no_limits_yet_rows
+ru: пока нет данных
+en: no data yet
+
+# limits.rs:no_limits_yet_rows
+ru: Лимиты появятся после первого ответа агента: программа берёт их из его ответов.
+en: Limits appear after the agent's first answer: the app takes them from its answers.
+
+# limits.rs:missing_agents_row
+ru: Агенты не найдены
+en: Agents not found
+
+# limits.rs:missing_agents_row
+ru: Их проверки появятся здесь, когда агент будет установлен.
+en: Their checks will appear here once the agent is installed.

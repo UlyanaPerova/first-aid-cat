@@ -297,7 +297,19 @@ fn dset(path: &str, val: &str) -> (bool, String) {
     }
 }
 
+/// Ответ `gsettings get … mode`: «'none'» — системный прокси и так выключен.
+fn proxy_mode_is_none(out: &str) -> bool {
+    out.trim().trim_matches('\'') == "none"
+}
+
 fn proxy_off() -> (bool, String) {
+    // уже выключен — не рапортуем «Готово!» за то, чего не делали
+    if !dry_run() {
+        let (ok, now) = sh(&["gsettings", "get", "org.gnome.system.proxy", "mode"], 10);
+        if ok && proxy_mode_is_none(&now) {
+            return (true, "Системный прокси и так выключен — выключать нечего.".into());
+        }
+    }
     let (ok, m) = gset("org.gnome.system.proxy", "mode", "'none'");
     (
         ok,
@@ -640,14 +652,23 @@ fn theme_restore(key: &str) -> (bool, String) {
     (ok, if ok { format!("Вернул как в эталоне: {b} = {val}.") } else { m })
 }
 
+/// «Расширения» — слово про GNOME: на Windows и macOS запоминаются только темы и настройки вида.
+fn snapshot_done() -> &'static str {
+    if cfg!(target_os = "linux") {
+        "Запомнил текущие темы и расширения как норму."
+    } else {
+        "Запомнил текущие темы как норму."
+    }
+}
+
 /// Запомнить текущие темы и расширения как норму (пишет файл эталона).
 fn snapshot() -> (bool, String) {
     if dry_run() {
         log(&format!("DRY_RUN: записал бы эталон тем в {}", crate::diag::snapshot_path()));
-        return (true, "Запомнил текущие темы и расширения как норму.".into());
+        return (true, snapshot_done().into());
     }
     match crate::diag::take_snapshot() {
-        Ok(_) => (true, "Запомнил текущие темы и расширения как норму.".into()),
+        Ok(_) => (true, snapshot_done().into()),
         Err(e) => (false, format!("Не удалось записать эталон: {e}")),
     }
 }
@@ -1058,12 +1079,20 @@ Remove-ItemProperty $k -Name AutoConfigURL -ErrorAction SilentlyContinue; Set-It
 $t = Add-Type -MemberDefinition '[DllImport(\"wininet.dll\")] public static extern bool InternetSetOption(IntPtr h, int o, IntPtr b, int l);' -Name W -Namespace Aptechka -PassThru; \
 [void]$t::InternetSetOption(0, 39, 0, 0); [void]$t::InternetSetOption(0, 37, 0, 0)";
 
+/// Печатает «proxy-already-off», если прокси WinINet выключен и скрипта автонастройки нет.
+#[cfg(windows)]
+const WIN_PROXY_IS_OFF: &str = "$p=Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'; \
+if ($p.ProxyEnable -ne 1 -and -not $p.AutoConfigURL) { 'proxy-already-off' }";
+
 #[cfg(windows)]
 fn win_apply(id: &str, arg: Option<&str>) -> (bool, String) {
     let a = arg.unwrap_or("");
     let ok_svc = |n: &str| !n.is_empty() && n.chars().all(|c| c.is_ascii_alphanumeric() || " -_".contains(c));
     match id {
         "win_theme_restore" => crate::looksnap::restore(a),
+        "win_proxy_off" if !dry_run() && psh(WIN_PROXY_IS_OFF, 20).1.contains("proxy-already-off") => {
+            (true, "Системный прокси и так выключен — выключать нечего.".into())
+        }
         "win_proxy_off" => done(psh(WIN_PROXY_OFF, 30), "Системный прокси выключен. Браузер может понадобиться перезапустить."),
         "win_dns_flush" => done(sh(&["ipconfig", "/flushdns"], 20), "Кэш DNS очищен."),
         "win_winhttp_reset" => done(psh_admin("netsh winhttp reset proxy", 60), "Прокси WinHTTP сброшен."),

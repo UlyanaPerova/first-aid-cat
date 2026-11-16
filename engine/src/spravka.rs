@@ -845,7 +845,9 @@ pub fn analytics_layout(fonts: &mut Fonts, a: &Analytics, pw: i32) -> Page {
     if !a.ready {
         b.text("Считаю… (читаю журналы агентов)", 15, false, GREY, left, 10);
     } else if a.agents.is_empty() {
-        b.text("Нет данных: Claude Code и Codex на этом компьютере ещё не работали.", 15, false, GREY, left, 10);
+        // пустой лист без текста выглядел сломанным: сообщение — по центру и ниже шапки
+        b.y += b.l(120);
+        b.text("Данных пока нет: они появятся после первого ответа Claude Code или Codex", 16, false, GREY, c, 10);
     }
     // дни: 30 последних, по местному времени
     let days: Vec<i32> = (0..crate::limits::DAYS).rev().map(|i| local_day(a.now - i * 86_400)).collect();

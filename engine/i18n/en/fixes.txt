@@ -827,3 +827,11 @@ en: I'll close the VPN client and open it again.
 # fixes.rs: тип сеанса не узнан
 ru: Не удалось узнать тип сеанса, поэтому оболочку не трогаю.
 en: Couldn't determine the session type, so I am not touching the shell.
+
+# fixes.rs:proxy_off
+ru: Системный прокси и так выключен — выключать нечего.
+en: The system proxy is already off, so there was nothing to switch off.
+
+# fixes.rs:snapshot_done
+ru: Запомнил текущие темы как норму.
+en: I saved the current themes as the norm.

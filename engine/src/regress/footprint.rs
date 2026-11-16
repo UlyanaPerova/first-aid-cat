@@ -460,7 +460,6 @@ fn fix_chats_skips_symlinked_files() {
 /// на запись заранее, и отказ в правах записывается как сбой — итог «не удалось изменить файлов: 1».
 #[cfg(unix)]
 #[test]
-#[ignore = "известная ошибка: файл без ключей, но только для чтения, даёт ложное «Не удалось изменить файлов» (mask_file открывает на запись до поиска ключей)"]
 fn fix_chats_readonly_file_without_keys_is_not_a_failure() {
     with_fake_home("fx_ro", |h| {
         use std::os::unix::fs::PermissionsExt;

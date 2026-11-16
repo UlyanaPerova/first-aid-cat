@@ -114,7 +114,12 @@ pub(crate) fn fx(id: &str, label: &str, arg: Option<&str>) -> Fix {
 }
 
 pub(crate) fn log(msg: &str) {
-    eprintln!("[диагностика] {}", term_safe(&crate::proxyaddr::redact(msg)));
+    eprintln!("{} {}", crate::i18n::pick("[диагностика]", "[diagnostics]"), term_safe(&crate::proxyaddr::redact(msg)));
+}
+
+/// То же для строк, которые видит пользователь (текстовый режим): перевод — при показе, до подстановки секретов не доходит.
+pub(crate) fn log_t(msg: &str) {
+    log(&crate::i18n::t(msg));
 }
 
 /// Текст для терминала без управляющих последовательностей (ESC, OSC, BEL, обратный порядок письма):
@@ -1423,7 +1428,7 @@ pub fn take_snapshot() -> Result<Snapshot, String> {
     );
     let path = snapshot_path();
     crate::store::write_private(std::path::Path::new(&path), body.as_bytes()).map_err(|e| e.to_string())?;
-    log(&format!("эталон тем записан: {path}"));
+    log_t(&format!("эталон тем записан: {path}"));
     Ok(snap)
 }
 
@@ -2068,7 +2073,7 @@ pub fn run_all() -> Vec<Check> {
     let started = Instant::now();
     let units: Vec<&'static crate::catalog::Unit> =
         crate::catalog::units().iter().filter(|u| crate::prefs::unit_enabled(u.id, u.default_on)).collect();
-    log(&format!("запускаю проверки ({} из {}) параллельно", units.len(), crate::catalog::units().len()));
+    log_t(&format!("запускаю проверки ({} из {}) параллельно", units.len(), crate::catalog::units().len()));
     let rxs: Vec<(&'static crate::catalog::Unit, Receiver<Vec<Check>>)> = units
         .into_iter()
         .map(|u| {
@@ -2087,12 +2092,12 @@ pub fn run_all() -> Vec<Check> {
         let mut rows = match rx.recv_timeout(left) {
             Ok(r) => r,
             Err(mpsc::RecvTimeoutError::Timeout) => {
-                log(&format!("проверка {} не уложилась в 30 с", u.id));
+                log_t(&format!("проверка {} не уложилась в 30 с", u.id));
                 vec![Check::new("sys", u.title, WARN, "не отвечает").hint("Проверка не уложилась в 30 секунд.")]
             }
             // поток проверки упал (паника) — остальные проверки живы
             Err(mpsc::RecvTimeoutError::Disconnected) => {
-                log(&format!("проверка {} упала", u.id));
+                log_t(&format!("проверка {} упала", u.id));
                 vec![Check::new("sys", u.title, INFO, "не получилось проверить").hint("Внутренняя ошибка проверки — подробности в журнале.")]
             }
         };
@@ -2102,7 +2107,7 @@ pub fn run_all() -> Vec<Check> {
         }
         all.extend(rows);
     }
-    log(&format!("проверки завершены за {:.1} с, итог: {}", started.elapsed().as_secs_f64(), worst(&all)));
+    log_t(&format!("проверки завершены за {:.1} с, итог: {}", started.elapsed().as_secs_f64(), worst(&all)));
     all
 }
 
@@ -2693,7 +2698,9 @@ fn ping_once(agent: &ureq::Agent) -> Result<(), String> {
 /// соединению. TCP-рукопожатие не годится: роутер с VPN отвечает на него сам за 0 мс.
 /// Возвращает (медиана, джиттер) в мс или None, если удачных замеров меньше трёх.
 fn ping_stats(n: usize) -> Option<(f64, f64)> {
-    let agent = speed_agent(4, 10.0);
+    // весь запрос — 5 с: ответ на пинг крошечный, а общий срок в 10 с перекрывал срок чтения в 4 с,
+    // и молчащий сервер держал окно замера вдвое дольше заявленного
+    let agent = speed_agent(4, 5.0);
     let mut times: Vec<f64> = Vec::new();
     let mut run_all_pings = || -> Result<(), String> {
         // прогрев: рукопожатие и TLS. Первое соединение иногда не успевает открыться, когда все проверки
@@ -2717,7 +2724,8 @@ fn ping_stats(n: usize) -> Option<(f64, f64)> {
     }
     let mut s = times.clone();
     s.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-    let med = *s.get(s.len() / 2)?;
+    // при чётном числе замеров медиана — полусумма двух средних
+    let med = if s.len().is_multiple_of(2) { (s[s.len() / 2 - 1] + s[s.len() / 2]) / 2.0 } else { s[s.len() / 2] };
     Some((med, jitter(&times)))
 }
 
@@ -2747,6 +2755,9 @@ fn mbps_of(bytes: u64, secs: f64) -> f64 {
 const BUSY: &str = "сервер замера просит подождать";
 /// Пауза перед второй, облегчённой попыткой после отказа 429 (в тестах — без ожидания).
 const RETRY_PAUSE_MS: u64 = if cfg!(test) { 0 } else { 2000 };
+/// Сервер оборвал соединение, пока мы слали тело: так выглядит отказ 429 у сервера, который отвечает и сразу
+/// закрывает соединение, не читая тела (сам ответ клиент прочитать не успевает).
+const CUT: &str = "соединение оборвано при отдаче";
 
 fn transfer(
     progress: &mut dyn FnMut(SpeedProgress),
@@ -2760,13 +2771,15 @@ fn transfer(
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::sync::{Arc, Mutex};
     let total = Arc::new(AtomicU64::new(0));
+    // отдача: байты запросов, которые сервер принял (ответ 2xx) — отличить настоящую отдачу от отвергнутой
+    let confirmed = Arc::new(AtomicU64::new(0));
     let stop = Arc::new(AtomicBool::new(false));
     let err: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
     let block = Arc::new(if down { Vec::new() } else { random_block(256 * 1024) });
     let t0 = Instant::now();
     let mut workers = Vec::new();
     for _ in 0..streams.max(1) {
-        let (total, stop, err, block) = (total.clone(), stop.clone(), err.clone(), block.clone());
+        let (total, stop, err, block, confirmed) = (total.clone(), stop.clone(), err.clone(), block.clone(), confirmed.clone());
         workers.push(thread::spawn(move || {
             let agent = speed_agent(8, limit_s + 3.0);
             // сбой соединения (медленная или неровная сеть, VPN) — ещё попытка, пока есть время: иначе одна
@@ -2774,14 +2787,17 @@ fn transfer(
             let mut fails = 0;
             while !stop.load(Ordering::Relaxed) && total.load(Ordering::Relaxed) < cap {
                 let r = if down { pull(&agent, chunk, &total, &stop) } else { push(&agent, chunk, &block, &total, &stop) };
+                if r.is_ok() && !down {
+                    confirmed.fetch_add(chunk, Ordering::Relaxed);
+                }
                 if let Err(e) = r {
-                    if stop.load(Ordering::Relaxed) {
-                        break;
-                    }
-                    // сервер просит подождать — останавливаем все потоки сразу, не долбим его дальше
+                    // отказ сервера записываем и при уже поднятом stop: его мог поднять сосед с тем же отказом
                     if e == BUSY {
                         err.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert(e);
                         stop.store(true, Ordering::Relaxed);
+                        break;
+                    }
+                    if stop.load(Ordering::Relaxed) {
                         break;
                     }
                     fails += 1;
@@ -2825,9 +2841,22 @@ fn transfer(
         thread::sleep(Duration::from_millis(20));
     }
     drop(workers);
-    let end_b = samples.last().map_or(0, |s| s.1);
+    // байты запросов, от которых сервер отказался, потоки вернули из счёта уже после последней точки ряда —
+    // берём меньшее: принятое-и-отвергнутое не должно стать «скоростью»
+    let last_b = samples.last().map_or(0, |s| s.1);
+    let end_b = last_b.min(total.load(Ordering::Relaxed));
+    if end_b < last_b {
+        samples.push((t0.elapsed().as_secs_f64(), end_b));
+    }
+    // отдача, сервер ответил «подождите», и ни один запрос он не принял: байты недосланных запросов — не скорость
+    let busy = err.lock().unwrap_or_else(|e| e.into_inner()).as_deref() == Some(BUSY);
+    if busy && !down && confirmed.load(Ordering::Relaxed) <= 500_000 {
+        return Err(BUSY.into());
+    }
     if end_b <= 500_000 {
         return match err.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            // ничего не принято, а соединения рвались на отправке тела — это отказ сервера (429 без чтения тела)
+            Some(e) if e == CUT => Err(BUSY.into()),
             Some(e) => Err(e),
             None => Ok(None),
         };
@@ -3000,13 +3029,29 @@ fn push(
         Ok(r) if (200..300).contains(&r.status()) => Ok(()),
         Ok(r) => Err(format!("сервер замера ответил {}", r.status())),
         Err(ureq::Error::Status(code, _)) => Err(format!("сервер замера ответил {code}")),
+        Err(e) if !stop.load(std::sync::atomic::Ordering::Relaxed) && sent.get() < chunk && is_cut(&e) => Err(CUT.into()),
         Err(e) => Err(e.to_string()),
     };
-    // отказ или обрыв: эти байты сервер не принял (они лишь ушли в буфер сокета) — в скорость не идут
-    if res.is_err() && !stop.load(std::sync::atomic::Ordering::Relaxed) {
+    // отказ или обрыв: эти байты сервер не принял (они лишь ушли в буфер сокета) — в скорость не идут.
+    // Отказ статусом вычитается всегда: stop мог поднять соседний поток, получивший тот же отказ раньше
+    let refused = matches!(&res, Err(e) if e == BUSY || e.starts_with("сервер замера ответил"));
+    if res.is_err() && (refused || !stop.load(std::sync::atomic::Ordering::Relaxed)) {
         total.fetch_sub(sent.get(), std::sync::atomic::Ordering::Relaxed);
     }
     res
+}
+
+/// Соединение оборвано другой стороной (сброс, закрытый канал) — по цепочке причин ошибки.
+fn is_cut(e: &ureq::Error) -> bool {
+    use std::io::ErrorKind::{BrokenPipe, ConnectionAborted, ConnectionReset};
+    let mut src: Option<&(dyn std::error::Error + 'static)> = Some(e);
+    while let Some(x) = src {
+        if x.downcast_ref::<std::io::Error>().is_some_and(|io| matches!(io.kind(), BrokenPipe | ConnectionAborted | ConnectionReset)) {
+            return true;
+        }
+        src = x.source();
+    }
+    false
 }
 
 /// Источник случайных байт для отдачи: /dev/urandom, а если его нет, простой xorshift.

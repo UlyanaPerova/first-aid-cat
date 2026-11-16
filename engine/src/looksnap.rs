@@ -224,7 +224,7 @@ pub fn check() -> Vec<Check> {
     out.push(
         Check::new("theme", "Эталон", INFO, &crate::diag::snapshot_time_shown(&snap.time))
             .hint("С этим состоянием сравниваются темы.")
-            .fixes(vec![fx("snapshot", "Запомнить текущее как норму", None)]),
+            .fixes(vec![fx("snapshot", "Запомнить как норму", None)]),
     );
     out
 }

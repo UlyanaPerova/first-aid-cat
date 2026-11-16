@@ -545,6 +545,9 @@ struct St {
     log_vis: bool,
     hover: Option<Hit>,
     pressed: Option<Hit>,
+    /// название проблемы, на пункте которой нажали в списке «⋯»: список мог перестроиться до отпускания,
+    /// и номер пункта указал бы уже на другую беду
+    pressed_problem: Option<String>,
     popup: Popup,
     dialog: Option<Dialog>,
     scroll: [i32; 3], // таблица, журнал, справка
@@ -601,7 +604,8 @@ impl St {
     /// строка «Задержка сети»: это одно и то же измерение (задержка и джиттер до сервера замера), просто сделанное
     /// в другое время, — две строки с разными цифрами только путали. Пинг замера остаётся в строке скорости.
     fn speed_rows(&self) -> impl Iterator<Item = &Check> {
-        let has_latency = self.checks.iter().any(|c| c.title == "Задержка сети");
+        // строка «Задержка сети» прячет «Пинг» замера, только если сама показывается (показатель не выключен)
+        let has_latency = self.checks.iter().any(|c| c.title == "Задержка сети" && unit_on(c.unit));
         self.speed_checks.iter().filter(move |c| !(has_latency && c.title == crate::diag::SPEED_TITLES[0]))
     }
 
@@ -616,7 +620,9 @@ impl St {
             .map(|c| (c.title.clone(), c.status.clone(), c.key))
             .collect();
         v.sort_by_key(|p| p.1 != "bad");
-        v.dedup_by(|a, b| a.0 == b.0);
+        // повторы названий — долой, где бы они ни стояли (после сортировки они не обязательно соседи)
+        let mut seen = std::collections::HashSet::new();
+        v.retain(|p| seen.insert(p.0.clone()));
         v
     }
 
@@ -625,7 +631,7 @@ impl St {
             .checks
             .iter()
             .chain(self.speed_rows())
-            .filter(|c| matches!(c.status.as_str(), "bad" | "warn") && unit_on(c.unit))
+            .filter(|c| matches!(c.status.as_str(), "bad" | "warn") && unit_on(c.unit) && !self.ignored.contains(&c.title))
             .map(|c| c.title.clone())
             .collect();
         v.dedup();
@@ -875,6 +881,7 @@ impl Ui {
             log_vis: ui_file().get("log").and_then(|v| v.as_bool()).unwrap_or(true),
             hover: None,
             pressed: None,
+            pressed_problem: None,
             popup: Popup::None,
             dialog: None,
             scroll: [0; 3],
@@ -1464,6 +1471,10 @@ impl Ui {
                 }
             }
         }
+        self.st.pressed_problem = match h {
+            Some(Hit::Problem(i)) => self.st.problems().into_iter().nth(i as usize).map(|p| p.0),
+            _ => None,
+        };
         self.st.pressed = h;
         if h == Some(Hit::Split) {
             let th = self.st.geo().table.h;
@@ -1518,6 +1529,7 @@ impl Ui {
             save_ui(self.st.split, self.st.log_vis);
         }
         let down = self.st.pressed.take();
+        let problem = self.st.pressed_problem.take();
         let up = self.hit_at(x, y);
         if let Some(d) = down {
             let r = self.hit_rect(d);
@@ -1526,7 +1538,17 @@ impl Ui {
         if down.is_none() || down != up {
             return Vec::new();
         }
-        let Some(h) = up else { return Vec::new() };
+        let Some(mut h) = up else { return Vec::new() };
+        // пункт списка проблем — по названию, на котором нажали, а не по номеру места
+        if let (Hit::Problem(_), Some(title)) = (h, problem) {
+            match self.st.problems().iter().position(|p| p.0 == title) {
+                Some(i) => h = Hit::Problem(i as u8),
+                None => {
+                    self.close_popup();
+                    return Vec::new();
+                }
+            }
+        }
         self.activate(h)
     }
 
@@ -1861,6 +1883,13 @@ impl Ui {
                 vec![Cmd::WidgetChanged]
             }
             MenuAct::Lang(i) => {
+                // язык задан переменной окружения — выбор в меню ничего бы не изменил; скажем об этом, а не промолчим
+                if std::env::var("APTECHKA_LANG").ok().as_deref().and_then(crate::i18n::Lang::from_id).is_some() {
+                    let m = "Язык задан переменной APTECHKA_LANG — выбор в меню не действует, пока она установлена.";
+                    self.log(m);
+                    self.say(m);
+                    return Vec::new();
+                }
                 crate::i18n::set(match i {
                     1 => Some(crate::i18n::Lang::Ru),
                     2 => Some(crate::i18n::Lang::En),
@@ -2086,12 +2115,12 @@ impl Ui {
         let dir = crate::dupes::pictures_dir()?.to_string_lossy().into_owned();
         if let Some(a) = &sp.analytics {
             let t = localtime(a.now);
-            let path = format!("{dir}/Расход_ИИ_{}-{:02}-{:02}.png", t.year, t.mon, t.mday);
+            let path = format!("{dir}/{}_{}-{:02}-{:02}.png", crate::i18n::pick("Расход_ИИ", "AI_usage"), t.year, t.mon, t.mday);
             let page = spravka::analytics_layout(&mut self.g.fonts, a, spravka::W * 2);
             let (w, h, rgb) = spravka::page_rgb(&mut self.g.fonts, &page);
             return Some((path, w, h, rgb));
         }
-        let path = format!("{dir}/Справка_{}.png", sp.doc.number);
+        let path = format!("{dir}/{}_{}.png", crate::i18n::pick("Справка", "Medical_note"), sp.doc.number);
         let (w, h, rgb) = spravka::render_rgb(&mut self.g.fonts, &sp.doc, spravka::W * 2);
         Some((path, w, h, rgb))
     }

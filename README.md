@@ -64,11 +64,11 @@ The checks are grouped into tabs. Out of the box the app runs **35 checks on Lin
 |---|---|
 | **Network** | Internet and DNS, including a live DNS query; a system proxy left behind by a VPN that is off; proxies in browsers, extensions, the terminal, git, npm, pip and apt; VPN tunnels and the address the world sees; your local and external IP address, with a history of how the external one changed; network latency and jitter; captive portals (cafe and hotel sign-in pages); Wi-Fi signal |
 | **AI** | Whether Claude, Codex, Gemini CLI, Qwen Code, Kimi Code, Cursor, OpenCode and Antigravity can reach their servers; the status pages of those services; which agent sessions are alive in your terminals, and the command to resume one; how much of the Claude Code and Codex subscription limits is used and when they reset, and how many tokens went out today and this week. The same numbers stay in sight without opening the app: a cat icon in the top panel with the fullest limit next to it, and a click-open panel with rings for the 5-hour and weekly limits and bars of tokens per day (see [AI limits in the panel](#ai-limits-in-the-panel)) |
-| **Graphics** | What draws the screen, the NVIDIA driver and Secure Boot, GPU temperature and load |
+| **Graphics** (Linux only; Windows and macOS have no such tab) | What draws the screen, the NVIDIA driver and Secure Boot, GPU temperature and load |
 | **Devices** | Sound and microphone, Bluetooth, printing (paused printers, stuck queues), keyboard layouts, battery wear, disk health (S.M.A.R.T.) |
 | **Themes** | Broken themes and icons, GNOME extensions, a dock that vanished after a full-screen window |
 | **System** | Clock accuracy and time sync, free space and inodes, memory pressure, failed services, interrupted package installs, Windows Update errors, crashes and freezes, resource-hungry apps, duplicate files |
-| **Digital footprint** | What a trojan running as you could take: API keys in shell history, in AI chat logs and in config files; VPN credentials; SSH keys without a passphrase; app login tokens; whether the disk is encrypted. Only the kind of secret and the file are shown, never the secret itself |
+| **Digital footprint** (a check inside the **System** tab on Linux, Windows and macOS, not a tab of its own) | What a trojan running as you could take: API keys in shell history, in AI chat logs and in config files; VPN credentials; SSH keys without a passphrase; app login tokens; whether the disk is encrypted. Only the kind of secret and the file are shown, never the secret itself |
 
 A speed test (download, upload, ping) runs only when you ask for it.
 
@@ -111,7 +111,7 @@ The app tells you when a limit reaches 80 % and 95 % (once per window) and when 
 - **Windows:** the number is drawn on the icon itself in the notification area. Windows 11 hides new icons under **^** at first: drag it out to keep it in sight.
 - **macOS:** the cat and the number sit in the menu bar; a click opens the same panel.
 
-Codex writes its limit percentages into its own logs. Claude Code tells them only to its status line, so the app connects one for you (see [Privacy](PRIVACY.md#what-it-changes)). Everything about it is in the **AI limits** menu: switch the icon on or off, show the fullest limit or each agent's number ("Cl 42% Co 73%"), choose which agents to track (for example only Claude Code), turn the notifications on or off, and open the usage chart.
+Codex writes its limit percentages into its own logs. Claude Code tells them only to its status line, so the app connects one for you (see [Privacy](PRIVACY.md#what-it-changes)). Everything about it is in the **AI limits** menu: switch the icon on or off, show the fullest limit or, on Linux and macOS, each agent's number ("Cl 42% Co 73%"; Windows has no such mode: the icon there shows one number, the fullest limit), choose which agents to track (for example only Claude Code), turn the notifications on or off, and open the usage chart.
 
 ### Sessions of AI agents
 
@@ -204,11 +204,11 @@ Download the installer for your system from [Releases](../../releases). Every fi
 
 | System | Installer | How |
 |---|---|---|
-| **Linux**, Debian and Ubuntu | `first-aid-cat_1.1.0_amd64.deb` | `sudo apt install ./first-aid-cat_1.1.0_amd64.deb` |
-| **Linux**, Fedora and openSUSE | `first-aid-cat-1.1.0-1.x86_64.rpm` | `sudo dnf install ./first-aid-cat-1.1.0-1.x86_64.rpm` |
-| **Linux**, any distribution | `first-aid-cat-1.1.0-linux-x86_64.AppImage` | `chmod +x` it and double-click. Needs FUSE; without it run `./first-aid-cat-1.1.0-linux-x86_64.AppImage --appimage-extract-and-run` |
-| **Windows** 10 and 11, x86-64 | `first-aid-cat-1.1.0-windows-x86_64-setup.exe` | Double-click. Installs for your user only, no administrator rights needed. The binary is not signed yet, so SmartScreen may warn about an unknown publisher |
-| **macOS** 14 Sonoma or later, Apple silicon | `first-aid-cat-1.1.0-macos-arm64.dmg` | Open it and drag the app to *Applications*. The app has an ad-hoc signature, not a Developer ID, so macOS blocks the first launch: open *System Settings → Privacy & Security* and click *Open Anyway* (on older macOS, right-click the app and choose *Open*) |
+| **Linux**, Debian and Ubuntu | `first-aid-cat_1.1.1_amd64.deb` | `sudo apt install ./first-aid-cat_1.1.1_amd64.deb` |
+| **Linux**, Fedora and openSUSE | `first-aid-cat-1.1.1-1.x86_64.rpm` | `sudo dnf install ./first-aid-cat-1.1.1-1.x86_64.rpm` |
+| **Linux**, any distribution | `first-aid-cat-1.1.1-linux-x86_64.AppImage` | `chmod +x` it and double-click. Needs FUSE; without it run `./first-aid-cat-1.1.1-linux-x86_64.AppImage --appimage-extract-and-run` |
+| **Windows** 10 and 11, x86-64 | `first-aid-cat-1.1.1-windows-x86_64-setup.exe` | Double-click. Installs for your user only, no administrator rights needed. The binary is not signed yet, so SmartScreen may warn about an unknown publisher |
+| **macOS** 14 Sonoma or later, Apple silicon | `first-aid-cat-1.1.1-macos-arm64.dmg` | Open it and drag the app to *Applications*. The app has an ad-hoc signature, not a Developer ID, so macOS blocks the first launch: open *System Settings → Privacy & Security* and click *Open Anyway* (on older macOS, right-click the app and choose *Open*) |
 
 Linux packages need glibc 2.35 or newer (Ubuntu 22.04+, Debian 12+, Fedora 36+) and X11 or XWayland. The package installs the `aptechka` command, a menu entry and an icon; it does not start anything at login.
 
@@ -219,16 +219,16 @@ The same programs without an installer, if you prefer that.
 **Linux**:
 
 ```sh
-tar xf first-aid-cat-1.1.0-linux-x86_64.tar.gz
-cd first-aid-cat-1.1.0-linux-x86_64
+tar xf first-aid-cat-1.1.1-linux-x86_64.tar.gz
+cd first-aid-cat-1.1.1-linux-x86_64
 ./install.sh              # installs to ~/.local/bin, adds a menu entry and starts the widget at login
 ./install.sh --no-widget  # same, without the widget at login
 ./install.sh --uninstall
 ```
 
-**Windows**: unpack `first-aid-cat-1.1.0-windows-x86_64.zip` and run `install.cmd`, or just start `aptechka.exe`.
+**Windows**: unpack `first-aid-cat-1.1.1-windows-x86_64.zip` and run `install.cmd`, or just start `aptechka.exe`.
 
-**macOS**: unpack `first-aid-cat-1.1.0-macos-arm64.zip` and move the app to *Applications*.
+**macOS**: unpack `first-aid-cat-1.1.1-macos-arm64.zip` and move the app to *Applications*.
 
 ## Command line
 

@@ -123,3 +123,7 @@ en: Restored from the baseline: {} — {}.
 
 ru: Вернул как в эталоне: {} — {}. Открытые программы подхватят это после перезапуска.
 en: Restored from the baseline: {} — {}. Open apps pick it up after a restart.
+
+# looksnap.rs:227
+ru: Запомнить как норму
+en: Save as baseline

@@ -588,7 +588,13 @@ pub fn fix_scan() -> (bool, String) {
     }
     let total: u64 = groups.iter().map(Group::waste).sum();
     let msg = if groups.is_empty() {
-        format!("Копий не нашёл (искал {:.0} с{}).", t.elapsed().as_secs_f64(), if complete { "" } else { ", успел посмотреть не всё" })
+        let names: Vec<String> = r.iter().filter_map(|p| p.file_name()).map(|n| crate::diag::term_safe(&n.to_string_lossy())).collect();
+        format!(
+            "Копий не нашёл (искал {:.0} с в папках: {}{}).",
+            t.elapsed().as_secs_f64(),
+            names.join(", "),
+            if complete { "" } else { ", успел посмотреть не всё" }
+        )
     } else {
         format!(
             "Нашёл {} копий, лишнее — {}. Смотри вкладку «Система».",

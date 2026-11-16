@@ -1120,7 +1120,17 @@ fn mask_file(p: &Path, dry: bool) -> Result<(usize, bool), String> {
     o.read(true).write(!dry);
     #[cfg(unix)]
     std::os::unix::fs::OpenOptionsExt::custom_flags(&mut o, libc::O_NONBLOCK | libc::O_NOFOLLOW);
-    let mut f = o.open(p).map_err(why)?;
+    let mut f = match o.open(p) {
+        Ok(f) => f,
+        // писать нельзя — сначала посмотреть, есть ли что вымарывать: файл только для чтения без ключей — не сбой
+        Err(e) if !dry && e.kind() == std::io::ErrorKind::PermissionDenied => {
+            return match mask_file(p, true) {
+                Ok((0, x)) => Ok((0, x)),
+                _ => Err(why(e)),
+            };
+        }
+        Err(e) => return Err(why(e)),
+    };
     if !f.metadata().map_err(why)?.is_file() {
         return Err("не обычный файл".into());
     }

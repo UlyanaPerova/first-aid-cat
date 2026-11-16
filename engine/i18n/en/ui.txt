@@ -226,10 +226,6 @@ en: A desktop health checker with a doctor cat: network, VPN and proxies, AI ass
 ru: Выдана справка № {}.
 en: Medical note No. {} issued.
 
-# ui.rs:1643
-ru: {}/Справка_{}.png
-en: {}/Medical_note_{}.png
-
 # ui.rs:1693
 ru: внимание
 en: attention
@@ -1087,3 +1083,7 @@ en: OK (2)
 
 ru: 7 ч 56 мин
 en: 7 h 56 min
+
+# ui.rs:MenuAct::Lang
+ru: Язык задан переменной APTECHKA_LANG — выбор в меню не действует, пока она установлена.
+en: The language is fixed by the APTECHKA_LANG variable, so the menu choice has no effect while it is set.

@@ -848,8 +848,17 @@ impl App {
             .find(|p| std::fs::symlink_metadata(p).is_err())
             .unwrap_or(path);
         match save_rgb(&path, w, h, &rgb) {
-            Ok(()) => u.log(&format!("Справка сохранена: {path}")),
-            Err(e) => u.log(&format!("Не удалось сохранить справку: {e}")),
+            Ok(()) => {
+                let m = format!("Справка сохранена: {path}");
+                u.log(&m);
+                // журнал может быть выключен или скрыт под окном справки — говорит и кот
+                u.say(&m);
+            }
+            Err(e) => {
+                let m = format!("Не удалось сохранить справку: {e}");
+                u.log(&m);
+                u.say(&m);
+            }
         }
     }
 
