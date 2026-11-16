@@ -170,6 +170,8 @@ struct Tpl {
     en: String,
     /// длина текста без подстановок — более подробный шаблон пробуем раньше
     weight: usize,
+    /// шаблон-довесок: начинается или кончается пробелом (« (интерфейс {} лежит)»)
+    edge_space: bool,
 }
 
 #[derive(Default)]
@@ -178,6 +180,8 @@ struct Table {
     tpls: Vec<Tpl>,
     /// форма слова → (английское для 1, для остальных)
     plural: HashMap<String, (String, String)>,
+    /// длина самой длинной фразы в `exact` (байты)
+    max_exact: usize,
 }
 
 fn unescape(s: &str) -> String {
@@ -256,13 +260,15 @@ fn parse(src: &str) -> Table {
                 }
             } else if let Some(pieces) = split_tpl(&r) {
                 let weight = pieces.iter().map(|p| p.chars().count()).sum();
-                t.tpls.push(Tpl { pieces, en: e, weight });
+                let edge_space = pieces.first().is_some_and(|p| p.starts_with(' ')) || pieces.last().is_some_and(|p| p.ends_with(' '));
+                t.tpls.push(Tpl { pieces, en: e, weight, edge_space });
             } else {
                 t.exact.insert(plain(&r), plain(&e));
             }
         }
     }
     t.tpls.sort_by_key(|x| std::cmp::Reverse(x.weight));
+    t.max_exact = t.exact.keys().map(String::len).max().unwrap_or(0);
     t
 }
 
@@ -341,9 +347,7 @@ fn translate(t: &Table, s: &str, depth: u8) -> String {
     // (« (интерфейс {} лежит)»): без этого довесок после обрезки пробела оставался непереведённым
     let core = s.trim();
     if core.len() != s.len() && !core.is_empty() {
-        for tp in
-            t.tpls.iter().filter(|tp| tp.pieces.first().is_some_and(|p| p.starts_with(' ')) || tp.pieces.last().is_some_and(|p| p.ends_with(' ')))
-        {
+        for tp in t.tpls.iter().filter(|tp| tp.edge_space) {
             if let Some(vals) = capture(&tp.pieces, s) {
                 let vals: Vec<String> = vals.iter().map(|v| translate(t, v, depth + 1)).collect();
                 if !vals.iter().any(|v| has_cyr(v)) {
@@ -442,8 +446,7 @@ impl<'a> Cover<'a> {
         b.push(s.len());
         b.dedup();
         let tpls = t.tpls.iter().filter(|tp| tp.pieces.iter().all(|p| p.is_empty() || s.contains(p.as_str()))).collect();
-        let max_exact = t.exact.keys().map(String::len).max().unwrap_or(0);
-        Cover { t, s, b, tpls, max_exact, memo: HashMap::new(), steps: 0 }
+        Cover { t, s, b, tpls, max_exact: t.max_exact, memo: HashMap::new(), steps: 0 }
     }
 
     fn idx(&self, off: usize) -> Option<usize> {
@@ -589,7 +592,8 @@ impl<'a> Cover<'a> {
 /// Перевод с добором: жадный разбор, а если после него осталось русское — точный (когда он покрывает всё).
 fn best(t: &Table, s: &str) -> String {
     let v = translate(t, s, 0);
-    if !has_cyr(&v) || s.len() > 2000 {
+    // длинные строки не перебираем: разбор идёт вглубь по слову на шаг, а длинные подсказки и так стоят в таблице целиком
+    if !has_cyr(&v) || s.len() > 800 {
         return v;
     }
     let mut c = Cover::new(t, s);
@@ -650,6 +654,12 @@ pub fn tr(s: &str) -> Cow<'_, str> {
     }
     c.insert(s.to_string(), v.clone());
     Cow::Owned(v)
+}
+
+/// Перевод на английский независимо от выбранного языка (для тестов других модулей).
+#[cfg(test)]
+pub fn to_english(s: &str) -> String {
+    best(table(), s)
 }
 
 /// Перевод сразу в String.

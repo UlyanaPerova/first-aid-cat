@@ -132,6 +132,23 @@ mod tests {
         Stay { ip: ip.into(), country: "DE".into(), from, to }
     }
 
+    /// Подсказка собирается по-русски и переводится при показе: по-английски в ней не должно остаться русского.
+    #[test]
+    fn summary_is_fully_translated() {
+        let now = 2_000_000_000;
+        let h = [
+            st("198.51.100.12", now - 400_000, now - 200_000),
+            st("203.0.113.47", now - 190_000, now - 5_400),
+            st("198.51.100.80", now - 5_000, now),
+        ];
+        let lines = summary(&h, now);
+        assert!(lines.len() >= 4, "{lines:?}");
+        for l in lines.iter().chain(summary(&h[..1], now).iter()) {
+            let en = crate::i18n::to_english(l);
+            assert!(!en.chars().any(|c| matches!(c, 'А'..='я' | 'Ё' | 'ё')), "«{l}» → «{en}»");
+        }
+    }
+
     #[test]
     fn same_address_extends_other_starts_new() {
         let h = step(Vec::new(), "1.1.1.1", "DE", 1_000);

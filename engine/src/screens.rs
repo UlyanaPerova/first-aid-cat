@@ -481,7 +481,10 @@ fn screen_key(sc: &Screen, st: &ScreenState, t: f64) -> (u64, u64) {
         }
         None => hash_of((ck, flicker(t).to_bits())),
     };
-    (ck, fk)
+    // язык — в ключ: тексты хранятся по-русски и переводятся при рисовании, без этого после смены языка
+    // экран остался бы нарисованным на прежнем
+    let en = crate::i18n::lang() == crate::i18n::Lang::En;
+    (hash_of((ck, en)), hash_of((fk, en)))
 }
 
 fn glitch_at(c: (f64, f64, f64), t: f64) -> bool {

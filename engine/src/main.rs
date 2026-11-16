@@ -787,9 +787,12 @@ impl App {
                     }
                     wlog(&format!("язык: {}", i18n::lang().id()));
                     // то, что собрано из частей заранее (реплика кота в облачке), — пересобрать на новом языке
-                    if !self.raw_checks.is_empty() {
-                        let t = self.t0.elapsed().as_secs_f64();
-                        self.apply_checks(self.raw_checks.clone(), false, t);
+                    // (только окно и экраны: идущая проверка, журнал и замер скорости не трогаются)
+                    if !self.checks.is_empty() {
+                        if let Some(u) = self.ui.as_mut() {
+                            u.set_checks(self.checks.clone(), false);
+                        }
+                        self.refresh_sstate(self.t0.elapsed().as_secs_f64());
                     }
                     #[cfg(target_os = "macos")]
                     widget::export_mac(&self.checks);
