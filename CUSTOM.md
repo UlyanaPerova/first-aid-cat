@@ -99,6 +99,22 @@ A fix ID must start with `my_`. You write five small functions; the program call
 
 Look at `examples/custom/mod.rs`: `my_open_router` shows all five.
 
+### Buttons on calm rows, and a list of actions
+
+A fix button is normally shown only on red and yellow rows. A row that is fine (green or blue) still gets its button when the fix id starts with `my_`, so you can have actions you press on request: switch something off, start something.
+
+To offer several actions in one row, put a header first: `fx("menu", "Speed", None)`, then the real fixes. The row shows one button, "Speed ▾", and a click opens the list of the others:
+
+```rust
+.fixes(vec![
+    fx("menu", "Speed", None),
+    fx("my_fans", "Quiet", Some("100")),
+    fx("my_fans", "Maximum", Some("255")),
+])
+```
+
+Every argument you pass this way must be accepted by your `valid()`.
+
 ## 6. Let an AI agent write it for you
 
 If you use Claude Code, Codex or another coding agent, open it in the repository folder and give it a request like this one, with your problem in the middle:

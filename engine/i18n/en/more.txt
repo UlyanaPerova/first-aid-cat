@@ -404,3 +404,39 @@ en: print service (CUPS) isn't running
 # more.rs:249
 ru: Без неё ничего не печатается. Помогает перезагрузка компьютера.
 en: Nothing prints without it. Restarting the computer helps.
+
+ru: {} · ещё: {}
+en: {} · also: {}
+
+ru: английская
+en: English
+
+ru: русская
+en: Russian
+
+ru: украинская
+en: Ukrainian
+
+ru: белорусская
+en: Belarusian
+
+ru: немецкая
+en: German
+
+ru: французская
+en: French
+
+ru: испанская
+en: Spanish
+
+ru: итальянская
+en: Italian
+
+ru: польская
+en: Polish
+
+ru: казахская
+en: Kazakh
+
+ru: турецкая
+en: Turkish

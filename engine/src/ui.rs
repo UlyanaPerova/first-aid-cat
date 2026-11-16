@@ -166,6 +166,8 @@ pub enum Hit {
     /// пункт этого списка: перейти к проблеме (номер в `St::problems`)
     Problem(u8),
     Fix(u16),
+    /// пункт списка действий строки: (строка, номер действия в её `fixes`)
+    FixItem(u16, u8),
     /// «Игнорировать» / «Не игнорировать» у строки
     Ignore(u16),
     /// «Игнорировать всё» (все красные и жёлтые) / «Вернуть всё»
@@ -225,6 +227,8 @@ enum Popup {
     Sessions,
     /// список проблем от кнопки «⋯» у реплики кота
     Problems,
+    /// выбор действия у строки с несколькими действиями (первое — заголовок «menu»): номер строки
+    RowFixes(u16),
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -548,6 +552,8 @@ struct St {
     /// название проблемы, на пункте которой нажали в списке «⋯»: список мог перестроиться до отпускания,
     /// и номер пункта указал бы уже на другую беду
     pressed_problem: Option<String>,
+    /// где кнопка строки, под которой открыт список её действий (`Popup::RowFixes`)
+    fix_anchor: Rect,
     popup: Popup,
     dialog: Option<Dialog>,
     scroll: [i32; 3], // таблица, журнал, справка
@@ -882,6 +888,7 @@ impl Ui {
             hover: None,
             pressed: None,
             pressed_problem: None,
+            fix_anchor: Rect::default(),
             popup: Popup::None,
             dialog: None,
             scroll: [0; 3],
@@ -1062,8 +1069,12 @@ impl Ui {
     fn rebuild_rows(&mut self) {
         // строки перестраиваются (пришли новые проверки) — начатое нажатие на кнопку строки отменяется:
         // кнопка по номеру строки указала бы уже на другую починку
-        if matches!(self.st.pressed, Some(Hit::Fix(_)) | Some(Hit::Ignore(_)) | Some(Hit::Row(_))) {
+        if matches!(self.st.pressed, Some(Hit::Fix(_)) | Some(Hit::FixItem(..)) | Some(Hit::Ignore(_)) | Some(Hit::Row(_))) {
             self.st.pressed = None;
+        }
+        // список действий строки открыт по её номеру — строки меняются, список закрываем
+        if matches!(self.st.popup, Popup::RowFixes(_)) {
+            self.close_popup();
         }
         self.st.ignored = crate::prefs::ignored();
         if self.st.tab == SETTINGS_TAB {
@@ -1694,9 +1705,20 @@ impl Ui {
                     }
                 }
             }
+            Hit::FixItem(i, j) => {
+                let f = self.st.rows.get(i as usize).and_then(|r| r.fixes.get(j as usize).cloned());
+                self.close_popup();
+                if let Some(f) = f {
+                    cmds.extend(self.open_fix(&f.id, &f.label, f.arg.clone()));
+                }
+            }
             Hit::Fix(i) => {
                 if let Some(f) = self.st.rows.get(i as usize).and_then(|r| r.fixes.first().cloned()) {
-                    if f.id == "unit_toggle" {
+                    if f.id == "menu" {
+                        // кнопка-заголовок: под ней список остальных действий строки
+                        self.st.fix_anchor = self.hit_rect(Hit::Fix(i));
+                        self.toggle_popup(Popup::RowFixes(i));
+                    } else if f.id == "unit_toggle" {
                         // «Показатели»: включить/выключить без подтверждения, включённый — сразу проверить
                         if let Some(u) = f.arg.as_deref().and_then(catalog::find) {
                             let on = !unit_on(u.id);
@@ -2269,6 +2291,7 @@ impl Ui {
             Hit::CopyResume => Some("Скопировать команду, чтобы продолжить эту сессию".into()),
             Hit::BalloonMore => Some("Список проблем".into()),
             Hit::Problem(_) => None,
+            Hit::FixItem(..) => None,
             Hit::Fix(i) => row(i).and_then(|r| r.fixes.first()).map(|f| f.label.clone()),
             Hit::IgnoreAll => Some(if self.st.problem_titles().is_empty() {
                 "Снова считать бедой всё, что игнорируется".into()
@@ -3111,7 +3134,8 @@ impl P<'_, '_> {
                 && (matches!(row.status.as_str(), "bad" | "warn")
                     || row.title.starts_with("Канал")
                     || row.key == "settings"
-                    || row.fixes.first().is_some_and(|f| ON_DEMAND.contains(&f.id.as_str())));
+                    // свои действия (custom, «my_…») и кнопка-список «menu» — тоже «по просьбе»
+                    || row.fixes.first().is_some_and(|f| ON_DEMAND.contains(&f.id.as_str()) || f.id == "menu" || f.id.starts_with("my_")));
             let mut btn = Rect::new(view.x + cols[2].0 + 4 * k, rr.y + 2 * k, cols[2].1 - 8 * k, rh - 4 * k);
             // «Игнорировать» — у красных и жёлтых строк; у игнорируемой — «Не игнорировать» (вместо починки)
             let ignored = self.s.tab != SETTINGS_TAB && self.s.ignored.contains(&row.title);
@@ -3145,7 +3169,9 @@ impl P<'_, '_> {
             let v = self.g.fonts.fit(&row.value, cols[1].1 - 14 * k, px, false);
             self.text_l(Rect::new(rr.x + cols[1].0, rr.y, cols[1].1, rh), 8 * k, &v, status_color(&row.status), px, false);
             if show_fix {
-                let label = row.fixes.first().map(|f| f.label.clone()).unwrap_or_default();
+                let menu = row.fixes.first().is_some_and(|f| f.id == "menu");
+                let label = row.fixes.first().map(|f| crate::i18n::tr(&f.label)).unwrap_or_default();
+                let label = if menu { format!("{} ▾", self.g.fonts.fit(&label, btn.w - 26 * k, px, false)) } else { label.to_string() };
                 let label = self.g.fonts.fit(&label, btn.w - 12 * k, px, false);
                 self.button(btn, &label, Hit::Fix(i as u16), true, false);
             }
@@ -3429,6 +3455,20 @@ impl P<'_, '_> {
                 let x = (sr.right() - w).max(4 * k);
                 Rect::new(x, sr.bottom() + 2 * k, w, n * 40 * k + 8 * k)
             }
+            Popup::RowFixes(i) => {
+                // под кнопкой строки, правым краем к ней; не помещается вниз — над кнопкой
+                let labels: Vec<String> =
+                    self.s.rows.get(i as usize).map(|r| r.fixes.iter().skip(1).map(|f| f.label.clone()).collect()).unwrap_or_default();
+                let mut w = 0;
+                for l in &labels {
+                    w = w.max(self.width(l, px, false));
+                }
+                let b = self.s.fix_anchor;
+                let w = (w + 44 * k).max(b.w).min(self.s.w - 8 * k);
+                let h = labels.len().max(1) as i32 * 24 * k + 6 * k;
+                let y = if b.bottom() + 2 * k + h <= self.s.h { b.bottom() + 2 * k } else { b.y - 2 * k - h };
+                Rect::new((b.right() - w).max(4 * k), y, w, h)
+            }
             Popup::Problems => {
                 // под кнопкой «⋯», правым краем к ней
                 let list = self.s.problems();
@@ -3509,6 +3549,20 @@ impl P<'_, '_> {
                 }
             }
             Popup::Sessions => self.sessions_list(r),
+            Popup::RowFixes(row) => {
+                let labels: Vec<String> =
+                    self.s.rows.get(row as usize).map(|r| r.fixes.iter().skip(1).map(|f| f.label.clone()).collect()).unwrap_or_default();
+                for (i, label) in labels.iter().enumerate() {
+                    let ir = Rect::new(r.x + 3 * k, r.y + 3 * k + i as i32 * 24 * k, r.w - 6 * k, 24 * k);
+                    let h = Hit::FixItem(row, i as u8 + 1);
+                    self.hit(ir, h);
+                    let hov = self.hover(h);
+                    if hov {
+                        self.c.fill(ir, SELECT);
+                    }
+                    self.text_l(ir, 22 * k, label, if hov { WHITE } else { BLACK }, px, false);
+                }
+            }
             Popup::Problems => {
                 let list = self.s.problems();
                 if list.is_empty() {

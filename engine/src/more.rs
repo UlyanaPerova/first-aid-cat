@@ -286,9 +286,95 @@ pub(crate) fn check_keyboard() -> Vec<Check> {
         } else {
             "Super+Пробел".into()
         };
-        out.push(Check::new("dev", "Раскладка", OK, &format!("переключение: {how}")));
+        // какая раскладка включена сейчас — полезнее, чем сочетание клавиш (его человек и так знает);
+        // сочетание остаётся запасным ответом, когда система не говорит, что включено
+        let value = match layouts_now(&src) {
+            Some((cur, others)) if others.is_empty() => layout_name(&cur),
+            Some((cur, others)) => format!("{} · ещё: {}", layout_name(&cur), others.iter().map(|c| layout_name(c)).collect::<Vec<_>>().join(", ")),
+            None => format!("переключение: {how}"),
+        };
+        out.push(Check::new("dev", "Раскладка", OK, &value));
     }
     out
+}
+
+/// Раскладка по коду xkb — словом («ru» → «русская»); незнакомый код остаётся кодом.
+fn layout_name(code: &str) -> String {
+    match code {
+        "us" | "gb" | "en" => "английская",
+        "ru" => "русская",
+        "ua" => "украинская",
+        "by" => "белорусская",
+        "de" => "немецкая",
+        "fr" => "французская",
+        "es" => "испанская",
+        "it" => "итальянская",
+        "pl" => "польская",
+        "kz" => "казахская",
+        "tr" => "турецкая",
+        _ => return code.to_uppercase(),
+    }
+    .to_string()
+}
+
+/// Коды раскладок из ответа gsettings: «[('xkb', 'us'), ('xkb', 'ru+phonetic')]» → us, ru.
+fn layout_codes(sources: &str) -> Vec<String> {
+    sources
+        .split("('xkb', '")
+        .skip(1)
+        .filter_map(|p| p.split('\'').next())
+        .map(|c| c.split('+').next().unwrap_or(c).to_string())
+        .filter(|c| !c.is_empty() && c.len() <= 8 && c.chars().all(|x| x.is_ascii_alphanumeric()))
+        .collect()
+}
+
+/// Включённая сейчас раскладка и остальные (без повторов). None — узнать не вышло.
+fn layouts_now(sources: &str) -> Option<(String, Vec<String>)> {
+    let pick = |cur: String, all: Vec<String>| {
+        let mut others: Vec<String> = Vec::new();
+        for c in all {
+            if c != cur && !others.contains(&c) {
+                others.push(c);
+            }
+        }
+        Some((cur, others))
+    };
+    // GNOME: список источников, а последний использованный — первый в mru-sources
+    let all = layout_codes(sources);
+    if !all.is_empty() {
+        let (_, mru) = run(&["gsettings", "get", "org.gnome.desktop.input-sources", "mru-sources"], 5);
+        let cur = layout_codes(&mru).into_iter().next().or_else(|| all.first().cloned())?;
+        return pick(cur, all);
+    }
+    // X11 без источников GNOME: список — у setxkbmap, а «включена не первая» — индикатор «Group 2» у xset
+    if crate::procs::which("setxkbmap").is_none() || crate::procs::which("xset").is_none() {
+        return None;
+    }
+    let (_, q) = run(&["setxkbmap", "-query"], 5);
+    let all = x11_layouts(&q);
+    let (ok, x) = run(&["xset", "-q"], 5);
+    let second = x.split("Group 2:").nth(1).map(|t| t.trim_start().starts_with("on"));
+    let cur = match (ok == 0, second) {
+        (true, Some(false)) => all.first().cloned()?,
+        // включена не первая: какая из остальных — индикатор не говорит; берём первую отличную от первой
+        (true, Some(true)) => all.iter().find(|c| Some(*c) != all.first()).cloned().or_else(|| all.first().cloned())?,
+        _ => return None,
+    };
+    pick(cur, all)
+}
+
+/// Строка «layout:     us,ru» из ответа setxkbmap -query → us, ru.
+fn x11_layouts(query: &str) -> Vec<String> {
+    query
+        .lines()
+        .find_map(|l| l.strip_prefix("layout:"))
+        .map(|v| {
+            v.split(',')
+                .map(|c| c.trim().to_string())
+                .filter(|c| !c.is_empty() && c.len() <= 8 && c.chars().all(|x| x.is_ascii_alphanumeric()))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 // ───────────────────────────── Пакеты, /boot ─────────────────────────────
@@ -683,6 +769,18 @@ pub(crate) fn check_secureboot() -> Vec<Check> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn layout_codes_names_and_x11_list() {
+        assert_eq!(super::layout_codes("[('xkb', 'us'), ('xkb', 'ru+phonetic'), ('ibus', 'mozc')]"), ["us", "ru"]);
+        assert!(super::layout_codes("@a(ss) []").is_empty());
+        assert!(super::layout_codes("[('xkb', 'u$(rm)')]").is_empty());
+        assert_eq!(super::x11_layouts("rules:      evdev\nlayout:     us,ru,ru\nvariant:    ,,\n"), ["us", "ru", "ru"]);
+        assert_eq!(
+            (super::layout_name("ru"), super::layout_name("us"), super::layout_name("zz")),
+            ("русская".into(), "английская".into(), "ZZ".into())
+        );
+    }
+
     use super::*;
 
     #[test]
