@@ -396,3 +396,11 @@ en: systemctl --user did not answer (no systemd user session?).
 
 ru: dpkg --audit не ответил или завершился с ошибкой.
 en: dpkg --audit did not answer or ended with an error.
+
+# more.rs:248
+ru: служба печати (CUPS) не работает
+en: print service (CUPS) isn't running
+
+# more.rs:249
+ru: Без неё ничего не печатается. Помогает перезагрузка компьютера.
+en: Nothing prints without it. Restarting the computer helps.

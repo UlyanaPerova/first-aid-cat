@@ -383,3 +383,27 @@ en: Appearance, colors, Dock
 
 ru: Тема, цвет акцента, обои, панель задач
 en: Theme, accent color, wallpaper, taskbar
+
+# catalog.rs:55
+ru: Звук, принтер
+en: Sound, printer
+
+# catalog.rs:409
+ru: Подключён ли Wi-Fi и какой сигнал
+en: Whether Wi-Fi is connected and how strong the signal is
+
+# catalog.rs:415
+ru: Прокси-расширения браузеров, переменные http_proxy (Windows и терминал), git/npm/pip
+en: Browser proxy extensions, http_proxy variables (Windows and terminal), git/npm/pip
+
+# catalog.rs:542
+ru: Нагрузка и память
+en: Load and memory
+
+# catalog.rs:543
+ru: Занят ли процессор, хватает ли памяти
+en: Whether the processor is busy and memory is enough
+
+# catalog.rs:741
+ru: Занят ли процессор, хватает ли памяти, много ли подкачки
+en: Whether the processor is busy, memory is enough and swap is heavily used

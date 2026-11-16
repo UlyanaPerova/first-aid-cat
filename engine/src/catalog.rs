@@ -52,7 +52,7 @@ impl Cat {
             Cat::Net => "Интернет, DNS, прокси и VPN",
             Cat::Ai => "Связь с ИИ-помощниками и их сессии в терминале",
             Cat::Gpu => "Видеокарта, драйвер, кто рисует экран",
-            Cat::Dev if cfg!(target_os = "macos") => "Звук",
+            Cat::Dev if cfg!(target_os = "macos") => "Звук, принтер",
             Cat::Dev if cfg!(windows) => "Звук, печать, Bluetooth, диск",
             Cat::Dev => "Звук, Bluetooth, принтер, клавиатура",
             Cat::Look if cfg!(target_os = "macos") => "Оформление, цвета, Dock",
@@ -406,6 +406,17 @@ fn base_units() -> &'static [Unit] {
             default_on: true,
         },
         Unit {
+            id: "wifi", cat: Cat::Net, title: "Wi-Fi", about: "Подключён ли Wi-Fi и какой сигнал", run: check_wifi, default_on: true
+        },
+        Unit {
+            id: "proxy_other",
+            cat: Cat::Net,
+            title: "Прокси в браузерах и программах",
+            about: "Прокси-расширения браузеров, переменные http_proxy (Windows и терминал), git/npm/pip",
+            run: crate::netproxy::check_other_proxies,
+            default_on: true,
+        },
+        Unit {
             id: "captive",
             cat: Cat::Net,
             title: "Вход в сеть",
@@ -525,6 +536,17 @@ fn base_units() -> &'static [Unit] {
             run: check_stability,
             default_on: true,
         },
+        Unit {
+            id: "system",
+            cat: Cat::Sys,
+            title: "Нагрузка и память",
+            about: "Занят ли процессор, хватает ли памяти",
+            run: check_system,
+            default_on: true,
+        },
+        Unit {
+            id: "hogs", cat: Cat::Sys, title: "Прожорливые программы", about: "Кто сейчас грузит процессор", run: check_hogs, default_on: true
+        },
         Unit { id: "clock", cat: Cat::Sys, title: "Часы", about: "Не врут ли часы", run: check_time, default_on: true },
         Unit {
             id: "services",
@@ -585,6 +607,9 @@ fn base_units() -> &'static [Unit] {
             about: "Пинг и джиттер до сервера замера раз в 15 минут (без скачивания: трафика почти нет)",
             run: crate::diag::check_latency,
             default_on: true,
+        },
+        Unit {
+            id: "wifi", cat: Cat::Net, title: "Wi-Fi", about: "Подключён ли Wi-Fi и какой сигнал", run: check_wifi, default_on: true
         },
         Unit {
             id: "captive",
@@ -700,6 +725,22 @@ fn base_units() -> &'static [Unit] {
         },
         Unit {
             id: "audio", cat: Cat::Dev, title: "Звук", about: "Работает ли звуковая служба coreaudiod", run: check_audio, default_on: true
+        },
+        Unit {
+            id: "printing",
+            cat: Cat::Dev,
+            title: "Печать",
+            about: "Принтер не на паузе, очередь не застряла",
+            run: crate::more::check_printing_mac,
+            default_on: true,
+        },
+        Unit {
+            id: "system",
+            cat: Cat::Sys,
+            title: "Нагрузка и память",
+            about: "Занят ли процессор, хватает ли памяти, много ли подкачки",
+            run: check_system,
+            default_on: true,
         },
         Unit {
             id: "disk",

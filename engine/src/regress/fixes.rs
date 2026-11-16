@@ -77,12 +77,13 @@ fn shell_unit_random_outputs_match_rule_and_ignore_order() {
     });
 }
 
-/// Если `systemctl` не ответил (нет шины, тайм-аут, пустой вывод), разбор даёт «не завершит сеанс» — и тогда шаг ПЕРЕД
-/// сигналом не останавливает. Это решение «при сомнении — делать», а не «при сомнении — отказать». Тест фиксирует поведение
-/// разбора (пустой вывод = false); риск описан в REGRESSION_TESTS.md.
+/// Если `systemctl` не ответил (нет шины, тайм-аут, пустой вывод), сигнал оболочке не отправляется: разбор не видит ни
+/// одной строки ActiveState — «не ответил», и shell_restart_ends_session() даёт отказ (раньше было «при сомнении — делать»).
 #[test]
-fn empty_systemctl_output_is_fail_open_documented() {
+fn empty_systemctl_output_means_refusal() {
     assert!(!shell_unit_ends_session(""));
+    assert!(!shell_unit_answered(""));
+    assert!(shell_unit_answered("OnFailure=\nActiveState=inactive\n"));
 }
 
 /// Текст отказа содержит способ сделать вручную (Alt+F2, r, Enter) — без него отказ был бы тупиком.

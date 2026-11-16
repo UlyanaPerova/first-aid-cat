@@ -795,3 +795,35 @@ en: Keys in AI agents' chat files will be replaced with a mask ("sk-proj-****").
 # fixes.rs:1340
 ru: Ключи в файлах чатов ИИ заменятся маской той же длины. Вернуть их будет нельзя; чаты останутся читаемыми.
 en: Keys in AI chat files will be replaced with a same-length mask. This cannot be undone; the chats stay readable.
+
+# fixes.rs:568
+ru: Клиент VPN закроется и откроется заново; подключиться придётся в его окне.
+en: The VPN client will close and open again; you will need to connect in its window.
+
+# fixes.rs:1024
+ru: Клиент сейчас не запущен — не знаю, где он лежит. Открой его вручную.
+en: The client is not running right now, so I don't know where it is. Open it by hand.
+
+# fixes.rs:1031
+ru: Не указан клиент.
+en: No client given.
+
+# fixes.rs:1070
+ru: Не нашёл программу {} в «Программах» — открыть её заново нечем, закрывать не стал.
+en: Couldn't find {} in Applications, so there is nothing to reopen it with — I didn't close it.
+
+# fixes.rs:1135
+ru: Не нашёл Wi-Fi в этом компьютере.
+en: Couldn't find Wi-Fi in this computer.
+
+# fixes.rs:1484
+ru: Сниму принтер с паузы. Если macOS попросит — введи пароль.
+en: I'll take the printer off pause. If macOS asks, enter your password.
+
+# fixes.rs:1485
+ru: Закрою клиент VPN и открою его заново.
+en: I'll close the VPN client and open it again.
+
+# fixes.rs: тип сеанса не узнан
+ru: Не удалось узнать тип сеанса, поэтому оболочку не трогаю.
+en: Couldn't determine the session type, so I am not touching the shell.

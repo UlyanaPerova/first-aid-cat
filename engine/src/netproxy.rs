@@ -262,6 +262,33 @@ fn check_env(out: &mut Vec<Check>) {
     }
 }
 
+/// Windows: переменные окружения, заданные насовсем (реестр: пользователя и всего компьютера), а не только у этой программы.
+#[cfg(windows)]
+fn check_win_env(out: &mut Vec<Check>) {
+    for (scope, key, how) in [
+        ("пользователь", r"HKCU\Environment", "'User'"),
+        ("весь компьютер", r"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment", "'Machine' (от администратора)"),
+    ] {
+        let (_, t) = crate::diag::run(&["reg", "query", key], 8);
+        for (name, v) in crate::xplat::proxy_vars(&crate::xplat::parse_reg_values(&t)) {
+            // имя пришло из реестра — в подсказку с командой его пускаем, только если оно из знаков имени переменной
+            let safe = name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+            let manual = if safe {
+                format!("Удали переменную: [Environment]::SetEnvironmentVariable('{name}', $null, {how}) — в PowerShell, затем открой новое окно.")
+            } else {
+                "Удали переменную в «Переменных среды» (Параметры → Система → О программе → Дополнительные параметры системы).".to_string()
+            };
+            out.push(proxy_row(
+                "Прокси в переменных Windows",
+                &format!("Переменная {name} ({scope})"),
+                &v,
+                None,
+                &format!("Из-за этого не работают терминал и программы, которые читают переменные окружения. {manual}"),
+            ));
+        }
+    }
+}
+
 // ───────────────────────────── git, npm, pip, apt ─────────────────────────────
 
 fn check_tools(out: &mut Vec<Check>) {
@@ -330,6 +357,8 @@ pub(crate) fn check_other_proxies() -> Vec<Check> {
     check_firefox(&mut out);
     check_chromium(&mut out);
     check_env(&mut out);
+    #[cfg(windows)]
+    check_win_env(&mut out);
     check_tools(&mut out);
     if out.is_empty() {
         out.push(Check::new("net", "Прокси в браузерах и программах", OK, "нет"));
@@ -358,6 +387,17 @@ pub fn comment_env_line(spec: &str) -> (bool, String) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn route_interface_from_route_get() {
+        // настоящий вывод macOS 26 (адреса обезличены)
+        let t = "   route to: default\ndestination: default\n       mask: default\n    gateway: 192.0.2.1\n  interface: en0\n      flags: <UP,GATEWAY,DONE,STATIC,PRCLONING,GLOBAL>\n";
+        assert_eq!(super::parse_route_interface(t).as_deref(), Some("en0"));
+        // VPN-туннель вместо кабеля, и вывод без маршрута
+        assert_eq!(super::parse_route_interface("  interface: utun4\n").as_deref(), Some("utun4"));
+        assert_eq!(super::parse_route_interface("route: writing to routing socket: not in table\n"), None);
+        assert_eq!(super::parse_route_interface("  interface: \n"), None);
+    }
+
     /// Локальный адрес — настоящий адрес этой машины: не пустой, не «любой», не свой же 127.0.0.1; разбирается как IP.
     /// Без сети (изолированная сборка) адреса нет — это тоже допустимо.
     #[test]
@@ -373,11 +413,46 @@ mod tests {
 #[cfg_attr(target_os = "linux", allow(dead_code))]
 pub fn check_net_basic(flush_fix: &str) -> Vec<Check> {
     let mut out = crate::reach::rows(flush_fix, Vec::new());
-    // адрес компьютера в своей сети — как на Linux (там он берётся из маршрута)
+    // адрес компьютера в своей сети и через какое подключение идёт интернет — как на Linux (там они берутся из маршрута)
     if let Some(ip) = local_ip() {
         out.insert(0, Check::new("net", "Мой локальный IP", crate::diag::INFO, &ip));
+        if let Some(i) = route_iface(Some(&ip)) {
+            out.insert(0, Check::new("net", "Подключение", OK, &format!("через {i}")));
+        }
     }
     out
+}
+
+/// macOS `route -n get default`: строка «interface: en0».
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub(crate) fn parse_route_interface(t: &str) -> Option<String> {
+    t.lines().find_map(|l| l.trim().strip_prefix("interface:")).map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+}
+
+/// Через какой сетевой интерфейс идёт интернет (macOS и Windows). macOS — интерфейс маршрута по умолчанию;
+/// Windows — адаптер, у которого адрес `ip` (адрес, с которого система пошла бы в интернет, `local_ip()`).
+#[cfg_attr(target_os = "linux", allow(dead_code))]
+#[cfg_attr(not(windows), allow(unused_variables))]
+pub(crate) fn route_iface(ip: Option<&str>) -> Option<String> {
+    #[cfg(target_os = "macos")]
+    {
+        return parse_route_interface(&crate::diag::run(&["route", "-n", "get", "default"], 3).1);
+    }
+    #[cfg(windows)]
+    {
+        let ip = ip?;
+        // адрес приходит из нашего же сокета, но в команду всё равно пускаем только знаки адреса
+        if ip.is_empty() || !ip.chars().all(|c| c.is_ascii_hexdigit() || ".:".contains(c)) {
+            return None;
+        }
+        let v = crate::win::ps_try(
+            &format!("(Get-NetIPAddress -IPAddress '{ip}' -ErrorAction SilentlyContinue | Select-Object -First 1).InterfaceAlias"),
+            10,
+        )?;
+        return v.first()?.as_str().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    }
+    #[allow(unreachable_code)]
+    None
 }
 
 /// Адрес этого компьютера в локальной сети: с какого адреса система пошла бы в интернет. Без единого пакета —

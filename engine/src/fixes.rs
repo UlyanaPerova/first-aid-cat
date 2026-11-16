@@ -372,10 +372,21 @@ const SHELL_RESTART_BY_HAND: &str =
 /// Оболочка GNOME запущена службой systemd, у которой сбой службы ведёт к завершению сеанса.
 /// Только чтение (systemctl show): в режиме DRY_RUN тоже проверяем по-настоящему.
 fn shell_restart_ends_session() -> bool {
-    ["org.gnome.Shell@x11.service", "org.gnome.Shell@wayland.service"].iter().any(|unit| {
+    let mut answered = false;
+    for unit in ["org.gnome.Shell@x11.service", "org.gnome.Shell@wayland.service"] {
         let out = crate::diag::run(&["systemctl", "--user", "show", unit, "-p", "OnFailure", "-p", "ActiveState"], 5).1;
-        shell_unit_ends_session(&out)
-    })
+        answered |= shell_unit_answered(&out);
+        if shell_unit_ends_session(&out) {
+            return true;
+        }
+    }
+    // systemctl не ответил вовсе (нет шины, тайм-аут): не знаем, закроет ли остановка оболочки сеанс, — значит, отказ
+    !answered
+}
+
+/// Ответил ли systemctl по службе: в выводе есть строка ActiveState (у несуществующей службы тоже — «inactive»).
+fn shell_unit_answered(show: &str) -> bool {
+    show.lines().any(|l| l.starts_with("ActiveState="))
 }
 
 /// Разбор вывода `systemctl show … -p OnFailure -p ActiveState`: служба работает и при сбое зовёт gnome-session-failed.
@@ -383,6 +394,26 @@ fn shell_unit_ends_session(show: &str) -> bool {
     let active = show.lines().any(|l| l.trim() == "ActiveState=active");
     let fails_session = show.lines().any(|l| l.starts_with("OnFailure=") && l.contains("gnome-session-failed"));
     active && fails_session
+}
+
+#[cfg(test)]
+mod session_type_tests {
+    use super::*;
+
+    #[test]
+    fn session_type_parse_and_pick() {
+        assert_eq!(parse_session_type("x11\n"), "x11");
+        assert_eq!(session_ids("      3 1000 ulyana seat0 tty2\n     c1 0 root - -\n"), vec!["3", "c1"]);
+        let shows = vec![
+            "Type=tty\nClass=user\nUser=1000\n".to_string(),
+            "Type=x11\nClass=greeter\nUser=120\n".to_string(),
+            "Type=x11\nClass=user\nUser=1000\n".to_string(),
+        ];
+        assert_eq!(pick_session_type(&shows, 1000).as_deref(), Some("x11"));
+        assert_eq!(pick_session_type(&shows, 1001), None);
+        assert_eq!(pick_session_type(&[], 1000), None);
+        assert!(shell_unit_answered("OnFailure=\nActiveState=inactive\n") && !shell_unit_answered(""));
+    }
 }
 
 #[cfg(test)]
@@ -396,17 +427,73 @@ fn shell_restart_refused_when_failure_ends_session() {
     assert!(!shell_unit_ends_session(""));
 }
 
+/// Тип сеанса из `loginctl show-session -p Type --value`.
+fn parse_session_type(out: &str) -> String {
+    out.trim().to_string()
+}
+
+/// Среди описаний сеансов (вывод `loginctl show-session -p Type -p Class -p User`) — тип сеанса этого пользователя
+/// с классом user и типом x11 или wayland.
+fn pick_session_type(shows: &[String], uid: u32) -> Option<String> {
+    shows.iter().find_map(|s| {
+        let get = |k: &str| s.lines().find_map(|l| l.trim().strip_prefix(k)?.strip_prefix('=')).map(str::trim);
+        let ty = get("Type")?;
+        (get("Class") == Some("user") && get("User") == Some(uid.to_string().as_str()) && matches!(ty, "x11" | "wayland")).then(|| ty.to_string())
+    })
+}
+
+/// Номера сеансов из `loginctl list-sessions --no-legend` (первое слово каждой строки).
+fn session_ids(list: &str) -> Vec<String> {
+    list.lines().filter_map(|l| l.split_whitespace().next()).filter(|w| w.chars().all(|c| c.is_ascii_alphanumeric())).map(String::from).collect()
+}
+
+/// Тип графического сеанса: по XDG_SESSION_ID, а если его нет (программа запущена из меню GNOME) — по сеансу
+/// пользователя у logind: Display (графический сеанс), запасной путь — перебор всех сеансов.
+fn session_type() -> String {
+    let ask = |args: &[&str]| crate::diag::run(args, 5).1;
+    let sid = std::env::var("XDG_SESSION_ID").unwrap_or_default();
+    if !sid.is_empty() {
+        return parse_session_type(&ask(&["loginctl", "show-session", &sid, "-p", "Type", "--value"]));
+    }
+    #[cfg(unix)]
+    let uid = {
+        extern "C" {
+            fn getuid() -> u32;
+        }
+        unsafe { getuid() }
+    };
+    #[cfg(not(unix))]
+    let uid = 0u32;
+    let disp = ask(&["loginctl", "show-user", &uid.to_string(), "-p", "Display", "--value"]).trim().to_string();
+    if !disp.is_empty() && disp.chars().all(|c| c.is_ascii_alphanumeric()) {
+        let t = parse_session_type(&ask(&["loginctl", "show-session", &disp, "-p", "Type", "--value"]));
+        if !t.is_empty() {
+            return t;
+        }
+    }
+    let shows: Vec<String> = session_ids(&ask(&["loginctl", "list-sessions", "--no-legend"]))
+        .iter()
+        .map(|id| ask(&["loginctl", "show-session", id, "-p", "Type", "-p", "Class", "-p", "User"]))
+        .collect();
+    pick_session_type(&shows, uid).unwrap_or_default()
+}
+
 fn shell_restart() -> (bool, String) {
     // тип сеанса — у logind, а не по переменной окружения (она врёт при запуске из ssh, sudo, другого сеанса):
     // в Wayland этот перезапуск завершил бы весь сеанс
-    let sid = std::env::var("XDG_SESSION_ID").unwrap_or_default();
-    let ty = if sid.is_empty() {
-        String::new()
-    } else {
-        crate::diag::run(&["loginctl", "show-session", &sid, "-p", "Type", "--value"], 5).1.trim().to_string()
-    };
-    if ty != "x11" && !dry_run() {
+    let ty = session_type();
+    if ty.is_empty() && !dry_run() {
+        return (false, "Не удалось узнать тип сеанса, поэтому оболочку не трогаю.".into());
+    }
+    if !ty.is_empty() && ty != "x11" && !dry_run() {
         return (false, "Перезапуск оболочки без выхода работает только в X11.".into());
+    }
+    // Сначала — мягкий путь: наше расширение GNOME зовёт перезапуск ИЗНУТРИ оболочки (то же самое, что делает Alt+F2, r).
+    // Процесс оболочки при этом не умирает, а запускает себя заново, поэтому systemd не видит «падения» и сеанс цел.
+    if !dry_run() {
+        if let Some(done) = shell_restart_by_extension() {
+            return done;
+        }
     }
     // Оболочка под systemd с правилом «упала — закрыть сеанс» (GNOME 42+: OnFailure=gnome-session-failed.target):
     // принудительная остановка там считается падением, сеанс завершается и все окна закрываются
@@ -428,6 +515,22 @@ fn shell_restart() -> (bool, String) {
     }
     let (ok, m) = sh(&["pkill", "-QUIT", "-x", "gnome-shell"], 30);
     (ok, if ok { "Оболочка GNOME перезапускается, окна останутся на месте.".into() } else { m })
+}
+
+/// Попросить наше расширение GNOME перезапустить оболочку: кладём в папку сеанса записку с нынешним временем,
+/// расширение (оно заглядывает туда раз в 2 с) забирает её и зовёт перезапуск. None — записку никто не забрал за
+/// 6 с: расширения нет, оно выключено или ещё старое (без этой возможности) — тогда решает прежняя логика.
+fn shell_restart_by_extension() -> Option<(bool, String)> {
+    let req = crate::store::runtime_dir().join("shell_restart");
+    crate::store::write_private_quick(&req, crate::ui::now_secs().to_string().as_bytes()).ok()?;
+    for _ in 0..24 {
+        pause(250);
+        if !req.exists() {
+            return Some((true, "Оболочка GNOME перезапускается, окна останутся на месте.".into()));
+        }
+    }
+    let _ = std::fs::remove_file(&req);
+    None
 }
 
 fn time_sync() -> (bool, String) {
@@ -565,6 +668,8 @@ pub fn confirm_text(id: &str) -> Option<&'static str> {
         "mac_finder_restart" => Some("Окна Finder закроются и откроются заново."),
         "mac_dock_restart" | "mac_menubar_restart" => Some("Dock и строка меню на секунду пропадут."),
         "mac_force_quit" => Some("Программа закроется. Несохранённое в ней может пропасть."),
+        "mac_vpn_restart" | "win_vpn_restart" => Some("Клиент VPN закроется и откроется заново; подключиться придётся в его окне."),
+        "mac_print_clear" => Some("Удалю твои задания из очереди печати."),
         "win_update_reset" => Some("Windows спросит разрешение администратора. Остановлю службы обновления и начну их кэш заново."),
         "win_explorer_restart" => Some("Панель задач и окна папок моргнут; открытые программы останутся."),
         "win_kill" => Some("Программа закроется принудительно — несохранённое в ней пропадёт."),
@@ -602,7 +707,9 @@ fn resource(id: &str) -> &str {
         "dupes_scan" | "dupes_trash" => "dupes",
         "dpkg_configure" | "apt_fix" | "apt_autoremove" | "prime_nvidia" => "packages",
         "net_reconnect" | "dns_flush" | "proxy_off" | "happ_restart" | "outline_restart" | "proton_restart" | "wifi_on" | "win_proxy_off"
-        | "win_dns_flush" | "win_winhttp_reset" | "mac_proxy_off" | "mac_dns_flush" => "network",
+        | "win_dns_flush" | "win_winhttp_reset" | "mac_proxy_off" | "mac_dns_flush" | "mac_vpn_restart" | "win_vpn_restart" | "mac_wifi_on" => {
+            "network"
+        }
         "env_proxy_off" | "footprint_history" | "footprint_lock" | "footprint_chats" => "userfiles",
         "theme_restore" | "win_theme_restore" | "mac_theme_restore" | "snapshot" | "ext_restart" | "ext_enable" | "dock_repair" | "kb_switch" => {
             "desktop"
@@ -645,7 +752,7 @@ impl Drop for Busy {
 
 /// Выполнить починку (сбой внутри — строка «не получилось», программа не падает).
 /// Действия без аргумента (если аргумент пришёл — он не используется).
-const NO_ARG: [&str; 45] = [
+const NO_ARG: [&str; 47] = [
     "net_reconnect",
     "dns_flush",
     "proxy_off",
@@ -688,6 +795,8 @@ const NO_ARG: [&str; 45] = [
     "mac_audio_restart",
     "mac_time_sync",
     "mac_thin_snapshots",
+    "mac_wifi_on",
+    "mac_print_clear",
     "footprint_lock",
     "footprint_history",
     "footprint_chats",
@@ -725,7 +834,9 @@ pub fn validate(id: &str, arg: Option<&str>) -> Result<(), String> {
         "dock_repair" => a.is_empty() || chars(a, "._@-", 128) && a.contains('@'),
         "theme_restore" => crate::diag::theme_key_known(a),
         "win_theme_restore" | "mac_theme_restore" => look_known(a),
-        "printer_enable" => chars(a, "_.@-", 127),
+        "printer_enable" | "mac_printer_enable" => chars(a, "_.@-", 127),
+        // клиент VPN — только из нашего списка (xplat::vpn_client), а не любое имя программы
+        "mac_vpn_restart" | "win_vpn_restart" => crate::xplat::vpn_client(a).is_some(),
         "env_proxy_off" => crate::netproxy::env_spec_ok(a),
         "git_proxy_off" => matches!(a, "http.proxy" | "https.proxy"),
         "dupes_trash" => hex16(a) || a.strip_prefix("all:").is_some_and(hex16),
@@ -1003,6 +1114,25 @@ fn win_apply(id: &str, arg: Option<&str>) -> (bool, String) {
                 Err(_) => (false, "Не указан процесс.".into()),
             }
         }
+        "win_vpn_restart" => match crate::xplat::vpn_client(a) {
+            Some(c) if dry_run() => {
+                log_dry(&format!("перезапустить {}", c.title));
+                (true, "Открыл заново.".into())
+            }
+            Some(c) => {
+                let (ok, m) = psh(&crate::xplat::win_vpn_restart_script(c.win_procs), 60);
+                if ok {
+                    (true, "Открыл заново, подключись в окне клиента. Связь через VPN вернётся после подключения.".into())
+                } else if m.contains("NOT_RUNNING") {
+                    (false, "Клиент сейчас не запущен — не знаю, где он лежит. Открой его вручную.".into())
+                } else if m.contains("STILL_RUNNING") {
+                    (false, "Клиент не закрылся — второй его копии запускать не стал. Закрой его вручную.".into())
+                } else {
+                    (false, m)
+                }
+            }
+            None => (false, "Не указан клиент.".into()),
+        },
         "win_time_sync" => clock_after(psh_admin("Start-Service w32time -ErrorAction SilentlyContinue; w32tm /resync /force", 90)),
         "win_cleanmgr" => {
             if dry_run() {
@@ -1033,6 +1163,49 @@ fn mac_admin(cmd: &str, timeout: u64) -> (bool, String) {
     (ok, m)
 }
 
+/// macOS: перезапустить клиент VPN — закрыть мягко (TERM, свой процесс по точному имени), дождаться, открыть `open -a`.
+#[cfg(target_os = "macos")]
+fn mac_vpn_restart(id: &str) -> (bool, String) {
+    let Some(c) = crate::xplat::vpn_client(id) else { return (false, "Не указан клиент.".into()) };
+    let home_apps = crate::store::home_dir().map(|h| h.join("Applications")).unwrap_or_default();
+    let app = [std::path::PathBuf::from("/Applications"), home_apps].iter().map(|d| d.join(format!("{}.app", c.mac_app))).find(|p| p.is_dir());
+    let Some(app) = app else {
+        return (false, format!("Не нашёл программу {} в «Программах» — открыть её заново нечем, закрывать не стал.", c.title));
+    };
+    let uid = crate::cmd::exec(&["id", "-u"], std::time::Duration::from_secs(5), crate::cmd::CHECK).text().trim().to_string();
+    let running = || crate::cmd::exec(&["pgrep", "-x", "-u", &uid, c.mac_proc], std::time::Duration::from_secs(5), crate::cmd::CHECK).code() == 0;
+    if dry_run() {
+        log_dry(&format!("закрыть {} и открыть {} заново", c.mac_proc, app.display()));
+        return (true, "Открыл заново.".into());
+    }
+    if running() {
+        sh(&["pkill", "-x", "-U", &uid, c.mac_proc], 15);
+        let mut gone = false;
+        for _ in 0..25 {
+            pause(200);
+            if !running() {
+                gone = true;
+                break;
+            }
+        }
+        if !gone {
+            return (false, "Клиент не закрылся — второй его копии запускать не стал. Закрой его вручную.".into());
+        }
+    }
+    let app_s = app.to_string_lossy().to_string();
+    let (ok, m) = sh_app(&["open", "-a", &app_s], 15);
+    if !ok {
+        return (false, m);
+    }
+    for _ in 0..10 {
+        pause(500);
+        if running() {
+            return (true, "Открыл заново, подключись в окне клиента. Связь через VPN вернётся после подключения.".into());
+        }
+    }
+    (false, "Запустил, но клиент так и не появился — открой его вручную.".into())
+}
+
 #[cfg(target_os = "macos")]
 fn mac_apply(id: &str, arg: Option<&str>) -> (bool, String) {
     match id {
@@ -1058,6 +1231,24 @@ fn mac_apply(id: &str, arg: Option<&str>) -> (bool, String) {
         }
         "mac_audio_restart" => done(mac_admin("killall coreaudiod", 60), "Звук перезапущен."),
         "mac_time_sync" => clock_after(mac_admin("/usr/bin/sntp -sS time.apple.com", 90)),
+        "mac_wifi_on" => {
+            let hw = crate::cmd::exec(&["networksetup", "-listallhardwareports"], std::time::Duration::from_secs(10), crate::cmd::CHECK);
+            match crate::xplat::parse_wifi_device(hw.text()) {
+                Some(dev) => done(sh(&["networksetup", "-setairportpower", &dev, "on"], 20), "Wi-Fi включён."),
+                None => (false, "Не нашёл Wi-Fi в этом компьютере.".into()),
+            }
+        }
+        "mac_printer_enable" => match arg {
+            Some(p) if !p.is_empty() => {
+                // обычному пользователю CUPS может отказать — тогда спросим пароль (имя принтера прошло validate: буквы, цифры, «_.@-»)
+                let (ok, m) = sh(&["cupsenable", p], 15);
+                let (ok, m) = if ok { (ok, m) } else { mac_admin(&format!("cupsenable '{p}'"), 60) };
+                (ok, if ok { format!("Принтер {p} снова печатает.") } else { m })
+            }
+            _ => (false, "Не указан принтер.".into()),
+        },
+        "mac_print_clear" => print_clear(),
+        "mac_vpn_restart" => mac_vpn_restart(arg.unwrap_or("")),
         "mac_thin_snapshots" => done(mac_admin("tmutil thinlocalsnapshots / 999999999999 4", 300), "Локальные снимки убраны."),
         "mac_force_quit" => match arg.and_then(|a| a.split_once('@')).and_then(|(p, k)| Some((p.parse::<u32>().ok()?, k))) {
             Some((pid, key)) if pid > 1 && pid != std::process::id() => {
@@ -1285,11 +1476,13 @@ pub fn manual(id: &str, arg: Option<&str>) -> Option<String> {
             "win_dns_flush" => "ipconfig /flushdns".into(),
             "win_time_sync" => "w32tm /resync /force   # от администратора".into(),
             "win_cleanmgr" => "cleanmgr".into(),
-            _ => return None,
+            "win_vpn_restart" => crate::xplat::win_vpn_restart_script(crate::xplat::vpn_client(a)?.win_procs),
+            _ => return manual_shared(id, a),
         })
     }
     #[cfg(target_os = "macos")]
     {
+        let q = |s: &str| format!("'{}'", s.replace('\'', r"'\''"));
         Some(match id {
             "mac_proxy_off" => crate::mac::proxy_off_script(),
             "mac_theme_restore" => crate::looksnap::restore_cmd(a, crate::diag::load_snapshot().key(a)?)?,
@@ -1300,17 +1493,55 @@ pub fn manual(id: &str, arg: Option<&str>) -> Option<String> {
             "mac_audio_restart" => "sudo killall coreaudiod".into(),
             "mac_time_sync" => "sudo sntp -sS time.apple.com".into(),
             "mac_thin_snapshots" => "sudo tmutil thinlocalsnapshots / 999999999999 4".into(),
+            "mac_vpn_restart" => {
+                let c = crate::xplat::vpn_client(a)?;
+                format!(
+                    "pkill -x {0}; sleep 2; if pgrep -x {0} >/dev/null; then echo 'still running - close it by hand'; else open -a {1}; fi",
+                    c.mac_proc, c.mac_app
+                )
+            }
+            "mac_wifi_on" => "networksetup -setairportpower \"$(networksetup -listallhardwareports | awk '/Wi-Fi/{getline; print $2}')\" on".into(),
+            "mac_printer_enable" => format!("cupsenable {}", q(a)),
+            "mac_print_clear" => "cancel -u \"$USER\" -x".into(),
             "mac_force_quit" => {
                 let p = a.split('@').next().unwrap_or("").trim().parse::<u32>().ok()?;
                 confirm_kill(p, "   # не закрылась? запусти строку ещё раз или завершить принудительно через Мониторинг системы")
             }
-            _ => return None,
+            _ => return manual_shared(id, a),
         })
     }
     #[cfg(not(any(target_os = "linux", windows, target_os = "macos")))]
     {
         let _ = (id, a);
         None
+    }
+}
+
+/// Ручные команды общих действий на macOS и Windows (на Linux они в основной таблице выше): где команда очевидна и одинакова.
+#[cfg(any(windows, target_os = "macos"))]
+fn manual_shared(id: &str, a: &str) -> Option<String> {
+    Some(match id {
+        "git_proxy_off" => format!("git config --global --unset {a}"),
+        "npm_proxy_off" => "npm config delete proxy; npm config delete https-proxy".into(),
+        "env_proxy_off" => {
+            let (f, n, _) = crate::netproxy::split_env_spec(a)?;
+            env_comment_cmd(f, n)
+        }
+        _ => return None,
+    })
+}
+
+/// Закомментировать строку n в файле f (с копией рядом) — для macOS это sed (BSD, ключ -i с суффиксом), для Windows — PowerShell.
+#[cfg(any(windows, target_os = "macos"))]
+fn env_comment_cmd(f: &str, n: usize) -> String {
+    #[cfg(windows)]
+    {
+        let q = crate::agents::ps_quote(f);
+        format!("$f = {q}; Copy-Item $f \"$f.bak\"; $l = @(Get-Content $f); $l[{}] = '# ' + $l[{}]; Set-Content $f $l", n - 1, n - 1)
+    }
+    #[cfg(not(windows))]
+    {
+        format!("sed -i.bak '{n}s/^/# /' '{}'", f.replace('\'', r"'\''"))
     }
 }
 
@@ -1352,7 +1583,9 @@ pub fn what_happens(id: &str) -> &'static str {
         "mic_unmute" => "Включу микрофон.",
         "bt_unblock" => "Сниму программную блокировку Bluetooth.",
         "bt_power" => "Включу адаптер Bluetooth.",
-        "wifi_on" => "Включу Wi-Fi.",
+        "wifi_on" | "mac_wifi_on" => "Включу Wi-Fi.",
+        "mac_printer_enable" => "Сниму принтер с паузы. Если macOS попросит — введи пароль.",
+        "mac_vpn_restart" | "win_vpn_restart" => "Закрою клиент VPN и открою его заново.",
         "printer_enable" => "Сниму принтер с паузы.",
         "kb_switch" => "Верну переключение раскладки по Super+Пробел.",
         "thumbs_clear" => "Удалю картинки-превью файлов, они пересоздадутся сами.",
@@ -1732,9 +1965,15 @@ pub fn log_dry(what: &str) {
 /// Подходит ли действие этой системе: win_* — Windows, mac_* — macOS, общие — везде, остальные — Linux.
 /// (Иначе на Mac с Homebrew-gsettings запускалось бы лечение GNOME.)
 pub fn for_this_os(id: &str) -> bool {
+    allowed_on(id, current_os())
+}
+
+/// То же, но для названной системы («linux», «windows», «macos») — чтобы правило проверялось тестом на любой системе.
+fn allowed_on(id: &str, os: &str) -> bool {
     // «snapshot» — эталон тем: на Linux (GNOME), Windows и macOS свой набор ключей (diag::capture_snapshot)
-    const COMMON: [&str; 9] = [
+    const COMMON: [&str; 10] = [
         "dupes_scan",
+        "env_proxy_off",
         "dupes_trash",
         "git_proxy_off",
         "npm_proxy_off",
@@ -1748,7 +1987,7 @@ pub fn for_this_os(id: &str) -> bool {
     if COMMON.contains(&id) || id.starts_with("my_") {
         true
     } else {
-        os_of(id) == current_os()
+        os_of(id) == os
     }
 }
 
@@ -1786,6 +2025,61 @@ fn actions_for_their_os() {
         assert!(!for_this_os(other), "{other}");
     }
     assert!(for_this_os("dupes_scan"));
+}
+
+/// Действия, кнопки которых создаёт общий код (а не файлы win.rs / mac.rs / diag.rs), — должны быть разрешены на каждой системе,
+/// где эта кнопка появляется (раньше «Закомментировать» у прокси на macOS отвечала «для другой системы»).
+#[cfg(test)]
+mod shared_buttons_tests {
+    use super::*;
+
+    #[test]
+    fn shared_buttons_allowed_everywhere() {
+        // netproxy.rs, footprint.rs, dupes.rs, looksnap.rs: кнопки появляются на всех трёх системах
+        for id in [
+            "env_proxy_off",
+            "git_proxy_off",
+            "npm_proxy_off",
+            "open_url",
+            "footprint_lock",
+            "footprint_history",
+            "footprint_chats",
+            "dupes_scan",
+            "dupes_trash",
+            "snapshot",
+        ] {
+            for os in ["linux", "windows", "macos"] {
+                assert!(allowed_on(id, os), "{id} на {os}");
+            }
+        }
+        // кнопки своих систем: на чужой не работают
+        for (id, os) in [
+            ("mac_force_quit", "macos"),
+            ("mac_finder_restart", "macos"),
+            ("mac_proxy_off", "macos"),
+            ("mac_time_sync", "macos"),
+            ("mac_audio_restart", "macos"),
+            ("mac_thin_snapshots", "macos"),
+            ("mac_theme_restore", "macos"),
+            ("mac_wifi_on", "macos"),
+            ("mac_printer_enable", "macos"),
+            ("mac_print_clear", "macos"),
+            ("mac_vpn_restart", "macos"),
+            ("win_vpn_restart", "windows"),
+            ("win_kill", "windows"),
+            ("win_proxy_off", "windows"),
+            ("win_svc_restart", "windows"),
+            ("win_time_sync", "windows"),
+            ("win_update_reset", "windows"),
+            ("win_winhttp_reset", "windows"),
+            ("win_cleanmgr", "windows"),
+            ("win_theme_restore", "windows"),
+        ] {
+            for other in ["linux", "windows", "macos"] {
+                assert_eq!(allowed_on(id, other), other == os, "{id} на {other}");
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1839,3 +2133,52 @@ mod mac_quit_tests {
 #[cfg(test)]
 #[path = "regress/fixes.rs"]
 mod regress;
+
+#[cfg(test)]
+mod manual_shared_tests {
+    use super::*;
+
+    #[test]
+    fn manual_for_shared_actions_on_every_os() {
+        assert_eq!(manual("git_proxy_off", Some("http.proxy")).as_deref(), Some("git config --global --unset http.proxy"));
+        let m = manual("npm_proxy_off", None).unwrap();
+        assert!(m.contains("npm config delete proxy") && m.contains("https-proxy"), "{m}");
+        // странный параметр — команды нет, как и у кнопки
+        assert!(manual("git_proxy_off", Some("x;y")).is_none());
+    }
+
+    /// Новые кнопки macOS и Windows: аргумент проверяется, лишнее не проходит.
+    #[test]
+    fn new_buttons_validate() {
+        for id in ["mac_vpn_restart", "win_vpn_restart"] {
+            for ok in ["happ", "outline", "proton"] {
+                assert!(validate(id, Some(ok)).is_ok(), "{id} {ok}");
+            }
+            for bad in ["", "Happ", "happ;ls", "../x", "vless"] {
+                assert!(validate(id, Some(bad)).is_err(), "{id} {bad}");
+            }
+        }
+        assert!(validate("mac_printer_enable", Some("HP_M125r")).is_ok());
+        assert!(validate("mac_printer_enable", Some("a b")).is_err());
+        assert!(validate("mac_printer_enable", Some("-x")).is_err());
+        assert!(validate("mac_printer_enable", None).is_err());
+        assert!(validate("mac_wifi_on", None).is_ok() && validate("mac_print_clear", None).is_ok());
+        // ручная команда для VPN собирается там, где кнопка есть
+        #[cfg(windows)]
+        assert!(manual("win_vpn_restart", Some("happ")).unwrap().contains("Start-Process"));
+        #[cfg(target_os = "macos")]
+        assert!(manual("mac_vpn_restart", Some("proton")).unwrap().contains("open -a ProtonVPN"));
+    }
+
+    #[cfg(any(windows, target_os = "macos"))]
+    #[test]
+    fn env_comment_command_for_files() {
+        let m = env_comment_cmd("/Users/x/.zshrc", 12);
+        #[cfg(not(windows))]
+        assert_eq!(m, "sed -i.bak '12s/^/# /' '/Users/x/.zshrc'");
+        #[cfg(windows)]
+        assert!(m.contains("$l[11]") && m.contains("Set-Content"), "{m}");
+        #[cfg(not(windows))]
+        assert!(env_comment_cmd("/a'b", 1).contains(r"'/a'\''b'"));
+    }
+}

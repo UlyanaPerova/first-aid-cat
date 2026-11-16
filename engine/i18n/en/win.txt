@@ -207,3 +207,23 @@ en: {}: update files are damaged — resetting the components will help.
 
 ru: PowerShell не ответил вовремя или вернул ошибку.
 en: PowerShell did not answer in time or returned an error.
+
+# win.rs:478
+ru: Windows не отдала счётчики процессора.
+en: Windows didn't provide processor counters.
+
+# win.rs:482
+ru: Windows не отдала сведения о памяти.
+en: Windows didn't provide memory information.
+
+# win.rs:546
+ru: Это часть системы, её закрывать нельзя. Обычно её нагружает какая-то программа; если тормозит долго — перезагрузи компьютер.
+en: This is part of the system and must not be closed. Usually some program is loading it; if it lags for long, restart the computer.
+
+# win.rs:580
+ru: не подключён
+en: not connected
+
+# win.rs:580
+ru: Wi-Fi не подключён ни к одной сети. Если сеть по кабелю — так и надо.
+en: Wi-Fi is not connected to any network. If the network is by cable, that's fine.

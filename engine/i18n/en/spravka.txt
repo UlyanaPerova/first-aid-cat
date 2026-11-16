@@ -567,3 +567,11 @@ en: more
 # spravka.rs:1109
 ru: Пустые клетки: за эти дни записей нет (раньше, чем хранит история, или день ещё не настал).
 en: Empty cells: no records for these days (earlier than the history goes back, or the day has not come yet).
+
+# spravka.rs:129
+ru: Если светлая или тёмная тема сбилась после обновления — верните её в Системных настройках → Оформление (или кнопкой «Вернуть» в Аптечке, если эталон записан).
+en: If the light or dark appearance got reset after an update, set it back in System Settings → Appearance (or with the “Restore” button in First Aid Cat, if a baseline was saved).
+
+# spravka.rs:165
+ru: Если тема, цвет или обои сбились после обновления — верните их в Параметры → Персонализация (или кнопкой «Вернуть» в Аптечке, если эталон записан).
+en: If the theme, color or wallpaper got reset after an update, set them back in Settings → Personalization (or with the “Restore” button in First Aid Cat, if a baseline was saved).

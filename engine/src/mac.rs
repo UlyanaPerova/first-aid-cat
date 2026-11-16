@@ -64,6 +64,19 @@ pub(crate) fn check_proxy() -> Vec<Check> {
     out
 }
 
+/// Кнопка «Перезапустить» у клиента VPN, который Аптечка умеет открывать заново (Happ, Outline, Proton VPN) и чья программа
+/// лежит в «Программах». Остальным клиентам кнопки нет.
+fn restart_button(c: Check, name: &str) -> Check {
+    let Some(v) = crate::xplat::vpn_client_by_name(name) else { return c };
+    let home = crate::store::home_dir().unwrap_or_default();
+    let have = ["/Applications".into(), home.join("Applications")].iter().any(|d: &std::path::PathBuf| d.join(format!("{}.app", v.mac_app)).is_dir());
+    if have {
+        c.fixes(vec![fx("mac_vpn_restart", &format!("Перезапустить {}", v.title), Some(v.id))])
+    } else {
+        c
+    }
+}
+
 /// VPN-службы macOS: `scutil --nc list` — «* (Connected) UUID VPN (bundle) "Имя" [VPN/…]».
 pub(crate) fn check_vpn() -> Vec<Check> {
     let (_, out_) = run(&["scutil", "--nc", "list"], 10);
@@ -76,7 +89,7 @@ pub(crate) fn check_vpn() -> Vec<Check> {
             "Connecting" | "Disconnecting" | "Reasserting" => (WARN, "переподключается"),
             _ => (INFO, "выключен"),
         };
-        out.push(Check::new("net", &format!("VPN {name}"), st, v));
+        out.push(restart_button(Check::new("net", &format!("VPN {name}"), st, v), &name));
     }
     // VPN-программы, которых нет в системном списке (scutil): работают своим помощником или прокси
     // (AdGuard VPN и т. п.). Запущена — ещё не значит «подключена», поэтому только подсказка итогу
@@ -92,7 +105,7 @@ pub(crate) fn check_vpn() -> Vec<Check> {
             let t = format!("VPN {title}");
             match out.iter_mut().find(|c| c.title == t) {
                 Some(c) => c.value = "служба выключена, программа запущена (свой туннель)".into(),
-                None => out.push(Check::new("net", &t, INFO, "программа запущена")),
+                None => out.push(restart_button(Check::new("net", &t, INFO, "программа запущена"), title)),
             }
         }
     }
@@ -102,6 +115,53 @@ pub(crate) fn check_vpn() -> Vec<Check> {
     let mut sum = crate::diag::vpn_summary_apps(&up, installed, &apps, Vec::new());
     sum.append(&mut out);
     sum
+}
+
+/// Нагрузка и память: средняя загрузка за минуту, давление памяти системы, подкачка.
+pub(crate) fn check_system() -> Vec<Check> {
+    use crate::xplat::*;
+    let mut out = Vec::new();
+    let (_, la) = run(&["sysctl", "-n", "vm.loadavg"], 5);
+    let (_, nc) = run(&["sysctl", "-n", "hw.ncpu"], 5);
+    match (parse_loadavg(&la), nc.trim().parse::<usize>().ok()) {
+        (Some(l1), Some(cores)) => out.push(load_row(l1, cores)),
+        _ => out.push(Check::new("sys", "Процессор", INFO, "не проверить").unknown().hint("sysctl vm.loadavg не ответил.")),
+    }
+    let (_, mp) = run(&["memory_pressure"], 10);
+    let (_, lvl) = run(&["sysctl", "-n", "kern.memorystatus_vm_pressure_level"], 5);
+    let total = run(&["sysctl", "-n", "hw.memsize"], 5).1.trim().parse::<u64>().unwrap_or(0);
+    match mac_memory_row(total, parse_free_percent(&mp), parse_pressure_level(&lvl)) {
+        Some(c) => out.push(c),
+        None => out.push(Check::new("sys", "Память", INFO, "не проверить").unknown().hint("memory_pressure не ответил.")),
+    }
+    let (_, sw) = run(&["sysctl", "vm.swapusage"], 5);
+    if let Some((total, used)) = parse_swapusage(&sw) {
+        out.extend(mac_swap_row(total, used));
+    }
+    out
+}
+
+/// Wi-Fi: включён ли, подключён ли, как сигнал. Включить выключенный можно кнопкой.
+pub(crate) fn check_wifi() -> Vec<Check> {
+    use crate::xplat::*;
+    let hw = run(&["networksetup", "-listallhardwareports"], 10).1;
+    let Some(dev) = parse_wifi_device(&hw) else { return Vec::new() }; // Wi-Fi в этом компьютере нет
+    match parse_wifi_power(&run(&["networksetup", "-getairportpower", &dev], 8).1) {
+        Some(false) => vec![Check::new("net", "Wi-Fi", INFO, "выключен").hint("Wi-Fi выключен. Если сеть по кабелю — так и надо.").fixes(vec![fx(
+            "mac_wifi_on",
+            "Включить Wi-Fi",
+            None,
+        )])],
+        Some(true) => {
+            // сигнал и канал — только из system_profiler (устаревшую airport macOS убрала); имя сети он скрывает сам
+            let (_, sp) = run(&["system_profiler", "SPAirPortDataType"], 25);
+            match parse_sp_airport(&sp) {
+                Some(link) => vec![wifi_row(&link, true)],
+                None => vec![Check::new("net", "Wi-Fi", INFO, "включён, не подключён").hint("Wi-Fi включён, но ни к одной сети не подключён.")],
+            }
+        }
+        None => Vec::new(),
+    }
 }
 
 /// Интернет и DNS (страница проверки подключения Apple).
@@ -318,11 +378,13 @@ pub(crate) fn check_apps() -> Vec<Check> {
                 "Процесс ждёт диск или драйвер и не закрывается никак. Часто из-за отключённого диска или сетевой папки. Помогает перезагрузка.",
             ));
         } else if f[1].starts_with('T') {
-            out.push(Check::new("sys", &format!("Остановлена: {name}"), WARN, "на паузе").fixes(vec![fx(
-                "mac_force_quit",
-                "Закрыть принудительно",
-                Some(f[0]),
-            )]));
+            // кнопке нужен «номер@время запуска» (как у остальных «закрыть»); процесса уже нет — кнопки нет
+            let fix = f[0].parse::<u32>().ok().and_then(crate::fixes::mac_quit_arg).map(|a| fx("mac_force_quit", "Закрыть принудительно", Some(&a)));
+            let mut c = Check::new("sys", &format!("Остановлена: {name}"), WARN, "на паузе");
+            if let Some(fix) = fix {
+                c = c.fixes(vec![fix]);
+            }
+            out.push(c);
         }
     }
     // история за неделю

@@ -188,28 +188,68 @@ pub(crate) fn check_printing() -> Vec<Check> {
         out.push(Check::new("dev", "Печать", BAD, "служба CUPS не работает").fixes(vec![fx("svc_restart", "Перезапустить", Some("cups"))]));
         return out;
     }
-    for line in p.lines().filter(|l| l.starts_with("printer ")) {
-        let name = line.split_whitespace().nth(1).unwrap_or("").to_string();
-        if line.contains("disabled") {
+    let (_, jobs) = run(&["lpstat", "-o"], 5);
+    out.extend(printing_rows(&p, &jobs, "printer_enable", "print_clear"));
+    out
+}
+
+/// Принтеры из `lpstat -p` (вывод CUPS одинаков на Linux и macOS, запускать с C-локалью): (имя, остановлен ли).
+/// Строки «printer Имя is idle. enabled since …» и «printer Имя disabled since …».
+pub(crate) fn parse_lpstat_printers(p: &str) -> Vec<(String, bool)> {
+    p.lines()
+        .filter(|l| l.starts_with("printer "))
+        .map(|l| (l.split_whitespace().nth(1).unwrap_or("").to_string(), l.contains("disabled")))
+        .filter(|(n, _)| !n.is_empty())
+        .collect()
+}
+
+/// Число заданий в `lpstat -o`.
+pub(crate) fn count_lpstat_jobs(jobs: &str) -> usize {
+    jobs.lines().filter(|l| !l.trim().is_empty()).count()
+}
+
+/// Строки «Принтер …» и «Очередь печати» по выводу CUPS; `enable_id` и `clear_id` — действия этой системы.
+pub(crate) fn printing_rows(lpstat_p: &str, lpstat_o: &str, enable_id: &str, clear_id: &str) -> Vec<Check> {
+    let mut out = Vec::new();
+    for (name, disabled) in parse_lpstat_printers(lpstat_p) {
+        if disabled {
             out.push(
                 Check::new("dev", &format!("Принтер {name}"), WARN, "остановлен")
                     .hint("Принтер поставлен на паузу (часто после ошибки бумаги или связи).")
-                    .fixes(vec![fx("printer_enable", "Возобновить", Some(&name))]),
+                    .fixes(vec![fx(enable_id, "Возобновить", Some(&name))]),
             );
         } else {
             out.push(Check::new("dev", &format!("Принтер {name}"), OK, "готов"));
         }
     }
-    let (_, jobs) = run(&["lpstat", "-o"], 5);
-    let n = jobs.lines().filter(|l| !l.trim().is_empty()).count();
+    let n = count_lpstat_jobs(lpstat_o);
     if n > 0 {
         out.push(
             Check::new("dev", "Очередь печати", WARN, &format!("{n} в очереди"))
                 .hint("Если задания не печатаются долго — очередь застряла.")
-                .fixes(vec![fx("print_clear", "Очистить мою очередь", None)]),
+                .fixes(vec![fx(clear_id, "Очистить мою очередь", None)]),
         );
     }
     out
+}
+
+/// macOS: печать через CUPS — то же, что на Linux, но служба CUPS — `lpstat -r` («scheduler is running»), а не systemd.
+#[cfg_attr(target_os = "linux", allow(dead_code))]
+pub(crate) fn check_printing_mac() -> Vec<Check> {
+    if crate::procs::which("lpstat").is_none() {
+        return Vec::new();
+    }
+    let (_, p) = run(&["lpstat", "-p"], 8);
+    if p.contains("No destinations") || p.trim().is_empty() {
+        return Vec::new(); // принтеров нет — и показывать нечего
+    }
+    let (_, sched) = run(&["lpstat", "-r"], 5);
+    if sched.contains("not running") {
+        return vec![Check::new("dev", "Печать", BAD, "служба печати (CUPS) не работает")
+            .hint("Без неё ничего не печатается. Помогает перезагрузка компьютера.")];
+    }
+    let (_, jobs) = run(&["lpstat", "-o"], 8);
+    printing_rows(&p, &jobs, "mac_printer_enable", "mac_print_clear")
 }
 
 // ───────────────────────────── Раскладка ─────────────────────────────
@@ -650,6 +690,23 @@ mod tests {
         assert_eq!(parse_volume("Volume: 0.40 [MUTED]"), Some((0.40, true)));
         assert_eq!(parse_volume("Volume: 1.00"), Some((1.0, false)));
         assert_eq!(parse_volume("ничего"), None);
+    }
+
+    #[test]
+    fn cups_output_parse() {
+        // вывод lpstat на C-локали (Linux и macOS одинаковый)
+        let p = "printer HP_M125 is idle.  enabled since Mon Nov  9 10:00:00 2026\nprinter Brother_X disabled since Tue Nov 10 09:00:00 2026 -\n\treason unknown\n";
+        assert_eq!(parse_lpstat_printers(p), vec![("HP_M125".to_string(), false), ("Brother_X".to_string(), true)]);
+        assert!(parse_lpstat_printers("lpstat: No destinations added.\n").is_empty());
+        assert_eq!(count_lpstat_jobs("HP_M125-12 ulyana 1024 Mon Nov  9 10:05:00 2026\n\n"), 1);
+        let rows = printing_rows(p, "HP_M125-12 u 1 Mon\nHP_M125-13 u 1 Mon\n", "mac_printer_enable", "mac_print_clear");
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[1].fixes[0].id, "mac_printer_enable");
+        assert_eq!(rows[1].fixes[0].arg.as_deref(), Some("Brother_X"));
+        assert_eq!(
+            (rows[2].title.as_str(), rows[2].value.as_str(), rows[2].fixes[0].id.as_str()),
+            ("Очередь печати", "2 в очереди", "mac_print_clear")
+        );
     }
 
     #[test]

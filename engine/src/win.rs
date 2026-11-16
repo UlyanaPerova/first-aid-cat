@@ -288,10 +288,15 @@ pub(crate) fn check_vpn() -> Vec<Check> {
         claimed.extend(adapters.iter().filter(|a| mine(a)).map(|a| a.name.clone()));
         let title = format!("Канал {}", v.name);
         // «программа запущена» — не «VPN включён»: включён, когда поднят его туннель
+        // Happ, Outline и Proton VPN умеем открывать заново (как на Linux): по пути их запущенной программы
+        let restart = |c: Check| match crate::xplat::vpn_client_by_name(v.name) {
+            Some(cl) => c.fixes(vec![fx("win_vpn_restart", &format!("Перезапустить {}", cl.title), Some(cl.id))]),
+            None => c,
+        };
         if running && tun_up {
-            out.push(Check::new("net", &title, OK, "включён (туннель)"));
+            out.push(restart(Check::new("net", &title, OK, "включён (туннель)")));
         } else if running {
-            out.push(Check::new("net", &title, INFO, "запущен, не подключён"));
+            out.push(restart(Check::new("net", &title, INFO, "запущен, не подключён")));
         } else if tun_up {
             out.push(Check::new("net", &title, BAD, "туннель остался без программы")
                 .hint("Программа VPN закрыта, а её сетевой интерфейс включён — интернет может идти в никуда. Запусти её и отключись, или перезапусти службу.")
@@ -421,6 +426,166 @@ pub(crate) fn check_stability() -> Vec<Check> {
         }
     }
     out
+}
+
+// ───────────────────────────── Нагрузка, память, прожорливые программы, Wi-Fi ─────────────────────────────
+
+/// Память по GlobalMemoryStatusEx: (физическая всего, свободная, лимит выделения, осталось до лимита), байты.
+fn memory_status() -> Option<(u64, u64, u64, u64)> {
+    // то же описание, что в widget.rs (одна и та же внешняя функция): длина, загрузка %, затем 7 полей u64 —
+    // физическая всего и свободная, лимит выделения и остаток до него, виртуальная
+    #[repr(C)]
+    struct MemStatus {
+        len: u32,
+        load: u32,
+        rest: [u64; 7],
+    }
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GlobalMemoryStatusEx(m: *mut MemStatus) -> i32;
+    }
+    let mut m = MemStatus { len: std::mem::size_of::<MemStatus>() as u32, load: 0, rest: [0; 7] };
+    (unsafe { GlobalMemoryStatusEx(&mut m) } != 0).then_some((m.rest[0], m.rest[1], m.rest[2], m.rest[3]))
+}
+
+/// Занятость процессора за секунду, % (GetSystemTimes: время ядра включает простой).
+fn cpu_busy_percent() -> Option<f64> {
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetSystemTimes(idle: *mut u64, kernel: *mut u64, user: *mut u64) -> i32;
+    }
+    let read = || {
+        let (mut i, mut k, mut u) = (0u64, 0u64, 0u64);
+        (unsafe { GetSystemTimes(&mut i, &mut k, &mut u) } != 0).then_some((i, k + u))
+    };
+    let (i0, t0) = read()?;
+    std::thread::sleep(Duration::from_secs(1));
+    let (i1, t1) = read()?;
+    (t1 > t0 && i1 >= i0).then(|| (100.0 * (1.0 - (i1 - i0) as f64 / (t1 - t0) as f64)).clamp(0.0, 100.0))
+}
+
+/// Нагрузка и память: занятость процессора и память (физическая, лимит выделения).
+pub(crate) fn check_system() -> Vec<Check> {
+    let mut out = Vec::new();
+    let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+    match cpu_busy_percent() {
+        Some(p) => out.push(Check::new(
+            "sys",
+            "Процессор",
+            OK,
+            &format!("занят на {p:.0}% ({})", crate::diag::plural(threads, "поток", "потока", "потоков")),
+        )),
+        None => out.push(Check::new("sys", "Процессор", INFO, "не проверить").unknown().hint("Windows не отдала счётчики процессора.")),
+    }
+    match memory_status() {
+        Some((tp, ap, tc, ac)) => out.extend(crate::xplat::win_memory_rows(tp, ap, tc, ac)),
+        None => out.push(Check::new("sys", "Память", INFO, "не проверить").unknown().hint("Windows не отдала сведения о памяти.")),
+    }
+    out
+}
+
+/// Процессорное время процесса (ядро + пользователь), 100-нс единицы; None — процесс закрыт или не открыть.
+fn process_cpu_100ns(pid: i64) -> Option<u64> {
+    use core::ffi::c_void;
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn OpenProcess(access: u32, inherit: i32, pid: u32) -> *mut c_void;
+        fn GetProcessTimes(h: *mut c_void, c: *mut u64, e: *mut u64, k: *mut u64, u: *mut u64) -> i32;
+        fn CloseHandle(h: *mut c_void) -> i32;
+    }
+    let h = unsafe { OpenProcess(0x1000, 0, u32::try_from(pid).ok()?) };
+    if h.is_null() {
+        return None;
+    }
+    let (mut c, mut e, mut k, mut u) = (0u64, 0u64, 0u64, 0u64);
+    let ok = unsafe { GetProcessTimes(h, &mut c, &mut e, &mut k, &mut u) } != 0;
+    unsafe { CloseHandle(h) };
+    ok.then_some(k + u)
+}
+
+/// Замеры «горячих» процессов между проверками: (номер, время запуска) → (секунды процессора, когда).
+static HOT_SEEN: std::sync::Mutex<Vec<((i64, u64), (f64, std::time::Instant))>> = std::sync::Mutex::new(Vec::new());
+
+/// Процесс занят долго, а не секунду: по замеру из прошлой проверки (≥ 50 с назад). Как на Linux: впервые замеченный
+/// горячий процесс запоминаем и судим в следующий раз.
+fn sustained(pid: i64, start: u64, cpu_s: f64) -> bool {
+    let key = (pid, start);
+    let now = std::time::Instant::now();
+    let mut seen = HOT_SEEN.lock().unwrap_or_else(|e| e.into_inner());
+    seen.retain(|(_, (_, t))| t.elapsed() < Duration::from_secs(900));
+    let prev = seen.iter().find(|(k, _)| *k == key).map(|(_, (c, t))| (*c, t.elapsed().as_secs_f64()));
+    let verdict = crate::xplat::hot_verdict(prev, cpu_s);
+    if verdict.is_some() || prev.is_none() {
+        seen.retain(|(k, _)| *k != key);
+        seen.push((key, (cpu_s, now)));
+    }
+    verdict.unwrap_or(false)
+}
+
+/// Прожорливые программы: два замера процессорного времени с паузой; процесс считается «горячим», когда
+/// занимает больше 80% ядра и так же держится долго (как на Linux).
+pub(crate) fn check_hogs() -> Vec<Check> {
+    let mut out = Vec::new();
+    let me = std::process::id() as i64;
+    let all = crate::procs::list();
+    let a: Vec<(crate::procs::Proc, u64)> =
+        all.iter().filter(|p| p.pid != me).filter_map(|p| process_cpu_100ns(p.pid).map(|t| (p.clone(), t))).collect();
+    std::thread::sleep(Duration::from_millis(1500));
+    let mut hot: Vec<(crate::procs::Proc, f64, f64)> = a
+        .into_iter()
+        .filter_map(|(p, t0)| process_cpu_100ns(p.pid).map(|t1| (p, t1, t1.saturating_sub(t0) as f64 / 1e7 / 1.5 * 100.0)))
+        .filter(|(_, _, pct)| *pct > 80.0)
+        .filter(|(p, t1, _)| sustained(p.pid, p.start as u64, *t1 as f64 / 1e7))
+        .map(|(p, t1, pct)| (p, t1 as f64 / 1e7, pct))
+        .collect();
+    hot.sort_by(|x, y| y.2.partial_cmp(&x.2).unwrap_or(std::cmp::Ordering::Equal));
+    const INDEXERS: [&str; 2] = ["SearchIndexer.exe", "SearchProtocolHost.exe"];
+    for (p, _, pct) in hot.iter().take(3) {
+        if crate::procs::is_protected(&p.name) {
+            out.push(Check::new("sys", &format!("Занят процессор: {}", p.name), WARN, &format!("{pct:.0}% ядра")).hint(
+                "Это часть системы, её закрывать нельзя. Обычно её нагружает какая-то программа; если тормозит долго — перезагрузи компьютер.",
+            ));
+        } else if INDEXERS.iter().any(|i| p.name.eq_ignore_ascii_case(i)) {
+            out.push(
+                Check::new("sys", &format!("Индексатор {}", p.name), INFO, &format!("{pct:.0}% процессора"))
+                    .hint("Составляет поиск по файлам. Обычно затихает сам через полчаса."),
+            );
+        } else {
+            // имя в аргументе — чтобы не закрыть другую программу, получившую тот же номер
+            let fix = fx("win_kill", "Закрыть программу", Some(&format!("{}:{}", p.pid, p.name)));
+            out.push(crate::more::hog_check(&p.name, *pct, crate::procs::hog_kind(p, &all), Some(fix)));
+        }
+    }
+    out
+}
+
+/// Wi-Fi: подключён ли и какой сигнал (`netsh wlan show interfaces`, вывод по-русски разбирается так же, как по-английски).
+pub(crate) fn check_wifi() -> Vec<Check> {
+    // кодировка вывода — UTF-8: иначе русское имя сети придёт в кодировке консоли
+    let r = crate::diag::run_ex(
+        &["powershell", "-NoProfile", "-NonInteractive", "-Command", "[Console]::OutputEncoding=[Text.Encoding]::UTF8; netsh wlan show interfaces"],
+        20,
+    );
+    if r.code() != 0 {
+        return Vec::new();
+    }
+    let ifaces = crate::xplat::parse_netsh_wlan(r.text());
+    let many = ifaces.len() > 1;
+    ifaces
+        .into_iter()
+        .map(|i| {
+            let mut c = match &i.link {
+                Some(l) => crate::xplat::wifi_row(l, false),
+                None => {
+                    Check::new("net", "Wi-Fi", INFO, "не подключён").hint("Wi-Fi не подключён ни к одной сети. Если сеть по кабелю — так и надо.")
+                }
+            };
+            if many {
+                c.title = format!("Wi-Fi {}", i.name);
+            }
+            c
+        })
+        .collect()
 }
 
 pub(crate) fn check_time() -> Vec<Check> {

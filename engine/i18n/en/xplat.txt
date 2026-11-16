@@ -1,0 +1,57 @@
+
+
+# xplat.rs:22
+ru: нагрузка {} на {} ядер
+en: load {} on {} cores
+
+# xplat.rs:24
+ru: Программы стоят в очереди за процессором: компьютер тормозит. Посмотри строки «Занят процессор» — там видно, кто грузит.
+en: Programs are queuing for the processor: the computer lags. Look at the “Processor busy” rows to see who is loading it.
+
+# xplat.rs:72
+ru: Системе не хватает свободной памяти: она сжимает данные и сбрасывает их на диск, из-за этого всё тормозит. Закрой лишние программы и вкладки браузера.
+en: The system is short of free memory: it compresses data and swaps it to disk, which makes everything lag. Close extra programs and browser tabs.
+
+# xplat.rs:83
+ru: занято {} ГБ из {} ГБ
+en: {} GB used of {} GB
+
+# xplat.rs:85
+ru: Память вытесняется на диск — программ открыто больше, чем помещается. Закрой лишние.
+en: Memory is being pushed out to disk — more programs are open than fit. Close extra ones.
+
+# xplat.rs:109
+ru: Почти вся память занята: Windows сбрасывает данные на диск, и всё тормозит. Закрой лишние программы и вкладки; посмотреть, кто ест память, — Диспетчер задач.
+en: Almost all memory is used: Windows swaps data to disk and everything lags. Close extra programs and tabs; to see who uses memory, open Task Manager.
+
+# xplat.rs:113
+ru: Лимит памяти
+en: Memory limit
+
+# xplat.rs:113
+ru: осталось {} ГБ
+en: {} GB left
+
+# xplat.rs:114
+ru: Оперативная память вместе с файлом подкачки почти исчерпана: программы начнут вылетать. Закрой лишние или увеличь файл подкачки.
+en: RAM together with the page file is almost used up: programs will start crashing. Close extra ones or enlarge the page file.
+
+# xplat.rs:249
+ru: сигнал слабый
+en: weak signal
+
+# xplat.rs:251
+ru: сигнал средний
+en: fair signal
+
+# xplat.rs:253
+ru: сигнал хороший
+en: good signal
+
+# xplat.rs:256
+ru: , канал {}
+en: , channel {}
+
+# xplat.rs:259
+ru: Роутер далеко или мешают стены: интернет будет рваным. Подойди ближе к роутеру или подключись кабелем.
+en: The router is far or walls get in the way: the connection will be choppy. Move closer to the router or connect by cable.

@@ -106,3 +106,23 @@ en: If the app froze and won't close, press “Force quit” (unsaved work will 
 # mac.rs: служба VPN выключена, а программа работает своим туннелем
 ru: служба выключена, программа запущена (свой туннель)
 en: service off, app running (own tunnel)
+
+# mac.rs:128
+ru: sysctl vm.loadavg не ответил.
+en: sysctl vm.loadavg didn't respond.
+
+# mac.rs:135
+ru: memory_pressure не ответил.
+en: memory_pressure didn't respond.
+
+# mac.rs:150
+ru: Wi-Fi выключен. Если сеть по кабелю — так и надо.
+en: Wi-Fi is off. If the network is by cable, that's fine.
+
+# mac.rs:160
+ru: включён, не подключён
+en: on, not connected
+
+# mac.rs:160
+ru: Wi-Fi включён, но ни к одной сети не подключён.
+en: Wi-Fi is on but not connected to any network.

@@ -103,14 +103,97 @@ pub fn dns_ms() -> Option<f64> {
     None
 }
 
-/// DNS-серверы системы (Linux и macOS — /etc/resolv.conf; на Windows — пусто, там остаётся системный поиск).
+/// DNS-серверы системы: Linux — /etc/resolv.conf; macOS — он же, а если там пусто — `scutil --dns`;
+/// Windows — `ipconfig /all`.
 fn system_resolvers() -> Vec<std::net::IpAddr> {
-    crate::store::read_text_lossy("/etc/resolv.conf")
-        .unwrap_or_default()
-        .lines()
-        .filter_map(|l| l.trim().strip_prefix("nameserver")?.split_whitespace().next()?.split('%').next()?.parse().ok())
-        .take(3)
-        .collect()
+    #[cfg(windows)]
+    {
+        let out = crate::cmd::exec(&["ipconfig", "/all"], Duration::from_secs(10), crate::cmd::CHECK);
+        resolvers_from_ipconfig(out.text())
+    }
+    #[cfg(not(windows))]
+    {
+        let v = resolvers_from_resolv_conf(&crate::store::read_text_lossy("/etc/resolv.conf").unwrap_or_default());
+        #[cfg(target_os = "macos")]
+        if v.is_empty() {
+            let out = crate::cmd::exec(&["scutil", "--dns"], Duration::from_secs(8), crate::cmd::CHECK);
+            return resolvers_from_scutil(out.text());
+        }
+        v
+    }
+}
+
+/// Годится ли адрес для прямого вопроса: не «любой», не link-local IPv6 (без номера интерфейса туда не достучаться)
+/// и не заглушка fec0:0:0:ffff::N, которую Windows показывает у отключённых адаптеров.
+fn usable_resolver(ip: &std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(a) => !a.is_unspecified(),
+        std::net::IpAddr::V6(a) => !a.is_unspecified() && (a.segments()[0] & 0xffc0) != 0xfe80 && a.segments()[0] != 0xfec0,
+    }
+}
+
+fn push_resolver(v: &mut Vec<std::net::IpAddr>, word: &str) -> bool {
+    let Ok(ip) = word.split('%').next().unwrap_or("").parse::<std::net::IpAddr>() else { return false };
+    if usable_resolver(&ip) && !v.contains(&ip) {
+        v.push(ip);
+    }
+    true
+}
+
+/// /etc/resolv.conf: строки «nameserver адрес».
+#[cfg_attr(windows, allow(dead_code))]
+fn resolvers_from_resolv_conf(t: &str) -> Vec<std::net::IpAddr> {
+    let mut v = Vec::new();
+    for l in t.lines() {
+        if let Some(w) = l.trim().strip_prefix("nameserver").and_then(|r| r.split_whitespace().next()) {
+            push_resolver(&mut v, w);
+        }
+    }
+    v.truncate(3);
+    v
+}
+
+/// macOS `scutil --dns`: строки «nameserver[0] : адрес» (повторяются в каждом «resolver #N» — убираем повторы).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn resolvers_from_scutil(t: &str) -> Vec<std::net::IpAddr> {
+    let mut v = Vec::new();
+    for l in t.lines() {
+        let l = l.trim();
+        if l.starts_with("nameserver[") {
+            if let Some(w) = l.split(" : ").nth(1).and_then(|r| r.split_whitespace().next()) {
+                push_resolver(&mut v, w);
+            }
+        }
+    }
+    v.truncate(3);
+    v
+}
+
+/// Windows `ipconfig /all`. Название строки зависит от языка («DNS Servers», «DNS-серверы»), поэтому не по названию:
+/// строка со словом «DNS» до двоеточия начинает список, следующие строки, где только адрес, его продолжают.
+/// Адреса одинаковы на любом языке.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn resolvers_from_ipconfig(t: &str) -> Vec<std::net::IpAddr> {
+    let mut v = Vec::new();
+    let mut in_list = false;
+    for l in t.lines() {
+        let trimmed = l.trim();
+        if let Some((key, val)) = l.split_once(" : ").or_else(|| l.split_once(": ")) {
+            in_list = false;
+            // «DNS Servers . . . : …», «DNS-серверы. . . : …»; не «DNS Suffix» (это имя домена, а не адрес)
+            let first = val.split_whitespace().next().unwrap_or("");
+            if key.to_ascii_uppercase().contains("DNS") && first.split('%').next().unwrap_or("").parse::<std::net::IpAddr>().is_ok() {
+                in_list = true;
+                push_resolver(&mut v, val.split_whitespace().next().unwrap_or(""));
+            }
+        } else if in_list && !trimmed.is_empty() && push_resolver(&mut v, trimmed.split_whitespace().next().unwrap_or("")) {
+            continue;
+        } else {
+            in_list = false;
+        }
+    }
+    v.truncate(3);
+    v
 }
 
 /// Ответ DNS «вживую», мимо кэша: случайное имя внутри example.com (его не может быть в кэше — резолвер
@@ -272,5 +355,39 @@ mod dns_tests {
         o[13] = b'z';
         assert!(!dns_reply_matches(&o, &q, srv, from));
         assert!(!dns_reply_matches(&good[..10], &q, srv, from));
+    }
+}
+
+#[cfg(test)]
+mod resolver_tests {
+    use super::*;
+
+    fn ips(v: Vec<std::net::IpAddr>) -> Vec<String> {
+        v.iter().map(|a| a.to_string()).collect()
+    }
+
+    #[test]
+    fn resolv_conf() {
+        let t = "# comment\nsearch lan\nnameserver 192.168.2.1\nnameserver fe80::1%en0\nnameserver 2606:4700:4700::1111\n";
+        assert_eq!(ips(resolvers_from_resolv_conf(t)), ["192.168.2.1", "2606:4700:4700::1111"]);
+    }
+
+    #[test]
+    fn scutil_dns() {
+        // настоящий вывод macOS 26 (обезличен), плюс второй адаптер с тем же сервером
+        let t = "DNS configuration\n\nresolver #1\n  search domain[0] : lan\n  nameserver[0] : 192.168.2.1\n  if_index : 11 (en0)\n  flags    : Request A records\n  reach    : 0x00020002 (Reachable,Directly Reachable Address)\n\nresolver #2\n  domain   : local\n  options  : mdns\n\nDNS configuration (for scoped queries)\n\nresolver #1\n  search domain[0] : lan\n  nameserver[0] : 192.168.2.1\n  nameserver[1] : 1.1.1.1\n";
+        assert_eq!(ips(resolvers_from_scutil(t)), ["192.168.2.1", "1.1.1.1"]);
+        assert!(resolvers_from_scutil("").is_empty());
+    }
+
+    #[test]
+    fn ipconfig_english_and_russian() {
+        let en = "Windows IP Configuration\r\n\r\nEthernet adapter Ethernet:\r\n\r\n   Connection-specific DNS Suffix  . : lan\r\n   Description . . . . . . . . . . . : Intel(R) PRO/1000\r\n   IPv6 Address. . . . . . . . . . . : fd00::5(Preferred)\r\n   DHCP Enabled. . . . . . . . . . . : Yes\r\n   DNS Servers . . . . . . . . . . . : 192.168.1.1\r\n                                       8.8.8.8\r\n   NetBIOS over Tcpip. . . . . . . . : Enabled\r\n";
+        assert_eq!(ips(resolvers_from_ipconfig(en)), ["192.168.1.1", "8.8.8.8"]);
+        let ru = "Настройка протокола IP для Windows\r\n\r\nАдаптер Ethernet Ethernet:\r\n\r\n   DNS-суффикс подключения . . . . . : lan\r\n   DNS-серверы. . . . . . . . . . . : fe80::1%12\r\n                                       192.168.1.1\r\n                                       2001:4860:4860::8888\r\n   NetBios через TCP/IP. . . . . . . . : Включен\r\n   Основной шлюз. . . . . . . . . : 192.168.1.1\r\n";
+        assert_eq!(ips(resolvers_from_ipconfig(ru)), ["192.168.1.1", "2001:4860:4860::8888"]);
+        // отключённый адаптер с заглушкой и без серверов — пусто
+        let off = "Wireless LAN adapter Wi-Fi:\r\n   Media State . . . . . . . . . . . : Media disconnected\r\n   DNS Servers . . . . . . . . . . . : fec0:0:0:ffff::1%1\r\n                                       fec0:0:0:ffff::2%1\r\n";
+        assert!(resolvers_from_ipconfig(off).is_empty());
     }
 }

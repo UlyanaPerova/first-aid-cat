@@ -12,6 +12,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Clutter from 'gi://Clutter';
 import Cogl from 'gi://Cogl';
+import Meta from 'gi://Meta';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
@@ -166,7 +167,31 @@ class AptechkaIndicator extends PanelMenu.Button {
         this._scene.visible = true;
     }
 
+    // The app's "Restart GNOME Shell" fix leaves a note with the current time in its session folder; we take it
+    // and restart the shell from inside: the very call behind Alt+F2, r (X11 only). The shell process re-executes
+    // itself, so systemd sees no failure and the session survives. The note is deleted BEFORE restarting (no loop);
+    // a note that cannot be deleted or is older than 15 s is ignored.
+    _checkRestart() {
+        const f = Gio.File.new_for_path(GLib.build_filenamev([GLib.get_user_runtime_dir(), 'aptechka', 'shell_restart']));
+        let at = 0;
+        try {
+            const [ok, bytes] = f.load_contents(null);
+            if (!ok)
+                return;
+            at = parseInt(new TextDecoder().decode(bytes).trim(), 10) || 0;
+            f.delete(null);
+        } catch (e) {
+            return;
+        }
+        const now = GLib.get_real_time() / 1e6;
+        if (Meta.is_wayland_compositor() || Math.abs(now - at) > 15)
+            return;
+        Meta.restart('Restarting…', global.context);
+    }
+
     _refresh(sceneOnly = false) {
+        if (!sceneOnly)
+            this._checkRestart();
         let data = null;
         try {
             const [ok, bytes] = this._file.load_contents(null);

@@ -56,7 +56,8 @@ const NORM_SHORT: &[(&str, &str)] = &[
     ("Доступ к репозиториям", "отвечают все"),
 ];
 
-/// Что делать, если приложение само не лечит (по началу названия проверки).
+/// Что делать, если приложение само не лечит (по началу названия проверки). Здесь Linux-советы (baobab, systemctl,
+/// GNOME, apt); на macOS и Windows берутся только записи из COMMON_ADVICE_KEYS и свои таблицы.
 const ADVICE: &[(&str, &str)] = &[
     (
         "Пинг",
@@ -124,6 +125,11 @@ const ADVICE: &[(&str, &str)] = &[
 /// Советы, где macOS говорит по-своему (перед общей таблицей).
 const ADVICE_MAC: &[(&str, &str)] = &[
     (
+        "Оформление",
+        "Если светлая или тёмная тема сбилась после обновления — верните её в Системных настройках → \
+             Оформление (или кнопкой «Вернуть» в Аптечке, если эталон записан).",
+    ),
+    (
         "Пинг",
         "Переключитесь на ближайший сервер VPN (Европа обычно быстрее Америки); закройте \
              торренты и большие загрузки; по возможности подключитесь кабелем вместо Wi-Fi. \
@@ -155,6 +161,11 @@ const ADVICE_MAC: &[(&str, &str)] = &[
 /// Советы, где Windows говорит по-своему (перед общей таблицей).
 const ADVICE_WIN: &[(&str, &str)] = &[
     (
+        "Тема",
+        "Если тема, цвет или обои сбились после обновления — верните их в Параметры → Персонализация \
+             (или кнопкой «Вернуть» в Аптечке, если эталон записан).",
+    ),
+    (
         "Пинг",
         "Переключитесь на ближайший сервер VPN (Европа обычно быстрее Америки); закройте \
              торренты и большие загрузки; по возможности подключитесь кабелем вместо Wi-Fi. \
@@ -183,16 +194,71 @@ const ADVICE_WIN: &[(&str, &str)] = &[
     ),
 ];
 
-/// Совет к строке: сначала слово этой системы, потом общее (Linux).
+/// Записи общей таблицы, которые верны на любой системе (остальные — про Linux: baobab, systemctl, apt, GNOME).
+const COMMON_ADVICE_KEYS: &[&str] = &["Скорость", "Серверы Anthropic", "Связь с Claude", "Без перезагрузки", "Канал", "VPN"];
+
+/// Совет к строке: сначала слово этой системы, потом общее — на Linux вся таблица, на других системах только общие записи.
 fn advice_for(title: &str) -> Option<&'static str> {
-    let own: &[(&str, &str)] = if cfg!(target_os = "macos") {
-        ADVICE_MAC
-    } else if cfg!(windows) {
-        ADVICE_WIN
-    } else {
-        &[]
+    advice_for_os(
+        title,
+        if cfg!(target_os = "macos") {
+            "macos"
+        } else if cfg!(windows) {
+            "windows"
+        } else {
+            "linux"
+        },
+    )
+}
+
+fn advice_for_os(title: &str, os: &str) -> Option<&'static str> {
+    let own: &[(&str, &str)] = match os {
+        "macos" => ADVICE_MAC,
+        "windows" => ADVICE_WIN,
+        _ => &[],
     };
-    lookup(own, title).or_else(|| lookup(ADVICE, title))
+    if let Some(a) = lookup(own, title) {
+        return Some(a);
+    }
+    if os == "linux" {
+        return lookup(ADVICE, title);
+    }
+    let (_, text) = ADVICE.iter().find(|(k, _)| title.starts_with(k) && COMMON_ADVICE_KEYS.contains(k))?;
+    Some(text)
+}
+
+#[cfg(test)]
+mod advice_tests {
+    use super::*;
+
+    #[test]
+    fn advice_is_per_system() {
+        // на Windows тема — про Параметры, а не про WhiteSur; на macOS — про Системные настройки
+        let w = advice_for_os("Тема Windows", "windows").unwrap();
+        assert!(w.contains("Параметры") && !w.contains("WhiteSur"), "{w}");
+        assert!(advice_for_os("Тема приложений", "windows").unwrap().contains("Параметры"));
+        assert!(advice_for_os("Оформление", "macos").unwrap().contains("Системных настройках"));
+        // Linux-советы на других системах не показываются
+        for t in ["Упавшие службы", "Расширение: dash", "Видеокарта", "Кто рисует экран", "Доступ к репозиториям"]
+        {
+            assert!(advice_for_os(t, "windows").is_none() && advice_for_os(t, "macos").is_none(), "{t}");
+            assert!(advice_for_os(t, "linux").is_some(), "{t}");
+        }
+        // а Linux-слова (baobab, systemctl, Монитор системы) нигде, кроме Linux, не встречаются в советах
+        for t in ["Пинг", "Скорость ↓", "Память", "Диск", "Температура CPU", "Системное время", "Без перезагрузки", "VPN"]
+        {
+            for os in ["windows", "macos"] {
+                if let Some(a) = advice_for_os(t, os) {
+                    assert!(
+                        !a.contains("baobab") && !a.contains("systemctl") && !a.contains("Монитор системы") && !a.contains("WhiteSur"),
+                        "{t} {os}: {a}"
+                    );
+                }
+            }
+        }
+        // общие записи есть везде
+        assert!(advice_for_os("Скорость ↓ скачивание", "macos").is_some());
+    }
 }
 
 /// Сложные случаи — направление к старшему врачу.

@@ -236,3 +236,38 @@ en: Because of this the terminal and AI agents in it don't work, though the brow
 ru: {}%, {}
 en: {}%, {}
 
+# netproxy.rs:269
+ru: пользователь
+en: user
+
+# netproxy.rs:270
+ru: весь компьютер
+en: whole computer
+
+# netproxy.rs:270
+ru: 'Machine' (от администратора)
+en: 'Machine' (as administrator)
+
+# netproxy.rs:277
+ru: Удали переменную: [Environment]::SetEnvironmentVariable('{}', $null, {}) — в PowerShell, затем открой новое окно.
+en: Remove the variable: [Environment]::SetEnvironmentVariable('{}', $null, {}) in PowerShell, then open a new window.
+
+# netproxy.rs:279
+ru: Удали переменную в «Переменных среды» (Параметры → Система → О программе → Дополнительные параметры системы).
+en: Remove the variable in “Environment Variables” (Settings → System → About → Advanced system settings).
+
+# netproxy.rs:282
+ru: Прокси в переменных Windows
+en: Proxy in Windows variables
+
+# netproxy.rs:283
+ru: Переменная {} ({})
+en: Variable {} ({})
+
+# netproxy.rs:286
+ru: Из-за этого не работают терминал и программы, которые читают переменные окружения. {}
+en: Because of this the terminal and programs that read environment variables don't work. {}
+
+# netproxy.rs:420
+ru: через {}
+en: via {}

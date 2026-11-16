@@ -2050,8 +2050,8 @@ impl Ui {
     /// в двойном размере, как в Python (page_surface(doc, 2)).
     pub fn spravka_png(&mut self) -> Option<(String, usize, usize, Vec<u8>)> {
         let sp = self.st.spravka.as_ref()?;
-        let home = crate::store::home_dir()?.to_string_lossy().into_owned();
-        let dir = ["Изображения", "Pictures"].iter().map(|d| format!("{home}/{d}")).find(|d| std::path::Path::new(d).is_dir()).unwrap_or(home);
+        // «Изображения» там, где они сейчас (на Windows — может быть в OneDrive), а не жёстко ~/Pictures
+        let dir = crate::dupes::pictures_dir()?.to_string_lossy().into_owned();
         if let Some(a) = &sp.analytics {
             let t = localtime(a.now);
             let path = format!("{dir}/Расход_ИИ_{}-{:02}-{:02}.png", t.year, t.mon, t.mday);
@@ -2421,12 +2421,8 @@ fn default_iface() -> String {
                 (f.next()? == "00000000").then(|| iface.to_string())
             })
         })
-        .or_else(|| {
-            // macOS: «interface: en0» из route -n get default
-            cfg!(target_os = "macos")
-                .then(|| crate::diag::run(&["route", "-n", "get", "default"], 3).1)
-                .and_then(|o| o.lines().find_map(|l| l.trim().strip_prefix("interface: ").map(|s| s.trim().to_string())))
-        })
+        // macOS и Windows: интерфейс, через который система идёт в интернет
+        .or_else(|| crate::netproxy::route_iface(crate::netproxy::local_ip().as_deref()))
         .unwrap_or_default()
 }
 

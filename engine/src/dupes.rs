@@ -74,6 +74,23 @@ pub fn roots() -> Vec<PathBuf> {
 /// в OneDrive или на другой диск).
 #[cfg(windows)]
 fn known_folders() -> Vec<PathBuf> {
+    known_folders_opt().into_iter().flatten().collect()
+}
+
+/// Папка «Изображения»: на Windows там, где она сейчас (в OneDrive или на другом диске), на остальных — ~/Pictures
+/// или ~/Изображения, а нет такой — домашняя папка.
+pub(crate) fn pictures_dir() -> Option<PathBuf> {
+    #[cfg(windows)]
+    if let Some(p) = known_folders_opt().get(3).cloned().flatten().filter(|p| p.is_dir()) {
+        return Some(p);
+    }
+    let h = crate::store::home_dir()?;
+    Some(["Изображения", "Pictures"].iter().map(|d| h.join(d)).find(|d| d.is_dir()).unwrap_or(h))
+}
+
+/// Шесть папок по порядку (Рабочий стол, Загрузки, Документы, Изображения, Видео, Музыка); None — система не ответила.
+#[cfg(windows)]
+fn known_folders_opt() -> Vec<Option<PathBuf>> {
     #[repr(C)]
     struct Guid(u32, u16, u16, [u8; 8]);
     #[link(name = "shell32")]
@@ -95,6 +112,7 @@ fn known_folders() -> Vec<PathBuf> {
     ];
     let mut out = Vec::new();
     for id in &ids {
+        let mut got = None;
         let mut p: *mut u16 = std::ptr::null_mut();
         if unsafe { SHGetKnownFolderPath(id, 0, std::ptr::null_mut(), &mut p) } == 0 && !p.is_null() {
             let mut n = 0;
@@ -102,12 +120,13 @@ fn known_folders() -> Vec<PathBuf> {
                 while *p.add(n) != 0 && n < 4096 {
                     n += 1;
                 }
-                out.push(PathBuf::from(String::from_utf16_lossy(std::slice::from_raw_parts(p, n))));
+                got = Some(PathBuf::from(String::from_utf16_lossy(std::slice::from_raw_parts(p, n))));
             }
         }
         if !p.is_null() {
             unsafe { CoTaskMemFree(p as *mut core::ffi::c_void) };
         }
+        out.push(got);
     }
     out
 }
