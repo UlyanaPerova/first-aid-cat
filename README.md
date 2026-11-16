@@ -193,8 +193,14 @@ As an example, this is what I keep in my own `custom/` folder:
 - **VPN on the router.** My router sends foreign sites through a VPN. The check opens one local site and two foreign ones. If only the foreign ones fail, it says that the VPN is broken (not the cable and not the provider) and offers **Restart VPN on the router**, which it does over SSH.
 - **Router VPN log.** Reads the router's log over SSH and counts how many times the tunnel dropped in the last hour. When it drops often, a button measures the speed of every VPN server on the router and keeps the seven fastest in the balancing group.
 - **Proxy for apps.** Asks the desktop what proxy it hands to apps like Firefox and Telegram. A proxy left behind by a closed VPN client gets a button that switches it off.
-- **Lights off.** A button that switches the RGB lighting of the PC off, and back on.
-- **Keyboard and mouse battery.** Rows with the charge of the wireless keyboard and mouse, read from what the system already reports, without installing the vendors' software.
+- **Lights off, for the whole PC.** One button switches off everything that glows and brings it back as it was. Getting there took three different tools, because none of the hardware has Linux support from its maker:
+  - memory and graphics card go through OpenRGB;
+  - the wireless Lian Li fans are driven by the open-source [uni-wireless-sync](https://github.com/phstudy/uni-wireless-sync), and the "on" button sends back the exact preset the vendor app had saved, byte for byte;
+  - the screen on the Thermalright liquid cooler shows the vendor logo forever unless something keeps sending it frames, so it is kept dark by the open-source [trcc-linux](https://github.com/Lexonight1/thermalright-trcc-linux).
+- **It repairs itself.** The switch remembers what was asked. At login everything is brought back to that state, and every five minutes a small timer compares the hardware with it and fixes what drifted. The app only shows a yellow row when that repair has failed three times in an hour.
+- **Cooler screen.** A list in the row: switch the screen off, show system readings, or pick your own picture, GIF or video in a file chooser.
+- **Fan speed.** A row with the current speed and a list: quiet, medium, maximum.
+- **Mouse battery.** A row with the charge of the wireless mouse, read from what the system already reports, without the vendor's software.
 
 You don't have to write the code yourself: [CUSTOM.md](CUSTOM.md) ([по-русски](CUSTOM.ru.md)) starts from nothing, has a working example, and includes a request you can give to a coding agent together with a description of your problem.
 
