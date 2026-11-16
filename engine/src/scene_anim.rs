@@ -496,7 +496,7 @@ mod tests {
         assert_eq!([s(1069), s(1070), s(1640), s(3139), s(3140)], [false, true, true, true, false]);
         assert!(!frame(2, 1500).shy && !frame_poked(2, 1500, None).shy);
         // смущённый кот не моргает: ни в один миг смущения веки не опущены, а без нажатия в те же миги моргание есть
-        let first_blink = (0..20_000).find(|t| frame(1, *t).blink == 2).expect("моргание за 20 с");
+        let first_blink = (5000..25_000).find(|t| frame(1, *t).blink == 2).expect("моргание за 20 с");
         for dt in 0..2000 {
             let f = frame_poked(1, first_blink - 1000 + dt, Some((first_blink - 1100, false)));
             assert!(!(f.shy && f.blink != 0), "{dt}");

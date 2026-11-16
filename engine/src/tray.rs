@@ -104,13 +104,23 @@ pub fn set_dots(on: bool) {
     crate::prefs::update(|v| v["tray_dots"] = serde_json::json!(on));
 }
 
+/// Чёрный кот на значке вместо белого (для светлой панели) — по умолчанию нет (TRAY_BLACK=1 — включить для снимка).
+/// На macOS значок красит сама система, там настройка не нужна.
+pub fn black_on() -> bool {
+    std::env::var("TRAY_BLACK").is_ok_and(|v| v == "1") || crate::prefs::load().get("tray_black").and_then(|x| x.as_bool()).unwrap_or(false)
+}
+
+pub fn set_black(on: bool) {
+    crate::prefs::update(|v| v["tray_black"] = serde_json::json!(on));
+}
+
 /// Отпечаток выбора агентов (чтобы значок заметил перемену).
 fn shown_sig() -> Vec<bool> {
     let mut v: Vec<bool> = AGENTS.iter().map(|a| shown(a)).collect();
     v.push(number_choice() == 1);
     let w = window_choice();
     v.extend([w == 1, w == 2]);
-    v.extend([pic_on(), anim_on(), dots_on()]);
+    v.extend([pic_on(), anim_on(), dots_on(), black_on()]);
     v
 }
 
@@ -354,6 +364,7 @@ fn icon_rgba(size: u32) -> Option<(u32, Vec<[u8; 4]>)> {
     let (sw, sh) = (pm.width() as usize, pm.height() as usize);
     let d = pm.data();
     let n = size as usize;
+    let black = black_on();
     let mut out = Vec::with_capacity(n * n);
     for y in 0..n {
         for x in 0..n {
@@ -373,7 +384,8 @@ fn icon_rgba(size: u32) -> Option<(u32, Vec<[u8; 4]>)> {
             // предумноженный RGBA → обычный ARGB
             let a = acc[3] / cnt;
             let un = |c: u32| (c / cnt * 255).checked_div(a).map_or(0, |v| v.min(255) as u8);
-            out.push([a as u8, un(acc[0]), un(acc[1]), un(acc[2])]);
+            // чёрный кот — тот же силуэт (прозрачность), только цвет чёрный
+            out.push(if black { [a as u8, 0, 0, 0] } else { [a as u8, un(acc[0]), un(acc[1]), un(acc[2])] });
         }
     }
     Some((size, out))
@@ -603,10 +615,11 @@ mod sni {
         pub fn write_shell_state(&self) {
             let dir = crate::store::runtime_dir();
             let choice = super::icon_choice();
-            let icon = dir.join(format!("tray_cat_{choice}.png"));
+            let black = super::black_on();
+            let icon = dir.join(format!("tray_cat_{choice}{}.png", if black { "_b" } else { "" }));
             // каждый вид — заново один раз за запуск значка (картинку могли поменять в новой версии)
             static WRITTEN: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
-            let bit = 1u8 << choice;
+            let bit = 1u8 << (choice + if black { 3 } else { 0 });
             if WRITTEN.fetch_or(bit, std::sync::atomic::Ordering::Relaxed) & bit == 0 {
                 if let Some((n, px)) = super::icon_rgba(44) {
                     let rgba: Vec<u8> = px.iter().flat_map(|p| [p[1], p[2], p[3], p[0]]).collect();
@@ -660,22 +673,23 @@ mod sni {
 
 /// Значок с числом для Windows (текст рядом со значком там не показать): цветной квадрат и процент белым.
 /// Возвращает ARGB по строкам сверху вниз; None — данных нет (тогда значок кота).
-/// Белый значок на тёмно-сером квадрате со скруглёнными углами (для Windows).
+/// Белый значок на тёмно-сером квадрате со скруглёнными углами (для Windows); чёрный — на светло-сером.
 #[cfg_attr(not(windows), allow(dead_code))]
 fn on_dark(n: i32, px: Vec<[u8; 4]>) -> Vec<[u8; 4]> {
     let corner = |i: usize| {
         let (x, y) = (i as i32 % n, i as i32 / n);
         (x == 0 || x == n - 1) && (y == 0 || y == n - 1)
     };
+    let bg: u32 = if black_on() { 0xE6 } else { 0x50 };
     px.into_iter()
         .enumerate()
         .map(|(i, p)| {
             if corner(i) {
                 return [0, 0, 0, 0];
             }
-            // смешать белый поверх 0x505050 по альфе
+            // смешать значок поверх фона по альфе
             let a = p[0] as u32;
-            let c = |v: u8| ((v as u32 * a + 0x50 * (255 - a)) / 255) as u8;
+            let c = |v: u8| ((v as u32 * a + bg * (255 - a)) / 255) as u8;
             [255, c(p[1]), c(p[2]), c(p[3])]
         })
         .collect()
@@ -2309,7 +2323,14 @@ impl ApplicationHandler<Ev> for App {
                     self.open_popup(el, x, y);
                 }
             }
-            Ev::Shown => self.apply_shown(),
+            Ev::Shown => {
+                // цвет кота тоже мог смениться
+                #[cfg(target_os = "linux")]
+                if let Some(t) = &self.tray {
+                    t.refresh_icon();
+                }
+                self.apply_shown()
+            }
             Ev::PanelOpen(_open) => {
                 #[cfg(target_os = "linux")]
                 self.panel_open(_open);
@@ -2488,20 +2509,22 @@ pub fn icon_shot(path: &str) {
     let (side, pad, px) = (22 * k, 10 * k, (14 * k) as u16);
     let mut fonts = Fonts::new();
     let (w, h) = (pad + side + 6 * k + fonts.width(text, px, true) + pad, 32 * k);
-    let mut buf = vec![0x1D1D1Du32; (w * h) as usize];
+    // чёрный кот — на светлой панели
+    let (bgc, fg) = if black_on() { (0xEBu32, 0x1D1D1Du32) } else { (0x1D, 0xF2F2F2) };
+    let mut buf = vec![(bgc << 16) | (bgc << 8) | bgc; (w * h) as usize];
     if let Some((n, icon)) = icon_rgba(side as u32) {
         let (x0, y0) = (pad as usize, ((h - side) / 2) as usize);
         for (i, p) in icon.iter().enumerate() {
             let (x, y) = (x0 + i % n as usize, y0 + i / n as usize);
             let a = p[0] as u32;
             let mix = |v: u8, bg: u32| (v as u32 * a + bg * (255 - a)) / 255;
-            buf[y * w as usize + x] = (mix(p[1], 0x1D) << 16) | (mix(p[2], 0x1D) << 8) | mix(p[3], 0x1D);
+            buf[y * w as usize + x] = (mix(p[1], bgc) << 16) | (mix(p[2], bgc) << 8) | mix(p[3], bgc);
         }
     }
     {
         let mut c = Canvas::new(&mut buf, w as usize, w, h);
         let base = fonts.center_base(0, h, px);
-        fonts.draw(&mut c, pad + side + 6 * k, base, text, 0xF2F2F2, px, true);
+        fonts.draw(&mut c, pad + side + 6 * k, base, text, fg, px, true);
     }
     let rgb: Vec<u8> = buf.iter().flat_map(|p| [(p >> 16) as u8, (p >> 8) as u8, *p as u8]).collect();
     let Ok(f) = std::fs::File::create(path) else { return };

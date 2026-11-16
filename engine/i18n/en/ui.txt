@@ -1019,3 +1019,6 @@ en: Animation in the popup
 
 ru: Точки сессий у значка
 en: Session dots by the icon
+
+ru: Чёрный кот на значке (для светлой панели)
+en: Black cat on the icon (for a light panel)

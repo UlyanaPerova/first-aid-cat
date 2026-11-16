@@ -60,7 +60,7 @@ The checks are grouped into tabs. Each one can be switched off in the **Metrics*
 | Tab | What it looks at |
 |---|---|
 | **Network** | Internet and DNS, including a live DNS query; a system proxy left behind by a VPN that is off; proxies in browsers, extensions, the terminal, git, npm, pip and apt; VPN tunnels and the address the world sees; your local and external IP address, with a history of how the external one changed; network latency and jitter; captive portals (cafe and hotel sign-in pages); Wi-Fi signal |
-| **AI** | Whether Claude, Codex, Gemini CLI, Qwen Code, Kimi Code, Cursor, OpenCode and Antigravity can reach their servers; the status pages of those services; which agent sessions are alive in your terminals, and the command to resume one; how much of the Claude Code and Codex subscription limits is used and when they reset, and how many tokens went out today and this week |
+| **AI** | Whether Claude, Codex, Gemini CLI, Qwen Code, Kimi Code, Cursor, OpenCode and Antigravity can reach their servers; the status pages of those services; which agent sessions are alive in your terminals, and the command to resume one; how much of the Claude Code and Codex subscription limits is used and when they reset, and how many tokens went out today and this week. The same numbers stay in sight without opening the app: a cat icon in the top panel with the fullest limit next to it, and a click-open panel with rings for the 5-hour and weekly limits and bars of tokens per day (see [AI limits in the panel](#ai-limits-in-the-panel)) |
 | **Graphics** | What draws the screen, the NVIDIA driver and Secure Boot, GPU temperature and load |
 | **Devices** | Sound and microphone, Bluetooth, printing (paused printers, stuck queues), keyboard layouts, battery wear, disk health (S.M.A.R.T.) |
 | **Themes** | Broken themes and icons, GNOME extensions, a dock that vanished after a full-screen window |
@@ -142,9 +142,9 @@ On **macOS** the widget is a native WidgetKit widget (small and medium). Add it 
 
 ## AI limits in the panel
 
-<p align="center">
-  <img src="docs/screenshots/limits_panel.gif" alt="AI limits panel: ring charts of the 5-hour and weekly limits, tokens per day, and the cat writing at his desk; when his ear is clicked he blushes" width="373">
-</p>
+| No agent is open | An agent is working | The work is done |
+|---|---|---|
+| <img src="docs/screenshots/limits_panel_sleeps.gif" alt="AI limits panel: ring charts of the 5-hour and weekly limits, tokens per day, and the cat asleep at his desk" width="270"> | <img src="docs/screenshots/limits_panel.gif" alt="AI limits panel: the cat writes with a pen at his desk; when his ear is clicked he blushes" width="270"> | <img src="docs/screenshots/limits_panel_done.gif" alt="AI limits panel: the cat has put the pen down and looks at you" width="270"> |
 
 Limits are tracked for **Claude Code** and **Codex**: these two are the agents that report their subscription limits on your computer. For the other agents (Gemini CLI, Qwen Code, Kimi Code, Cursor, OpenCode, Antigravity) the app checks the connection to their servers, their status pages and their sessions with the resume command (the **AI** tab), but it shows no limits and no token counts.
 
@@ -154,6 +154,12 @@ If you use Claude Code or Codex, a small white cat appears in the top panel (the
 |---|---|---|
 | <img src="docs/screenshots/tray_icon_sleeps.png" alt="Panel icon: the cat sleeps, 73%" height="32"> | <img src="docs/screenshots/tray_icon_walks.png" alt="Panel icon: the cat walks, 73%" height="32"> | <img src="docs/screenshots/tray_icon_sits.png" alt="Panel icon: the cat sits, 73%" height="32"> |
 | sleeps | walks | sits |
+
+On a light panel the white cat is hard to see, so it can be black: **AI limits → Black cat on the icon (for a light panel)**. On macOS the system colours the icon by itself.
+
+<img src="docs/screenshots/tray_icon_black_sleeps.png" alt="Black panel icon on a light panel: the cat sleeps, 73%" height="32"> <img src="docs/screenshots/tray_icon_black_walks.png" alt="Black panel icon: the cat walks, 73%" height="32"> <img src="docs/screenshots/tray_icon_black_sits.png" alt="Black panel icon: the cat sits, 73%" height="32">
+
+When several sessions are open, dots next to the number show each of them: `●` is working, `○` has finished and waits for you, so `●●○ 73%` means two are busy and one is waiting (Linux and macOS; on Windows the icon itself is the number). The dots, the picture at the bottom of the panel and its animation can each be switched off in the **AI limits** menu.
 
 One click on it opens the panel; the next click, or a click anywhere outside, closes it. For each agent the panel shows rings for the 5-hour and weekly limits with their reset times, and bars of tokens per day for two weeks.
 

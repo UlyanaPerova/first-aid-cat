@@ -254,6 +254,7 @@ enum MenuAct {
     TrayPic,
     TrayAnim,
     TrayDots,
+    TrayBlack,
     /// лицензии и уведомления (licenses.rs): положить в папку сеанса и открыть
     Licenses,
     /// анимация картинки в окне / виджета: включить или выключить
@@ -420,6 +421,10 @@ fn limits_menu() -> Vec<(String, MenuAct)> {
             // текста рядом со значком на Windows нет — точкам там негде быть
             if !cfg!(windows) {
                 v.push(("Точки сессий у значка".to_string(), MenuAct::TrayDots));
+            }
+            // на macOS значок красит система (под светлую и тёмную строку меню) — выбирать нечего
+            if !cfg!(target_os = "macos") {
+                v.push(("Чёрный кот на значке (для светлой панели)".to_string(), MenuAct::TrayBlack));
             }
         }
     }
@@ -1830,6 +1835,10 @@ impl Ui {
             }
             MenuAct::TrayDots => {
                 crate::tray::set_dots(!crate::tray::dots_on());
+                Vec::new()
+            }
+            MenuAct::TrayBlack => {
+                crate::tray::set_black(!crate::tray::black_on());
                 Vec::new()
             }
             MenuAct::TrayWin(w) => {
@@ -3448,6 +3457,7 @@ impl P<'_, '_> {
                         || matches!(act, MenuAct::TrayPic) && crate::tray::pic_on()
                         || matches!(act, MenuAct::TrayAnim) && crate::tray::anim_pref()
                         || matches!(act, MenuAct::TrayDots) && crate::tray::dots_on()
+                        || matches!(act, MenuAct::TrayBlack) && crate::tray::black_on()
                         || matches!(act, MenuAct::TrayAgents(c) if *c == crate::tray::agents_choice())
                         || matches!(act, MenuAct::Lang(i) if *i == lang_now());
                     let col = if hov { WHITE } else { BLACK };
