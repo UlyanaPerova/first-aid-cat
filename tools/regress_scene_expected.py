@@ -63,6 +63,18 @@ def fnv(px):
             h = ((h ^ b) * 0x100000001b3) & 0xFFFFFFFFFFFFFFFF
     return h
 
+# У «пишет» клетки под кистью с ручкой в покое в моргание не входят (кисть движется; правило из to_rust.py): из
+# утверждённого кадра моргания они здесь выбрасываются так же, по картинке спрайта кисти.
+_SPR = os.path.join(prev, '2026-11-16_раунд_6', 'рабочие_файлы', 'final', 'WRITE_ручка_спрайт.png')
+_spr = Image.open(_SPR).convert('RGBA').load()
+def blink_cells(nm, n):
+    c = opaque(f'{F}/{nm}_моргание_{n}.png')
+    if nm != 'WRITE':
+        return c
+    if isinstance(c, dict):
+        return {k: v for k, v in c.items() if not _spr[k[0], k[1]][3]}
+    return [e for e in c if not _spr[e[0], e[1]][3]]
+
 def overlay(base, cells):
     px = list(base)
     for (x, y), c in cells.items():
@@ -98,7 +110,7 @@ for st in range(3):
 for st, nm in ((1, 'WRITE'), (2, 'DONE')):
     s = still(st)
     for k, n in ((1, 'полу'), (2, 'закрыты')):
-        cases.append((f'blink_{st}_{k}', fnv(overlay(s, opaque(f'{F}/{nm}_моргание_{n}.png')))))
+        cases.append((f'blink_{st}_{k}', fnv(overlay(s, blink_cells(nm, n)))))
 for k in (1, 2):
     cases.append((f'z_0_{k}', fnv(overlay(still(0), opaque(f'{Z}/SLEEP_z_{k}.png')))))
 
@@ -114,7 +126,7 @@ def combo(st, tail=0, ecg=None, pickle=0, z=0, blink=0):
     if z:
         px = overlay(px, opaque(f'{Z}/SLEEP_z_{z}.png'))
     if blink:
-        px = overlay(px, opaque(f'{F}/{("WRITE", "DONE")[st - 1]}_моргание_{("полу", "закрыты")[blink - 1]}.png'))
+        px = overlay(px, blink_cells(("WRITE", "DONE")[st - 1], ("полу", "закрыты")[blink - 1]))
     return fnv(px)
 
 COMBOS = [

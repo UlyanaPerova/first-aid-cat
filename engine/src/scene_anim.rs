@@ -140,6 +140,11 @@ pub fn frame_poked(state: u8, t: u64, poke: Poke) -> Frame {
             (f.ear, f.ear_r) = if right { (0, pose) } else { (pose, 0) };
         }
         f.shy = t >= p + SHY_FROM && t < p + SHY_TO;
+        // пока кот смущён, он не моргает: лицо смущения нарисовано с открытыми глазами и перекрывает часть клеток век —
+        // моргание под ним выходило обрывками (полглаза закрыто, полглаза открыто)
+        if f.shy {
+            f.blink = 0;
+        }
     }
     f
 }
@@ -490,6 +495,14 @@ mod tests {
         let s = |t| frame_poked(2, t, Some((1000, true))).shy;
         assert_eq!([s(1069), s(1070), s(1640), s(3139), s(3140)], [false, true, true, true, false]);
         assert!(!frame(2, 1500).shy && !frame_poked(2, 1500, None).shy);
+        // смущённый кот не моргает: ни в один миг смущения веки не опущены, а без нажатия в те же миги моргание есть
+        let first_blink = (0..20_000).find(|t| frame(1, *t).blink == 2).expect("моргание за 20 с");
+        for dt in 0..2000 {
+            let f = frame_poked(1, first_blink - 1000 + dt, Some((first_blink - 1100, false)));
+            assert!(!(f.shy && f.blink != 0), "{dt}");
+        }
+        assert_eq!(frame_poked(1, first_blink, Some((first_blink - 1100, false))).blink, 0);
+        assert_eq!(frame_poked(1, first_blink, Some((first_blink - 5000, false))).blink, 2);
         assert_eq!(next_change_poked(2, 3100, Some((1000, false))).min(3140), next_change(2, 3100).min(3140));
         assert_eq!(frame_poked(1, 3140, Some((1000, false))), frame(1, 3140));
         // смущённое лицо есть у всех трёх состояний
