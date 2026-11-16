@@ -72,25 +72,111 @@ pub fn set_agents_choice(c: u8) {
     crate::prefs::update(|v| v["limits_hide"] = serde_json::json!(hide));
 }
 
+/// Картинка (сценка с котом) в плашке — по умолчанию да (TRAY_PIC=0 — выключить для снимка).
+pub fn pic_on() -> bool {
+    std::env::var("TRAY_PIC").map_or(true, |v| v != "0") && crate::prefs::load().get("tray_pic").and_then(|x| x.as_bool()).unwrap_or(true)
+}
+
+pub fn set_pic(on: bool) {
+    crate::prefs::update(|v| v["tray_pic"] = serde_json::json!(on));
+}
+
+/// Анимация сценки в плашке — по умолчанию да (TRAY_ANIM=0 — выключить для снимка); без картинки не нужна.
+pub fn anim_on() -> bool {
+    std::env::var("TRAY_ANIM").map_or(true, |v| v != "0") && anim_pref() && pic_on()
+}
+
+/// Сама настройка анимации (для галочки в меню: она не зависит от того, есть ли картинка).
+pub fn anim_pref() -> bool {
+    crate::prefs::load().get("tray_anim").and_then(|x| x.as_bool()).unwrap_or(true)
+}
+
+pub fn set_anim(on: bool) {
+    crate::prefs::update(|v| v["tray_anim"] = serde_json::json!(on));
+}
+
+/// Точки сессий рядом со значком — по умолчанию да.
+pub fn dots_on() -> bool {
+    crate::prefs::load().get("tray_dots").and_then(|x| x.as_bool()).unwrap_or(true)
+}
+
+pub fn set_dots(on: bool) {
+    crate::prefs::update(|v| v["tray_dots"] = serde_json::json!(on));
+}
+
 /// Отпечаток выбора агентов (чтобы значок заметил перемену).
 fn shown_sig() -> Vec<bool> {
     let mut v: Vec<bool> = AGENTS.iter().map(|a| shown(a)).collect();
     v.push(number_choice() == 1);
     let w = window_choice();
     v.extend([w == 1, w == 2]);
+    v.extend([pic_on(), anim_on(), dots_on()]);
     v
 }
 
-/// Состояние агентов, за которыми следим: хоть один думает — 1; есть открытые сессии — 2; иначе 0.
-fn agents_state() -> u8 {
-    let ids: Vec<&str> = AGENTS.iter().filter(|a| shown(a)).map(|a| if a.starts_with("Claude") { "claude" } else { "codex" }).collect();
-    let live: Vec<_> = crate::diag::all_sessions(30).into_iter().filter(|s| s.live && ids.contains(&s.agent)).collect();
-    if live.iter().any(|s| s.status == "busy") {
+/// Открытые сессии агентов, за которыми следим: (работают, закончили и ждут). Хранится упакованно
+/// (работают << 16 | ждут), чтобы значок брал число без опроса.
+static SESS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+fn sess_pack(busy: usize, wait: usize) -> u32 {
+    ((busy.min(0xFFFF) as u32) << 16) | wait.min(0xFFFF) as u32
+}
+
+/// Сколько сессий работает и сколько ждёт (то, что видит значок сейчас).
+pub fn session_counts() -> (usize, usize) {
+    let v = SESS.load(std::sync::atomic::Ordering::Relaxed);
+    ((v >> 16) as usize, (v & 0xFFFF) as usize)
+}
+
+/// Поза кота по числу сессий: кто-то работает — 1; иначе есть открытые — 2; иначе 0.
+fn state_of(busy: usize, wait: usize) -> u8 {
+    if busy > 0 {
         1
-    } else if !live.is_empty() {
+    } else if wait > 0 {
         2
     } else {
         0
+    }
+}
+
+/// Считает открытые сессии агентов, за которыми следим: (работают, ждут).
+fn count_sessions() -> (usize, usize) {
+    let ids: Vec<&str> = AGENTS.iter().filter(|a| shown(a)).map(|a| if a.starts_with("Claude") { "claude" } else { "codex" }).collect();
+    let live: Vec<_> = crate::diag::all_sessions(30).into_iter().filter(|s| s.live && ids.contains(&s.agent)).collect();
+    let busy = live.iter().filter(|s| s.status == "busy").count();
+    (busy, live.len() - busy)
+}
+
+/// Точки у значка: «●» — работает, «○» — закончила и ждёт (работающие первыми). Меньше двух сессий или
+/// выключено — пусто (поза кота и так всё говорит); больше пяти — цифрами: «3● 4○».
+fn session_dots(busy: usize, wait: usize, on: bool) -> String {
+    if !on || busy + wait < 2 {
+        return String::new();
+    }
+    if busy + wait <= 5 {
+        return format!("{}{}", "●".repeat(busy), "○".repeat(wait));
+    }
+    [(busy, '●'), (wait, '○')].iter().filter(|(n, _)| *n > 0).map(|(n, c)| format!("{n}{c}")).collect::<Vec<_>>().join(" ")
+}
+
+/// Дописывает точки перед числом: «\u{2002}●●○ 73%»; ведущий широкий пробел остаётся первым.
+fn with_dots(base: String, dots: &str) -> String {
+    if dots.is_empty() {
+        return base;
+    }
+    match base.strip_prefix('\u{2002}') {
+        Some(rest) if !rest.is_empty() => format!("\u{2002}{dots} {rest}"),
+        _ => format!("\u{2002}{dots}"),
+    }
+}
+
+/// Строка подсказки про сессии: «Работают: 2 · ждут тебя: 1»; без сессий — пусто.
+fn sessions_tip(busy: usize, wait: usize) -> String {
+    match (busy, wait) {
+        (0, 0) => String::new(),
+        (b, 0) => format!("Работают: {b}"),
+        (0, w) => format!("Ждут тебя: {w}"),
+        (b, w) => format!("Работают: {b} · ждут тебя: {w}"),
     }
 }
 
@@ -122,7 +208,8 @@ pub enum Ev {
 /// Текст рядом со значком: «64%», или пусто, если лимиты неизвестны (на Windows — число на самом значке).
 #[cfg_attr(windows, allow(dead_code))]
 pub fn label(agents: &[Agent], now: i64) -> String {
-    label_with(agents, now, number_choice(), window_choice())
+    let (b, w) = session_counts();
+    with_dots(label_with(agents, now, number_choice(), window_choice()), &session_dots(b, w, dots_on()))
 }
 
 /// Подпись по выбору числа (см. `number_choice`).
@@ -214,6 +301,17 @@ pub fn set_notify(on: bool) {
 
 /// Подсказка при наведении: по строке на агента.
 pub fn tooltip(agents: &[Agent], now: i64) -> String {
+    let (b, w) = session_counts();
+    let sess = sessions_tip(b, w);
+    let lim = tooltip_limits(agents, now);
+    if sess.is_empty() {
+        lim
+    } else {
+        format!("{lim}\n{sess}")
+    }
+}
+
+fn tooltip_limits(agents: &[Agent], now: i64) -> String {
     if agents.is_empty() {
         return "Лимиты ИИ: пока нет данных".into();
     }
@@ -1417,6 +1515,8 @@ fn upscale(src: Img, k: i32) -> Img {
 /// один раз. Всё остальное (рамка, заголовок, группы, кнопка) рисует код по меркам дизайна.
 pub struct Tpl {
     k: i32,
+    /// с сценкой ли плашка (`pic_on` на момент сборки); без неё плашка ниже и сценки нет вовсе
+    pic: bool,
     s: f32,
     /// аватарка в заголовке: (ширина, высота, ARGB с прозрачностью)
     avatar: Img,
@@ -1439,6 +1539,7 @@ impl Tpl {
         };
         Tpl {
             k,
+            pic: pic_on(),
             s,
             avatar: avatar(d(52)),
             scenes: [scene(&crate::scene_px::SLEEP), scene(&crate::scene_px::WRITE), scene(&crate::scene_px::DONE)],
@@ -1474,6 +1575,10 @@ impl Tpl {
 
     /// Высоты частей (по дизайну: заголовок 98, группа агента 512; низ — строка с кнопкой и сценка).
     fn parts(&self) -> (i32, i32, i32) {
+        if !self.pic {
+            // низ — только строка с кнопкой (она кончается на 77) и поле
+            return (self.d(98), self.d(512), self.d(77) + self.d(11));
+        }
         let scene_h = self.scenes.iter().map(|s| s.1).max().unwrap_or(0);
         (self.d(98), self.d(512), self.d(92) + scene_h + self.d(11))
     }
@@ -1729,9 +1834,14 @@ fn paint(f: &mut Fonts, agents: &[Agent], data_t: i64, t: &Tpl, fr: &Frame, c: &
     // низ: сценка с котом (что делают агенты), «обновлено в…», кнопка «Медкарта расхода…» (она — в шаблоне)
     let fy = hh + gh * n as i32;
     // сценка — по центру плашки (раньше слева было поле 11, справа 1)
-    let scene = t.scene_for(icon_choice(), fr);
-    let scene_at = Rect::new((w - scene.0) / 2, fy + d(92), scene.0, scene.1);
-    blit(c, &scene, scene_at.x, scene_at.y);
+    let scene_at = if t.pic {
+        let scene = t.scene_for(icon_choice(), fr);
+        let at = Rect::new((w - scene.0) / 2, fy + d(92), scene.0, scene.1);
+        blit(c, &scene, at.x, at.y);
+        at
+    } else {
+        Rect::new(0, 0, 0, 0)
+    };
     if data_t > 0 {
         let tm = crate::ui::localtime(data_t);
         // «обновлено» — от левого края панели агентов, кнопка — до правого её края
@@ -1848,7 +1958,7 @@ const GRACE: Duration = Duration::from_millis(900);
 impl App {
     /// Шаблон плашки под нынешний масштаб экрана (уменьшается один раз) и размер плашки под агентов.
     fn tpl_size(&mut self) -> (i32, i32) {
-        if self.tpl.as_ref().is_none_or(|t| t.k != self.k) {
+        if self.tpl.as_ref().is_none_or(|t| t.k != self.k || t.pic != pic_on()) {
             self.tpl = Some(Tpl::new(self.k.max(1)));
         }
         self.tpl.as_ref().map_or((W, W), |t| t.size(self.agents.len()))
@@ -1980,7 +2090,7 @@ impl App {
             close: Rect::new(0, 0, 0, 0),
             cursor: (0, 0),
             opened: Instant::now(),
-            anim: crate::prefs::app_anim(),
+            anim: crate::prefs::app_anim() && anim_on(),
             shown: (0, Frame::default()),
             scene: Rect::new(0, 0, 0, 0),
             cache: Vec::new(),
@@ -2019,10 +2129,21 @@ impl App {
         let t = self.data_t;
         self.user_event_data(all);
         self.data_t = t;
+        // анимацию выключили — кадры меню расширения убираем до перерисовки плашки
+        #[cfg(target_os = "linux")]
+        if self.panel_t0.is_some() && !anim_on() {
+            self.panel_open(false);
+        }
         // значок — в любом случае (агентов могло не остаться вовсе)
         self.set_tray();
         let (w, h) = self.tpl_size();
-        if let Some(p) = &self.popup {
+        if let Some(p) = self.popup.as_mut() {
+            p.anim = crate::prefs::app_anim() && anim_on();
+            if !p.anim {
+                p.poke = None;
+            }
+            p.shown = (0, Frame::default());
+            p.cache.clear();
             let _ = p.window.request_inner_size(PhysicalSize::new(w as u32, h as u32));
             p.window.request_redraw();
         }
@@ -2071,7 +2192,7 @@ impl App {
     fn panel_open(&mut self, open: bool) {
         self.panel_shown = None;
         self.panel_poke = None;
-        if open && crate::prefs::app_anim() && self.tray.as_ref().is_some_and(|t| t.shell_icon()) {
+        if open && crate::prefs::app_anim() && anim_on() && self.tray.as_ref().is_some_and(|t| t.shell_icon()) {
             self.panel_t0 = Some(Instant::now());
             self.panel_animate();
             return;
@@ -2106,6 +2227,11 @@ impl App {
         let ms = t0.elapsed().as_millis() as u64;
         // меню не закрылось по-честному (расширение упало) — не живём вечно
         if ms > 15 * 60 * 1000 {
+            self.panel_open(false);
+            return None;
+        }
+        // анимацию выключили, пока меню открыто — кадры убираем, остаётся статичная картинка
+        if !anim_on() {
             self.panel_open(false);
             return None;
         }
@@ -2329,7 +2455,7 @@ pub fn shot(path: &str) {
     // TRAY_T=секунды — кадр анимации сценки в этот миг от открытия плашки; без него — статичная сценка.
     // TRAY_POKE=секунды — в этот миг кота тронули за ушко (TRAY_POKE_R=1 — за правое)
     let secs = |k: &str| std::env::var(k).ok().and_then(|v| v.parse::<f64>().ok()).map(|s| (s.max(0.0) * 1000.0).round() as u64);
-    let fr = secs("TRAY_T").map_or(Frame::default(), |ms| {
+    let fr = secs("TRAY_T").filter(|_| anim_on()).map_or(Frame::default(), |ms| {
         crate::scene_anim::frame_poked(icon_choice(), ms, secs("TRAY_POKE").map(|p| (p, std::env::var_os("TRAY_POKE_R").is_some())))
     });
     {
@@ -2352,7 +2478,12 @@ pub fn icon_shot(path: &str) {
     if let Some(st) = std::env::var("TRAY_SCENE").ok().and_then(|v| v.parse::<u8>().ok()) {
         STATE.store(st.min(2), std::sync::atomic::Ordering::Relaxed);
     }
-    let text = label_with(&sample_agents(), crate::ui::now_secs(), 0, 0);
+    // TRAY_SESSIONS=работают,ждут — сколько сессий показать точками (без него — как в настройках, то есть ничего)
+    let (b, w) = std::env::var("TRAY_SESSIONS")
+        .ok()
+        .and_then(|v| v.split_once(',').and_then(|(a, b)| Some((a.trim().parse().ok()?, b.trim().parse().ok()?))))
+        .unwrap_or((0, 0));
+    let text = with_dots(label_with(&sample_agents(), crate::ui::now_secs(), 0, 0), &session_dots(b, w, dots_on()));
     let text = text.trim();
     let (side, pad, px) = (22 * k, 10 * k, (14 * k) as u16);
     let mut fonts = Fonts::new();
@@ -2449,7 +2580,7 @@ pub fn run() {
                 return;
             }
             // до следующих цифр — следим за настройками (выбрали другой значок, выключили), раз в 2 с
-            let (t0, icon, sig) = (Instant::now(), icon_choice(), shown_sig());
+            let (t0, icon, sess, sig) = (Instant::now(), icon_choice(), SESS.load(std::sync::atomic::Ordering::Relaxed), shown_sig());
             while t0.elapsed() < EVERY {
                 std::thread::sleep(Duration::from_secs(2));
                 if !enabled() {
@@ -2461,9 +2592,11 @@ pub fn run() {
                 }
                 // что делают агенты — раз в 4 с (кот на значке: спит, идёт, сидит)
                 if t0.elapsed().as_secs() % 4 < 2 {
-                    let st = agents_state();
-                    if st != icon {
+                    let (b, w) = count_sessions();
+                    let (st, pk) = (state_of(b, w), sess_pack(b, w));
+                    if st != icon || pk != sess {
                         STATE.store(st, std::sync::atomic::Ordering::Relaxed);
+                        SESS.store(pk, std::sync::atomic::Ordering::Relaxed);
                         let _ = p2.send_event(Ev::Icon);
                         break;
                     }
@@ -2559,6 +2692,37 @@ mod tests {
         assert_eq!(label_with(one, now, 1, 2), "\u{2002}Co 0%");
         assert_eq!(tooltip(&[a], now), "Codex: 5 ч 64% · неделя 0% · сегодня 1,5 млн");
         assert_eq!(label_with(&[], now, 0, 0), "");
+    }
+
+    #[test]
+    fn session_dots_and_tip() {
+        assert_eq!(session_dots(0, 0, true), "");
+        assert_eq!(session_dots(1, 0, true), "");
+        assert_eq!(session_dots(0, 1, true), "");
+        assert_eq!(session_dots(2, 1, true), "●●○");
+        assert_eq!(session_dots(0, 2, true), "○○");
+        assert_eq!(session_dots(3, 2, true), "●●●○○");
+        assert_eq!(session_dots(3, 4, true), "3● 4○");
+        assert_eq!(session_dots(6, 0, true), "6●");
+        assert_eq!(session_dots(2, 1, false), "");
+        assert_eq!(with_dots("\u{2002}73%".into(), "●●○"), "\u{2002}●●○ 73%");
+        assert_eq!(with_dots("\u{2002}73%".into(), ""), "\u{2002}73%");
+        assert_eq!(with_dots(String::new(), "●○"), "\u{2002}●○");
+        assert_eq!(sessions_tip(2, 1), "Работают: 2 · ждут тебя: 1");
+        assert_eq!(sessions_tip(0, 0), "");
+        assert_eq!(state_of(2, 1), 1);
+        assert_eq!(state_of(0, 1), 2);
+        assert_eq!(state_of(0, 0), 0);
+    }
+
+    #[test]
+    fn popup_without_picture_is_shorter() {
+        let mut t = Tpl::new(1);
+        let with = t.size(2);
+        t.pic = false;
+        let without = t.size(2);
+        assert_eq!(with.0, without.0);
+        assert!(without.1 < with.1 - 100, "{with:?} {without:?}");
     }
 
     fn agent(pct5: f64, reset5: i64, at: i64) -> Agent {

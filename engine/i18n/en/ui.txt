@@ -1010,3 +1010,12 @@ en: List of problems
 
 ru: Проблем нет — всё в порядке
 en: No problems — all is well
+
+ru: Картинка в плашке
+en: Picture in the popup
+
+ru: Анимация в плашке
+en: Animation in the popup
+
+ru: Точки сессий у значка
+en: Session dots by the icon

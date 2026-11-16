@@ -250,6 +250,10 @@ enum MenuAct {
     Sep,
     /// уведомления о лимитах
     LimitsNotify,
+    /// картинка (кот за столом) в плашке лимитов; её анимация; точки сессий у значка
+    TrayPic,
+    TrayAnim,
+    TrayDots,
     /// лицензии и уведомления (licenses.rs): положить в папку сеанса и открыть
     Licenses,
     /// анимация картинки в окне / виджета: включить или выключить
@@ -410,6 +414,13 @@ fn limits_menu() -> Vec<(String, MenuAct)> {
             v.push(("Лимит в числе: неделя".to_string(), MenuAct::TrayWin(2)));
             v.push((String::new(), MenuAct::Sep));
             v.push(("Уведомлять о лимитах (80 %, 95 %, сброс)".to_string(), MenuAct::LimitsNotify));
+            v.push((String::new(), MenuAct::Sep));
+            v.push(("Картинка в плашке".to_string(), MenuAct::TrayPic));
+            v.push(("Анимация в плашке".to_string(), MenuAct::TrayAnim));
+            // текста рядом со значком на Windows нет — точкам там негде быть
+            if !cfg!(windows) {
+                v.push(("Точки сессий у значка".to_string(), MenuAct::TrayDots));
+            }
         }
     }
     v
@@ -1807,6 +1818,18 @@ impl Ui {
             }
             MenuAct::TrayAgents(c) => {
                 crate::tray::set_agents_choice(c);
+                Vec::new()
+            }
+            MenuAct::TrayPic => {
+                crate::tray::set_pic(!crate::tray::pic_on());
+                Vec::new()
+            }
+            MenuAct::TrayAnim => {
+                crate::tray::set_anim(!crate::tray::anim_pref());
+                Vec::new()
+            }
+            MenuAct::TrayDots => {
+                crate::tray::set_dots(!crate::tray::dots_on());
                 Vec::new()
             }
             MenuAct::TrayWin(w) => {
@@ -3422,6 +3445,9 @@ impl P<'_, '_> {
                         || matches!(act, MenuAct::TrayNum(n) if *n == crate::tray::number_choice())
                         || matches!(act, MenuAct::TrayWin(w) if *w == crate::tray::window_choice())
                         || matches!(act, MenuAct::LimitsNotify) && crate::tray::notify_on()
+                        || matches!(act, MenuAct::TrayPic) && crate::tray::pic_on()
+                        || matches!(act, MenuAct::TrayAnim) && crate::tray::anim_pref()
+                        || matches!(act, MenuAct::TrayDots) && crate::tray::dots_on()
                         || matches!(act, MenuAct::TrayAgents(c) if *c == crate::tray::agents_choice())
                         || matches!(act, MenuAct::Lang(i) if *i == lang_now());
                     let col = if hov { WHITE } else { BLACK };
