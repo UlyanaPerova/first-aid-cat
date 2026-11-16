@@ -1,4 +1,4 @@
-<h1 align="center"><i>CUTE BUT USELESS</i></h1>
+<h1 align="center"><i>CUTE</i></h1>
 
 <p align="center">
   <img alt="Linux" src="https://img.shields.io/badge/Linux-supported-2e7d32?logo=linux&logoColor=white">
