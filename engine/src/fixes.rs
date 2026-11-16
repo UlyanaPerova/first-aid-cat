@@ -849,6 +849,9 @@ pub fn validate(id: &str, arg: Option<&str>) -> Result<(), String> {
     let hex16 = |s: &str| s.len() == 16 && s.chars().all(|c| c.is_ascii_hexdigit());
     let ok = match id {
         _ if NO_ARG.contains(&id) => true,
+        // заголовок списка действий строки (кнопка «… ▾»): сам ничего не делает, но должен пережить запись строк в
+        // файл и чтение обратно — иначе список превращается в одну кнопку первого действия
+        "menu" => a.is_empty(),
         // имя службы systemd: «cups», «bluetooth.service», «user@1000.service»
         "svc_restart" => chars(a, ":_.@-\\", 200),
         "ext_restart" | "ext_enable" => chars(a, "._@-", 128) && a.contains('@'),
@@ -2177,6 +2180,13 @@ mod manual_shared_tests {
     }
 
     /// Новые кнопки macOS и Windows: аргумент проверяется, лишнее не проходит.
+    #[test]
+    fn menu_header_is_valid_but_does_nothing() {
+        assert!(validate("menu", None).is_ok());
+        assert!(validate("menu", Some("x")).is_err());
+        assert!(!apply("menu", None).0, "заголовок списка — не действие");
+    }
+
     #[test]
     fn new_buttons_validate() {
         for id in ["mac_vpn_restart", "win_vpn_restart"] {

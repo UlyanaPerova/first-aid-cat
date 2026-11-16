@@ -695,6 +695,27 @@ mod unchecked_tests {
 }
 
 #[cfg(test)]
+mod menu_roundtrip_tests {
+    use super::*;
+
+    /// Заголовок списка действий («menu») переживает запись в файл и чтение: иначе в окне вместо кнопки-списка
+    /// остаётся кнопка первого действия. Неизвестное действие при чтении по-прежнему отбрасывается.
+    #[test]
+    fn menu_header_survives_the_results_file() {
+        let dir = std::env::temp_dir().join(format!("aptechka-menu-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let p = dir.join("c.json");
+        let fx = |id: &str, label: &str| Fix { id: id.into(), label: label.into(), arg: None };
+        let rows = vec![Check::new("sys", "Строка", "info", "x").fixes(vec![fx("menu", "Скорость"), fx("proxy_off", "A"), fx("no_such_fix", "B")])];
+        write_checks(&p, &rows);
+        let (_, back) = read_checks(&p).unwrap();
+        let ids: Vec<&str> = back[0].fixes.iter().map(|f| f.id.as_str()).collect();
+        assert_eq!(ids, ["menu", "proxy_off"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
 mod economy_tests {
     use super::*;
 
