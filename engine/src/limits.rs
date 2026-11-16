@@ -11,7 +11,7 @@
 //! прочитан каждый файл, и в следующий раз разбираются только новые строки.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::io::{Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -178,6 +178,35 @@ struct FileState {
     projects: Projects,
     /// последние лимиты из этого файла (Codex) и их время
     limits: Option<Limits>,
+    /// отпечаток начала файла: сколько первых байт взято и их хеш. По нему видно, что файл заменили другим,
+    /// даже если новый длиннее прежнего (по одной длине такую замену не заметить)
+    head: (u64, u64),
+    /// итог сессии Codex (total_token_usage) из последнего учтённого события: повтор события с тем же итогом
+    /// (обновились только лимиты) расход не прибавляет
+    codex_total: Option<u64>,
+}
+
+/// Сколько первых байт файла идёт в отпечаток.
+const HEAD: u64 = 512;
+
+/// Хеш первых `n` байт файла (None — не прочитать).
+fn head_print(f: &mut std::fs::File, n: u64) -> Option<u64> {
+    use std::hash::{Hash, Hasher};
+    let mut buf = vec![0u8; n as usize];
+    f.seek(SeekFrom::Start(0)).ok()?;
+    f.read_exact(&mut buf).ok()?;
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    buf.hash(&mut h);
+    Some(h.finish())
+}
+
+/// Файл уже не тот, что читали: стал короче или вырос, но начало у него другое (переписан целиком).
+/// Начало сверяется только у выросшего файла — у неизменившихся лишнего чтения нет.
+fn replaced(f: &mut std::fs::File, len: u64, st: &FileState) -> bool {
+    if len < st.pos {
+        return true;
+    }
+    len > st.pos && st.head.0 > 0 && head_print(f, st.head.0) != Some(st.head.1)
 }
 
 /// Состояние чтения одного агента: файл → прочитанное.
@@ -213,10 +242,20 @@ const LINE_CAP: usize = 8 << 20;
 fn read_new(p: &Path, st: &mut FileState, needles: &[&[u8]], seen: &mut HashSet<u64>, eat: &mut Eat) {
     let Ok(mut f) = crate::store::open_regular(p) else { return };
     let len = f.metadata().map(|m| m.len()).unwrap_or(0);
-    if len < st.pos {
+    if replaced(&mut f, len, st) {
         *st = FileState::default();
     }
-    if len == st.pos || f.seek(SeekFrom::Start(st.pos)).is_err() {
+    if len == st.pos {
+        return;
+    }
+    // отпечаток начала — пока он короче HEAD, берём столько, сколько в файле уже есть
+    if st.head.0 < HEAD {
+        let n = len.min(HEAD);
+        if let Some(h) = head_print(&mut f, n) {
+            st.head = (n, h);
+        }
+    }
+    if f.seek(SeekFrom::Start(st.pos)).is_err() {
         return;
     }
     let _drop = crate::footprint::CacheDrop::new(&f);
@@ -258,7 +297,9 @@ fn scan(state: &Mutex<Option<Files>>, roots: &[PathBuf], depth: usize, needles: 
     // файл стал короче (его переписали) — он будет прочитан заново; забыть его ответы ДО сбора общего списка,
     // иначе его же строки сочлись бы повторами
     for (p, st) in files.iter_mut() {
-        if std::fs::metadata(p).is_ok_and(|m| m.len() < st.pos) {
+        let Ok(mut f) = crate::store::open_regular(p) else { continue };
+        let len = f.metadata().map(|m| m.len()).unwrap_or(0);
+        if replaced(&mut f, len, st) {
             *st = FileState::default();
         }
     }
@@ -427,7 +468,16 @@ fn codex_line(v: &serde_json::Value, st: &mut FileState, _seen: &mut HashSet<u64
         return;
     }
     let Some(t) = v.get("timestamp").and_then(|x| x.as_str()).and_then(iso_secs) else { return };
-    if let Some(last) = p.get("info").and_then(|i| i.get("last_token_usage")) {
+    // итог сессии не изменился — это повтор события (пришли только новые лимиты): расход уже учтён
+    let total = p
+        .get("info")
+        .and_then(|i| i.get("total_token_usage"))
+        .map(|t| hash(&format!("{} {} {} {}", u(t, "input_tokens"), u(t, "cached_input_tokens"), u(t, "output_tokens"), u(t, "total_tokens"))));
+    let repeat = total.is_some() && total == st.codex_total;
+    if total.is_some() {
+        st.codex_total = total;
+    }
+    if let Some(last) = p.get("info").and_then(|i| i.get("last_token_usage")).filter(|_| !repeat) {
         let (inp, cached) = (u(last, "input_tokens"), u(last, "cached_input_tokens"));
         let tok = Tok {
             input: inp.saturating_sub(cached),

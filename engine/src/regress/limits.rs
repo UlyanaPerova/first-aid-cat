@@ -627,7 +627,6 @@ fn claude_truncated_file_is_reread_not_added() {
 /// Файл переписан новым содержимым, которое ДЛИННЕЕ прежней позиции чтения: сокращения нет, и программа не замечает
 /// замены — читает с середины нового файла. Эталон: сумма новых ответов.
 #[test]
-#[ignore = "известная ошибка: файл, переписанный более длинным содержимым, не распознаётся как новый (учёт идёт по позиции, без проверки отпечатка начала файла)"]
 fn claude_rewritten_longer_file_is_detected() {
     let t = Tmp::new("cl_rewrite");
     std::fs::create_dir_all(t.p("projects/a")).unwrap();
@@ -950,7 +949,6 @@ fn codex_cached_larger_than_input_saturates() {
 /// числам, без содержимого) сумма событий дала +4% по входу и +22% по ответам относительно итога сессии.
 /// Эталон: итоговый `total_token_usage` последнего события.
 #[test]
-#[ignore = "известная ошибка: повтор события token_count (то же total_token_usage) считается дважды — расход Codex завышен"]
 fn codex_repeated_token_count_event_counts_once() {
     let t = Tmp::new("cx_dup");
     std::fs::create_dir_all(t.p("sessions/a")).unwrap();
