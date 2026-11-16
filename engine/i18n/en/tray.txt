@@ -65,3 +65,6 @@ en: resets
 
 ru: лимиты появятся после первого ответа агента
 en: limits will appear after the agent's first reply
+
+ru: плашка: закрыта щелчком мимо неё
+en: panel: closed by a click outside it
