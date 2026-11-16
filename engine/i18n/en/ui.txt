@@ -610,6 +610,10 @@ en: fix the proxy
 ru: что с видеокартой
 en: what's up with the GPU
 
+# ui.rs:3731
+ru: ~/проекты/аптечка
+en: ~/projects/aptechka
+
 # дополнительные шаблоны и части составных строк
 
 ru: Проверяю…

@@ -1,6 +1,6 @@
 [package]
 name = "aptechka"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2021"
 # самая старая версия Rust, на которой собирается (rusqlite и uuid требуют 1.89); проверяет CI
 rust-version = "1.89"

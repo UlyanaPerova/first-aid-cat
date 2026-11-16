@@ -1782,6 +1782,8 @@ struct Popup {
     /// где в окне сценка и вся плашка без неё перемен — чтобы кадр анимации менял только сценку
     scene: Rect,
     cache: Vec<u32>,
+    /// окно плашки уже получало фокус (до этого его потеря — не «щёлкнули мимо»)
+    focused: bool,
     /// когда (мс от открытия) кота тронули за ушко и за какое
     poke: crate::scene_anim::Poke,
 }
@@ -1833,7 +1835,12 @@ struct App {
     strips: Vec<std::path::PathBuf>,
     /// когда пришли последние цифры
     data_t: i64,
+    /// когда плашку закрыл щелчок мимо неё (щелчок по самому значку в тот же миг не должен открыть её снова)
+    closed_at: Option<Instant>,
 }
+
+/// Сколько после открытия плашка не закрывается по потере фокуса: система может на миг отдать фокус обратно панели.
+const FOCUS_GRACE: Duration = Duration::from_millis(250);
 
 /// Сколько плашка не закрывается после открытия (потеря фокуса от того же щелчка, второй щелчок двойного нажатия).
 const GRACE: Duration = Duration::from_millis(900);
@@ -1913,6 +1920,10 @@ impl App {
 impl App {
     fn open_popup(&mut self, el: &ActiveEventLoop, cx: i32, cy: i32) {
         crate::diag::log("значок: нажатие");
+        // плашку только что закрыл этот же щелчок (фокус ушёл к панели раньше, чем пришло нажатие на значок)
+        if self.closed_at.take().is_some_and(|t| t.elapsed() < Duration::from_millis(400)) {
+            return;
+        }
         if let Some(p) = self.popup.take() {
             // второе нажатие — закрыть; но не второй щелчок двойного нажатия
             if p.opened.elapsed() < GRACE {
@@ -1973,6 +1984,7 @@ impl App {
             shown: (0, Frame::default()),
             scene: Rect::new(0, 0, 0, 0),
             cache: Vec::new(),
+            focused: false,
             poke: None,
         });
         self.draw();
@@ -2218,6 +2230,21 @@ impl ApplicationHandler<Ev> for App {
         match ev {
             WindowEvent::RedrawRequested => self.draw(),
             WindowEvent::CloseRequested => self.popup = None,
+            // щёлкнули мимо плашки (фокус ушёл другому окну или рабочему столу) — она закрывается, как любое меню.
+            // Только macOS и Windows: на Linux плашка-окно бывает лишь вне GNOME, и там панели сами отбирают фокус
+            // у только что открытого окна — раньше оно из-за этого закрывалось само.
+            WindowEvent::Focused(true) => {
+                if let Some(p) = self.popup.as_mut() {
+                    p.focused = true;
+                }
+            }
+            WindowEvent::Focused(false) if cfg!(any(target_os = "macos", windows)) => {
+                if self.popup.as_ref().is_some_and(|p| p.focused && p.opened.elapsed() > FOCUS_GRACE) {
+                    crate::diag::log("плашка: закрыта щелчком мимо неё");
+                    self.popup = None;
+                    self.closed_at = Some(Instant::now());
+                }
+            }
 
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed && event.logical_key == Key::Named(NamedKey::Escape) => {
                 self.popup = None
@@ -2428,6 +2455,7 @@ pub fn run() {
         #[cfg(target_os = "linux")]
         reg_t: Instant::now(),
         data_t: 0,
+        closed_at: None,
         watch: Watch::default(),
         tpl: None,
         #[cfg(target_os = "linux")]

@@ -357,12 +357,39 @@ pub fn comment_env_line(spec: &str) -> (bool, String) {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    /// Локальный адрес — настоящий адрес этой машины: не пустой, не «любой», не свой же 127.0.0.1; разбирается как IP.
+    /// Без сети (изолированная сборка) адреса нет — это тоже допустимо.
+    #[test]
+    fn local_ip_is_a_real_address() {
+        if let Some(ip) = super::local_ip() {
+            let a: std::net::IpAddr = ip.parse().expect("разбирается как IP");
+            assert!(!a.is_unspecified() && !a.is_loopback(), "{ip}");
+        }
+    }
+}
 
 /// Интернет и DNS (Windows и macOS; на Linux — вместе с маршрутом в diag::check_network).
 #[cfg_attr(target_os = "linux", allow(dead_code))]
 pub fn check_net_basic(flush_fix: &str) -> Vec<Check> {
-    crate::reach::rows(flush_fix, Vec::new())
+    let mut out = crate::reach::rows(flush_fix, Vec::new());
+    // адрес компьютера в своей сети — как на Linux (там он берётся из маршрута)
+    if let Some(ip) = local_ip() {
+        out.insert(0, Check::new("net", "Мой локальный IP", crate::diag::INFO, &ip));
+    }
+    out
+}
+
+/// Адрес этого компьютера в локальной сети: с какого адреса система пошла бы в интернет. Без единого пакета —
+/// «соединение» UDP только выбирает маршрут. Сначала IPv4, в сети только с IPv6 — он. None — сети нет.
+pub fn local_ip() -> Option<String> {
+    let via = |bind: &str, to: &str| {
+        let s = std::net::UdpSocket::bind(bind).ok()?;
+        s.connect(to).ok()?;
+        let ip = s.local_addr().ok()?.ip();
+        (!ip.is_unspecified() && !ip.is_loopback()).then(|| ip.to_string())
+    };
+    via("0.0.0.0:0", "1.1.1.1:80").or_else(|| via("[::]:0", "[2606:4700:4700::1111]:80"))
 }
 
 // ───────────────────────────── Страница входа в сеть (кафе, гостиница) ─────────────────────────────

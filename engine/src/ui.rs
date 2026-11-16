@@ -3728,8 +3728,8 @@ pub fn demo_sessions() -> Vec<Session> {
     let now = now_secs() as f64;
     let mk = |id: &str, title: &str, live: bool, st: &str, ago: f64| Session {
         id: id.into(),
-        cwd: "~/проекты/аптечка".into(),
-        title: title.into(),
+        cwd: crate::i18n::tr("~/проекты/аптечка").into_owned(),
+        title: crate::i18n::tr(title).into_owned(),
         mtime: now - ago,
         live,
         status: st.into(),
