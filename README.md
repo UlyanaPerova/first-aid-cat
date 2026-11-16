@@ -146,7 +146,9 @@ On **macOS** the widget is a native WidgetKit widget (small and medium). Add it 
   <img src="docs/screenshots/limits_panel.gif" alt="AI limits panel: ring charts of the 5-hour and weekly limits, tokens per day, and the cat writing at his desk; when his ear is clicked he blushes" width="373">
 </p>
 
-If you use Claude Code or Codex, a small white cat appears in the top panel (the menu bar on macOS) with the fullest subscription limit next to it. The cat shows what your agents are doing:
+Limits are tracked for **Claude Code** and **Codex**: these two are the agents that report their subscription limits on your computer. For the other agents (Gemini CLI, Qwen Code, Kimi Code, Cursor, OpenCode, Antigravity) the app checks the connection to their servers, their status pages and their sessions with the resume command (the **AI** tab), but it shows no limits and no token counts.
+
+If you use Claude Code or Codex, a small white cat appears in the top panel (the menu bar on macOS) with the fullest subscription limit next to it. The cat shows what these two agents are doing:
 
 | No agent is open | An agent is working | The work is done, the session waits for you |
 |---|---|---|
