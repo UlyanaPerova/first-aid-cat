@@ -26,9 +26,11 @@ It is a single native binary written in Rust. There is no Electron and no GTK. I
 
 - [Meet the cat](#meet-the-cat)
 - [What it checks](#what-it-checks)
+  - [AI limits in the panel](#ai-limits-in-the-panel)
+  - [Sessions of AI agents](#sessions-of-ai-agents)
+  - [External IP history](#external-ip-history)
 - [Fixes](#fixes)
 - [Widgets](#widgets)
-- [AI limits in the panel](#ai-limits-in-the-panel)
 - [Your own checks](#your-own-checks)
 - [Install](#install)
 - [Command line](#command-line)
@@ -55,7 +57,7 @@ The window, the widgets and the cat make a cozy pixel-art corner for your deskto
 
 ## What it checks
 
-The checks are grouped into tabs. Each one can be switched off in the **Metrics** tab.
+The checks are grouped into tabs. Out of the box the app runs **35 checks on Linux, 28 on Windows and 29 on macOS**, and most of them give several rows. You decide what stays: any check can be switched off in the **Metrics** tab, and you can add new ones of your own (see [Your own checks](#your-own-checks)); they show up in the app right away, with their own rows and buttons, like the built-in ones.
 
 | Tab | What it looks at |
 |---|---|
@@ -68,6 +70,47 @@ The checks are grouped into tabs. Each one can be switched off in the **Metrics*
 | **Digital footprint** | What a trojan running as you could take: API keys in shell history, in AI chat logs and in config files; VPN credentials; SSH keys without a passphrase; app login tokens; whether the disk is encrypted. Only the kind of secret and the file are shown, never the secret itself |
 
 A speed test (download, upload, ping) runs only when you ask for it.
+
+### AI limits in the panel
+
+| No agent is open | An agent is working | The work is done |
+|---|---|---|
+| <img src="docs/screenshots/limits_panel_sleeps.gif" alt="AI limits panel: ring charts of the 5-hour and weekly limits, tokens per day, and the cat asleep at his desk" width="270"> | <img src="docs/screenshots/limits_panel.gif" alt="AI limits panel: the cat writes with a pen at his desk; when his ear is clicked he blushes" width="270"> | <img src="docs/screenshots/limits_panel_done.gif" alt="AI limits panel: the cat has put the pen down and looks at you" width="270"> |
+
+Limits are tracked for **Claude Code** and **Codex**: these two are the agents that report their subscription limits on your computer. For the other agents (Gemini CLI, Qwen Code, Kimi Code, Cursor, OpenCode, Antigravity) the app checks the connection to their servers, their status pages and their sessions with the resume command (the **AI** tab), but it shows no limits and no token counts.
+
+If you use Claude Code or Codex, a small white cat appears in the top panel (the menu bar on macOS) with the fullest subscription limit next to it. The cat shows what these two agents are doing:
+
+| No agent is open | An agent is working | The work is done, the session waits for you |
+|---|---|---|
+| <img src="docs/screenshots/tray_icon_sleeps.png" alt="Panel icon: the cat sleeps, 73%" height="32"> | <img src="docs/screenshots/tray_icon_walks.png" alt="Panel icon: the cat walks, 73%" height="32"> | <img src="docs/screenshots/tray_icon_sits.png" alt="Panel icon: the cat sits, 73%" height="32"> |
+| <img src="docs/screenshots/tray_icon_black_sleeps.png" alt="Black panel icon on a light panel: the cat sleeps, 73%" height="32"> | <img src="docs/screenshots/tray_icon_black_walks.png" alt="Black panel icon on a light panel: the cat walks, 73%" height="32"> | <img src="docs/screenshots/tray_icon_black_sits.png" alt="Black panel icon on a light panel: the cat sits, 73%" height="32"> |
+
+On a light panel the white cat is hard to see, so it can be black (the second row): **AI limits → Black cat on the icon (for a light panel)**. On macOS the system colours the icon by itself.
+
+When several sessions are open, dots next to the number show each of them: `●` is working, `○` has finished and waits for you, so `●●○ 73%` means two are busy and one is waiting (Linux and macOS; on Windows the icon itself is the number). The dots, the picture at the bottom of the panel and its animation can each be switched off in the **AI limits** menu.
+
+One click on it opens the panel; the next click, or a click anywhere outside, closes it. For each agent the panel shows rings for the 5-hour and weekly limits with their reset times, and bars of tokens per day for two weeks.
+
+At the bottom the same cat sits at his desk, and he is alive there too: he sleeps, writes with a pen, or leans back when the work is done. He blinks, his tail sways and his ears twitch. Click an ear and he gets embarrassed.
+
+The numbers come from the agents on this computer: nothing is asked from the network, and no account token is read. If the agent has not reported for more than 15 minutes, the panel says how old the numbers are instead of pretending they are fresh.
+
+#### Usage chart and the spending calendar
+
+<p align="center">
+  <img src="docs/screenshots/usage_card_calendar.png" alt="AI usage chart: the spending calendar, where a darker red day means more tokens spent" width="620">
+</p>
+
+**Usage chart…** opens the usage chart in the app (also **AI limits → AI usage chart**): limit bars with "resets in 1 h 56 min", tokens per day and per model for 30 days, and which projects used the most. Below is the **spending calendar**: every day is a cell, and the darker the red, the more tokens went out that day. One look shows which days ate the week. The chart can be saved as an image.
+
+The app tells you when a limit reaches 80 % and 95 % (once per window) and when it is free again after a reset.
+
+- **Linux, GNOME:** the app installs its own small GNOME Shell extension, so the panel opens like any other top-bar menu. After the first install, restart GNOME Shell once (on X11: Alt+F2, `r`, Enter; on Wayland: log out and in). Without it, the icon is shown through AppIndicator (on by default in Ubuntu), where the panel opens on a double click. KDE shows the icon without the number.
+- **Windows:** the number is drawn on the icon itself in the notification area. Windows 11 hides new icons under **^** at first: drag it out to keep it in sight.
+- **macOS:** the cat and the number sit in the menu bar; a click opens the same panel.
+
+Codex writes its limit percentages into its own logs. Claude Code tells them only to its status line, so the app connects one for you (see [Privacy](PRIVACY.md#what-it-changes)). Everything about it is in the **AI limits** menu: switch the icon on or off, show the fullest limit or each agent's number ("Cl 42% Co 73%"), choose which agents to track (for example only Claude Code), turn the notifications on or off, and open the usage chart.
 
 ### Sessions of AI agents
 
@@ -139,49 +182,6 @@ On **macOS** the widget is a native WidgetKit widget (small and medium). Add it 
 
 **Help → Medical Note from Dr. Meow** turns the current state into a (joking) clinic certificate that you can save as an image.
 
-
-## AI limits in the panel
-
-| No agent is open | An agent is working | The work is done |
-|---|---|---|
-| <img src="docs/screenshots/limits_panel_sleeps.gif" alt="AI limits panel: ring charts of the 5-hour and weekly limits, tokens per day, and the cat asleep at his desk" width="270"> | <img src="docs/screenshots/limits_panel.gif" alt="AI limits panel: the cat writes with a pen at his desk; when his ear is clicked he blushes" width="270"> | <img src="docs/screenshots/limits_panel_done.gif" alt="AI limits panel: the cat has put the pen down and looks at you" width="270"> |
-
-Limits are tracked for **Claude Code** and **Codex**: these two are the agents that report their subscription limits on your computer. For the other agents (Gemini CLI, Qwen Code, Kimi Code, Cursor, OpenCode, Antigravity) the app checks the connection to their servers, their status pages and their sessions with the resume command (the **AI** tab), but it shows no limits and no token counts.
-
-If you use Claude Code or Codex, a small white cat appears in the top panel (the menu bar on macOS) with the fullest subscription limit next to it. The cat shows what these two agents are doing:
-
-| No agent is open | An agent is working | The work is done, the session waits for you |
-|---|---|---|
-| <img src="docs/screenshots/tray_icon_sleeps.png" alt="Panel icon: the cat sleeps, 73%" height="32"> | <img src="docs/screenshots/tray_icon_walks.png" alt="Panel icon: the cat walks, 73%" height="32"> | <img src="docs/screenshots/tray_icon_sits.png" alt="Panel icon: the cat sits, 73%" height="32"> |
-| sleeps | walks | sits |
-
-On a light panel the white cat is hard to see, so it can be black: **AI limits → Black cat on the icon (for a light panel)**. On macOS the system colours the icon by itself.
-
-<img src="docs/screenshots/tray_icon_black_sleeps.png" alt="Black panel icon on a light panel: the cat sleeps, 73%" height="32"> <img src="docs/screenshots/tray_icon_black_walks.png" alt="Black panel icon: the cat walks, 73%" height="32"> <img src="docs/screenshots/tray_icon_black_sits.png" alt="Black panel icon: the cat sits, 73%" height="32">
-
-When several sessions are open, dots next to the number show each of them: `●` is working, `○` has finished and waits for you, so `●●○ 73%` means two are busy and one is waiting (Linux and macOS; on Windows the icon itself is the number). The dots, the picture at the bottom of the panel and its animation can each be switched off in the **AI limits** menu.
-
-One click on it opens the panel; the next click, or a click anywhere outside, closes it. For each agent the panel shows rings for the 5-hour and weekly limits with their reset times, and bars of tokens per day for two weeks.
-
-At the bottom the same cat sits at his desk, and he is alive there too: he sleeps, writes with a pen, or leans back when the work is done. He blinks, his tail sways and his ears twitch. Click an ear and he gets embarrassed.
-
-The numbers come from the agents on this computer: nothing is asked from the network, and no account token is read. If the agent has not reported for more than 15 minutes, the panel says how old the numbers are instead of pretending they are fresh.
-
-### Usage chart and the spending calendar
-
-<p align="center">
-  <img src="docs/screenshots/usage_card_calendar.png" alt="AI usage chart: the spending calendar, where a darker red day means more tokens spent" width="620">
-</p>
-
-**Usage chart…** opens the usage chart in the app (also **AI limits → AI usage chart**): limit bars with "resets in 1 h 56 min", tokens per day and per model for 30 days, and which projects used the most. Below is the **spending calendar**: every day is a cell, and the darker the red, the more tokens went out that day. One look shows which days ate the week. The chart can be saved as an image.
-
-The app tells you when a limit reaches 80 % and 95 % (once per window) and when it is free again after a reset.
-
-- **Linux, GNOME:** the app installs its own small GNOME Shell extension, so the panel opens like any other top-bar menu. After the first install, restart GNOME Shell once (on X11: Alt+F2, `r`, Enter; on Wayland: log out and in). Without it, the icon is shown through AppIndicator (on by default in Ubuntu), where the panel opens on a double click. KDE shows the icon without the number.
-- **Windows:** the number is drawn on the icon itself in the notification area. Windows 11 hides new icons under **^** at first: drag it out to keep it in sight.
-- **macOS:** the cat and the number sit in the menu bar; a click opens the same panel.
-
-Codex writes its limit percentages into its own logs. Claude Code tells them only to its status line, so the app connects one for you (see [Privacy](PRIVACY.md#what-it-changes)). Everything about it is in the **AI limits** menu: switch the icon on or off, show the fullest limit or each agent's number ("Cl 42% Co 73%"), choose which agents to track (for example only Claude Code), turn the notifications on or off, and open the usage chart.
 
 ## Your own checks
 
