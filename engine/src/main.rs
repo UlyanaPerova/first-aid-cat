@@ -308,8 +308,9 @@ fn screen_state(checks: &[diag::Check], sessions: &[diag::Session], speed: Optio
     st.speed = speed;
     if let Some(v) = g("VPN (итог)") {
         let short = if v.status == "ok" { v.value.replace("мир видит ", "вкл · ") } else { v.value.clone() };
-        // перевод до обрезки (обрезанную фразу в таблице i18n не найти)
-        st.vpn = (v.status.clone(), i18n::t(&short).chars().take(22).collect());
+        // по-русски и целиком: переводит и обрезает экран при рисовании (обрезанную фразу в таблице i18n не найти,
+        // а переведённая здесь осталась бы на прежнем языке после его смены)
+        st.vpn = (v.status.clone(), short);
     }
     // Claude: по живым сессиям Claude Code (как в gui.py _screen_state)
     let live: Vec<&diag::Session> = sessions.iter().filter(|s| s.live).collect();
@@ -380,8 +381,8 @@ fn screen_state(checks: &[diag::Check], sessions: &[diag::Session], speed: Optio
     let worst = diag::worst(checks).to_string();
     let first = |s: &str| checks.iter().find(|c| c.status == s);
     st.message = match worst.as_str() {
-        "bad" => first("bad").map(|c| format!("Ой! {}: {}", i18n::t(&c.title), i18n::t(&c.value))).unwrap_or_default(),
-        "warn" => first("warn").map(|c| format!("Хм, {}: {}", i18n::t(&c.title), i18n::t(&c.value))).unwrap_or_default(),
+        "bad" => first("bad").map(|c| format!("Ой! {}: {}", c.title, c.value)).unwrap_or_default(),
+        "warn" => first("warn").map(|c| format!("Хм, {}: {}", c.title, c.value)).unwrap_or_default(),
         _ if diag::unchecked_count(checks) > 0 => format!("Проблем не вижу, но не всё получилось проверить: {}", diag::unchecked_count(checks)),
         _ => "Всё спокойно, мур! :3".into(),
     };
@@ -785,6 +786,11 @@ impl App {
                         w.set_title(&i18n::t("Аптечка"));
                     }
                     wlog(&format!("язык: {}", i18n::lang().id()));
+                    // то, что собрано из частей заранее (реплика кота в облачке), — пересобрать на новом языке
+                    if !self.raw_checks.is_empty() {
+                        let t = self.t0.elapsed().as_secs_f64();
+                        self.apply_checks(self.raw_checks.clone(), false, t);
+                    }
                     #[cfg(target_os = "macos")]
                     widget::export_mac(&self.checks);
                 }
@@ -1864,6 +1870,10 @@ fn ui_shot(app: &mut App, path: &str) {
     // команды окна: настоящие запуски только в пробном режиме (DRY_RUN=1), иначе лишь пишем
     for c in &cmds {
         wlog(&format!("команда окна: {c:?}"));
+    }
+    // смена языка (UI_DO=lang2) — как в настоящем окне
+    if cmds.iter().any(|c| matches!(c, Cmd::LangChanged)) {
+        app.handle_cmds(vec![Cmd::LangChanged], None);
     }
     if fixes::dry_run() {
         let run: Vec<Cmd> = cmds.into_iter().filter(|c| matches!(c, Cmd::RunFix { .. } | Cmd::SaveSpravka)).collect();

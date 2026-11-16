@@ -19,6 +19,8 @@ python3 ../tools/i18n.py check                           # 0 strings without tra
 python3 ../tools/i18n.py unused                          # translations whose Russian text is gone from the code
 ```
 
+`i18n.py check` compares the strings in the code with the tables. It cannot see what the program glues together at run time, so there is a second, live check: `python3 tools/i18n_live.py` (from the repository root, Linux) starts the built program in English in a temporary profile three ways (all checks with their hints, buttons and fix texts; every tab of the window; the window started in Russian and switched to English) and prints every string that still has Russian letters. On Windows and macOS run `DIAG_FULL=1 APTECHKA_LANG=en aptechka --diag` and look for Russian letters in the output.
+
 The unit tests cover the parts where a mistake is dangerous or silent:
 
 - **Fix gate:** unknown IDs and malformed arguments are refused, and every action runs only on its own operating system.

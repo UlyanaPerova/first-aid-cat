@@ -337,9 +337,20 @@ fn translate(t: &Table, s: &str, depth: u8) -> String {
     if let Some(e) = t.exact.get(s) {
         return e.clone();
     }
-    // пробелы по краям — не часть фразы
+    // пробелы по краям — не часть фразы; но сперва — шаблоны-довески, которые сами начинаются с пробела
+    // (« (интерфейс {} лежит)»): без этого довесок после обрезки пробела оставался непереведённым
     let core = s.trim();
     if core.len() != s.len() && !core.is_empty() {
+        for tp in
+            t.tpls.iter().filter(|tp| tp.pieces.first().is_some_and(|p| p.starts_with(' ')) || tp.pieces.last().is_some_and(|p| p.ends_with(' ')))
+        {
+            if let Some(vals) = capture(&tp.pieces, s) {
+                let vals: Vec<String> = vals.iter().map(|v| translate(t, v, depth + 1)).collect();
+                if !vals.iter().any(|v| has_cyr(v)) {
+                    return fill(&tp.en, &vals);
+                }
+            }
+        }
         let i = s.find(core).unwrap_or(0);
         return format!("{}{}{}", &s[..i], translate(t, core, depth + 1), &s[i + core.len()..]);
     }
@@ -379,6 +390,219 @@ fn translate(t: &Table, s: &str, depth: u8) -> String {
     s.to_string()
 }
 
+// ───────────────────────────── точный разбор склеек ─────────────────────────────
+//
+// `translate` идёт по строке жадно: первый подошедший шаблон забирает себе всё, а что не разобралось — остаётся
+// по-русски («данные 21 h ago», «off (интерфейс … лежит)»). Здесь — перебор: строка режется на слова и знаки,
+// и ищется такое покрытие записями таблицы (фразы, шаблоны, формы числа), при котором русских букв остаётся
+// меньше всего. Зовётся только когда жадный разбор оставил русское, поэтому на готовые переводы не влияет.
+
+/// Цена одной оставшейся русской буквы.
+const LEFT: u32 = 100_000;
+/// Цена записи таблицы: из равных покрытий берём то, где записей меньше, а из них — где записи точнее
+/// (совпало больше текста: «, канал {}» у Wi-Fi, а не одно слово «канал», которое в таблице — VPN-туннель).
+const ITEM: u32 = 64;
+
+fn item_cost(matched: usize) -> u32 {
+    ITEM - (matched as u32).min(ITEM - 1)
+}
+/// Потолок перебора: дальше берём лучшее из найденного.
+const COVER_STEPS: u32 = 200_000;
+
+fn cyr_count(s: &str) -> u32 {
+    s.chars().filter(|c| matches!(c, 'А'..='я' | 'Ё' | 'ё')).count() as u32
+}
+
+/// Найденное место шаблона: (граница конца, цена, перевод).
+type Found = (usize, u32, String);
+
+struct Cover<'a> {
+    t: &'a Table,
+    s: &'a str,
+    /// границы слов и знаков (смещения в байтах), первая — 0, последняя — длина строки
+    b: Vec<usize>,
+    /// шаблоны, все куски которых есть в строке
+    tpls: Vec<&'a Tpl>,
+    max_exact: usize,
+    memo: HashMap<(usize, usize), (u32, String)>,
+    steps: u32,
+}
+
+impl<'a> Cover<'a> {
+    fn new(t: &'a Table, s: &'a str) -> Self {
+        let mut b = vec![0];
+        let mut prev_word = false;
+        for (i, c) in s.char_indices() {
+            let word = c.is_alphanumeric();
+            if i > 0 && !(word && prev_word) {
+                b.push(i);
+            }
+            prev_word = word;
+        }
+        b.push(s.len());
+        b.dedup();
+        let tpls = t.tpls.iter().filter(|tp| tp.pieces.iter().all(|p| p.is_empty() || s.contains(p.as_str()))).collect();
+        let max_exact = t.exact.keys().map(String::len).max().unwrap_or(0);
+        Cover { t, s, b, tpls, max_exact, memo: HashMap::new(), steps: 0 }
+    }
+
+    fn idx(&self, off: usize) -> Option<usize> {
+        self.b.binary_search(&off).ok()
+    }
+
+    /// Фраза из таблицы; со строчной буквы — та же фраза с заглавной («звук: вывод» посреди предложения).
+    fn exact(&self, sub: &str) -> Option<String> {
+        if let Some(e) = self.t.exact.get(sub) {
+            return Some(e.clone());
+        }
+        let first = sub.chars().next()?;
+        if !first.is_lowercase() || !has_cyr(&sub[..first.len_utf8()]) {
+            return None;
+        }
+        let cap: String = first.to_uppercase().chain(sub[first.len_utf8()..].chars()).collect();
+        let e = self.t.exact.get(&cap)?;
+        let mut it = e.chars();
+        let (a, b) = (it.next()?, it.next());
+        // «VPN», «DNS» строчными не становятся
+        if a.is_uppercase() && b.is_none_or(|c| !c.is_uppercase()) {
+            Some(a.to_lowercase().chain(e[a.len_utf8()..].chars()).collect())
+        } else {
+            Some(e.clone())
+        }
+    }
+
+    /// Лучшее покрытие куска строки между границами i и j: (цена, перевод).
+    fn seq(&mut self, i: usize, j: usize) -> (u32, String) {
+        if i >= j {
+            return (0, String::new());
+        }
+        if let Some(v) = self.memo.get(&(i, j)) {
+            return v.clone();
+        }
+        self.steps += 1;
+        // слово или знак как есть
+        let tok = &self.s[self.b[i]..self.b[i + 1]];
+        let (c, rest) = self.seq(i + 1, j);
+        let mut best = (cyr_count(tok) * LEFT + c, format!("{tok}{rest}"));
+        if self.steps > COVER_STEPS {
+            return best;
+        }
+        let cand = |best: &mut (u32, String), cost: u32, text: String| {
+            if cost < best.0 {
+                *best = (cost, text);
+            }
+        };
+        // фраза из таблицы (длинные — раньше)
+        for k in (i + 1..=j).rev() {
+            let sub = &self.s[self.b[i]..self.b[k]];
+            if sub.len() > self.max_exact || !has_cyr(sub) {
+                continue;
+            }
+            if let Some(e) = self.exact(sub) {
+                let (c, rest) = self.seq(k, j);
+                // фраза, найденная только с заглавной буквы, — без скидки за точность
+                let exact = self.t.exact.contains_key(sub);
+                cand(&mut best, item_cost(if exact { sub.chars().count() } else { 0 }) + c, e + &rest);
+            }
+        }
+        // «5 ключей»
+        if i + 3 <= j && tok.chars().all(|c| c.is_ascii_digit()) && &self.s[self.b[i + 1]..self.b[i + 2]] == " " {
+            let w = &self.s[self.b[i + 2]..self.b[i + 3]];
+            if let (Ok(n), Some((one, many))) = (tok.parse::<i64>(), self.t.plural.get(w)) {
+                let (c, rest) = self.seq(i + 3, j);
+                cand(&mut best, item_cost(w.chars().count()) + c, format!("{n} {}{rest}", if n == 1 { one } else { many }));
+            }
+        }
+        // шаблон, начинающийся здесь
+        for tp in self.tpls.clone() {
+            let mut found = Vec::new();
+            self.tpl(tp, 0, self.b[i], j, &mut Vec::new(), &mut found);
+            for (k, cost, text) in found {
+                let (c, rest) = self.seq(k, j);
+                cand(&mut best, item_cost(tp.weight) + cost + c, text + &rest);
+            }
+        }
+        self.memo.insert((i, j), best.clone());
+        best
+    }
+
+    /// Все способы уложить шаблон с куска `pi`, стоя на смещении `pos` (перед куском `pi` > 0 — подстановка).
+    fn tpl(&mut self, tp: &Tpl, pi: usize, pos: usize, j: usize, vals: &mut Vec<(u32, String)>, out: &mut Vec<Found>) {
+        self.steps += 1;
+        if self.steps > COVER_STEPS {
+            return;
+        }
+        let end = self.b[j];
+        let p = &tp.pieces[pi];
+        if pi == 0 {
+            if self.s[pos..end].starts_with(p.as_str()) && self.idx(pos + p.len()).is_some() {
+                self.tpl(tp, 1, pos + p.len(), j, vals, out);
+            }
+            return;
+        }
+        let last = pi == tp.pieces.len() - 1;
+        let Some(hi) = self.idx(pos) else { return };
+        if p.is_empty() {
+            // подстановка в самом конце шаблона: до любой границы
+            if last {
+                for k in hi + 1..=j {
+                    vals.push(self.seq(hi, k));
+                    self.done(tp, k, vals, out);
+                    vals.pop();
+                }
+            }
+            return;
+        }
+        let mut from = pos;
+        while let Some(off) = self.s[from..end].find(p.as_str()) {
+            let st = from + off;
+            if let (true, Some(a), Some(e)) = (st > pos, self.idx(st), self.idx(st + p.len())) {
+                vals.push(self.seq(hi, a));
+                if last {
+                    self.done(tp, e, vals, out);
+                } else {
+                    self.tpl(tp, pi + 1, st + p.len(), j, vals, out);
+                }
+                vals.pop();
+            }
+            from = st + self.s[st..].chars().next().map_or(1, char::len_utf8);
+            if from >= end {
+                break;
+            }
+        }
+    }
+
+    fn done(&self, tp: &Tpl, k: usize, vals: &[(u32, String)], out: &mut Vec<Found>) {
+        // одна связка посередине («{} из {}») между непереведёнными словами хуже, чем фраза целиком по-русски
+        let infix_only = tp.pieces.first().is_some_and(String::is_empty) && tp.pieces.last().is_some_and(String::is_empty);
+        if infix_only && vals.iter().any(|v| v.0 >= LEFT) {
+            return;
+        }
+        if vals.iter().any(|v| v.1.matches('«').count() != v.1.matches('»').count() || v.1.matches('“').count() != v.1.matches('”').count()) {
+            return;
+        }
+        let texts: Vec<String> = vals.iter().map(|v| v.1.clone()).collect();
+        out.push((k, vals.iter().map(|v| v.0).sum(), fill(&tp.en, &texts)));
+    }
+}
+
+/// Перевод с добором: жадный разбор, а если после него осталось русское — точный (когда он покрывает всё).
+fn best(t: &Table, s: &str) -> String {
+    let v = translate(t, s, 0);
+    if !has_cyr(&v) || s.len() > 2000 {
+        return v;
+    }
+    let mut c = Cover::new(t, s);
+    let n = c.b.len() - 1;
+    let (cost, text) = c.seq(0, n);
+    // только полное покрытие: частичное переводит отдельные слова посреди чужого текста («Скорость via VPN»)
+    if cost < LEFT {
+        text
+    } else {
+        v
+    }
+}
+
 /// Непереведённые строки — в файл APTECHKA_I18N_MISSING (только для проверки перевода в VM).
 fn missing(s: &str) {
     static PATH: OnceLock<Option<std::path::PathBuf>> = OnceLock::new();
@@ -413,7 +637,7 @@ pub fn tr(s: &str) -> Cow<'_, str> {
     if let Some(v) = CACHE.lock().unwrap_or_else(|e| e.into_inner()).as_ref().and_then(|c| c.get(s)) {
         return Cow::Owned(v.clone());
     }
-    let v = translate(table(), s, 0);
+    let v = best(table(), s);
     // в журнал — строка целиком (по кускам после разбивки не понять, откуда она)
     if has_cyr(&v) {
         missing(s);
@@ -492,6 +716,25 @@ mod tests {
         let bad: Vec<String> =
             t.exact.iter().filter(|(_, en)| !has_cyr(en)).map(|(ru, _)| translate(t, &format!("Нажми «{ru}»"), 0)).filter(|v| has_cyr(v)).collect();
         assert!(bad.is_empty(), "{} фраз остались с русским, например: {:?}", bad.len(), &bad[..bad.len().min(5)]);
+    }
+
+    /// Склейки, которые жадный разбор оставлял наполовину русскими (всё это есть в таблице).
+    #[test]
+    fn glued_strings_are_covered() {
+        let t = table();
+        for s in [
+            "выключен (интерфейс outline-tun0 лежит)",
+            "3% · сброс вс 22.11 в 16:00 · данные 21 ч назад",
+            "Мур! Беда: звук: вывод — нет устройства (Dummy Output). Нажми «Перезапустить звук».",
+            "ps -o pid=,comm= -p 622 && kill 622   # не закрылась? запусти строку ещё раз или завершить принудительно через Мониторинг системы",
+        ] {
+            let en = best(t, s);
+            assert!(!has_cyr(&en), "«{s}» → «{en}»");
+        }
+        assert_eq!(best(t, "сигнал хороший (-62 dBm), канал 36 (5GHz, 80MHz)"), "good signal (-62 dBm), channel 36 (5GHz, 80MHz)");
+        assert_eq!(best(t, "выключен (интерфейс outline-tun0 лежит)"), "off (interface outline-tun0 is down)");
+        // чужие слова (название программы) остаются как есть, а своё вокруг — переводится
+        assert_eq!(best(t, "Открыта: Просмотр"), "Open: Просмотр");
     }
 
     #[test]

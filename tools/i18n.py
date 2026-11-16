@@ -4,6 +4,7 @@
   python3 tools/i18n.py check              — сколько строк без перевода (по модулям); код 1, если есть
   python3 tools/i18n.py missing MODULE     — непереведённые строки модуля MODULE.rs в формате таблицы
                                              (ru: …  /  en: пусто) — дописать в engine/i18n/en/MODULE.txt
+  python3 tools/i18n.py missing custom     — то же для своих проверок (custom/mod.rs → custom/en.txt)
   python3 tools/i18n.py unused             — строки таблиц, которых в коде уже нет (убрать вручную)
 Строки, которые никогда не показываются (имена слоёв картинки, служебные ключи, разбор чужого вывода), —
 в engine/i18n/ignore/MODULE.txt (по одной, в том же виде, что после «ru: »; # — комментарий).
@@ -122,15 +123,19 @@ def unesc(s):
     return "".join(out)
 
 
+CUSTOM = os.path.join(ROOT, "custom")  # свои проверки (CUSTOM.md): перевод — в custom/en.txt
+
+
 def load_tables():
     done, pending = set(), set()
     if not os.path.isdir(TABLES):
         return done, pending
-    for f in os.listdir(TABLES):
-        if not f.endswith(".txt"):
-            continue
+    files = [os.path.join(TABLES, f) for f in os.listdir(TABLES) if f.endswith(".txt")]
+    if os.path.isfile(os.path.join(CUSTOM, "en.txt")):
+        files.append(os.path.join(CUSTOM, "en.txt"))
+    for f in files:
         ru = None
-        for line in open(os.path.join(TABLES, f), encoding="utf-8"):
+        for line in open(f, encoding="utf-8"):
             line = line.rstrip("\n").rstrip("\r")
             if line.startswith("ru: "):
                 ru = unesc(line[4:])
@@ -173,7 +178,8 @@ def main():
     mods = sorted(f[:-3] for f in os.listdir(SRC) if f.endswith(".rs"))
     if cmd == "missing":
         mod = sys.argv[2]
-        for key, line in module_strings(os.path.join(SRC, mod + ".rs")):
+        path = os.path.join(CUSTOM, "mod.rs") if mod == "custom" else os.path.join(SRC, mod + ".rs")
+        for key, line in module_strings(path):
             if key not in done and key not in ign:
                 print(f"# {mod}.rs:{line}\nru: {esc(key)}\nen: \n")
         return 0
@@ -207,6 +213,11 @@ def main():
         miss = [k for k, _ in module_strings(os.path.join(SRC, m + ".rs")) if k not in done and k not in ign]
         if miss:
             print(f"{len(miss):5}  {m}.rs")
+            total += len(miss)
+    if os.path.isfile(os.path.join(CUSTOM, "mod.rs")):
+        miss = [k for k, _ in module_strings(os.path.join(CUSTOM, "mod.rs")) if k not in done and k not in ign]
+        if miss:
+            print(f"{len(miss):5}  custom/mod.rs  (перевод — в custom/en.txt: python3 tools/i18n.py missing custom)")
             total += len(miss)
     print(f"{total:5}  всего без перевода")
     return 1 if total else 0

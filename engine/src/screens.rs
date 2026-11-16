@@ -670,7 +670,9 @@ fn content(p: &mut Painter, name: &str, st: &ScreenState, w: f32, h: f32, t: f64
             let mut y = 132.;
             for (label, (s, val)) in [("VPN", &st.vpn), ("Клод", &st.claude)] {
                 p.dot(m + 6., y - 8., s, t);
-                p.text(m + 20., y, &format!("{}: {}", tr(label), tr(val)), INK);
+                // значение — перевод, потом обрезка под ширину экрана
+                let val: String = tr(val).chars().take(22).collect();
+                p.text(m + 20., y, &format!("{}: {val}", tr(label)), INK);
                 y += 26.;
             }
             let f = |v: Option<f64>| v.map(|v| format!("{v:.0}")).unwrap_or("—".into());

@@ -112,6 +112,12 @@ fn i18n_tables() {
     let mut names: Vec<_> = std::fs::read_dir(&dir).map(|rd| rd.flatten().map(|e| e.path()).collect()).unwrap_or_default();
     names.retain(|p: &std::path::PathBuf| p.extension().is_some_and(|x| x == "txt"));
     names.sort();
+    // свои проверки (custom/, см. CUSTOM.md) приносят свой перевод: custom/en.txt в том же формате
+    let own = Path::new(env!("CARGO_MANIFEST_DIR")).join("../custom/en.txt");
+    println!("cargo:rerun-if-changed={}", own.display());
+    if own.is_file() {
+        names.push(own);
+    }
     let mut all = String::new();
     for p in &names {
         println!("cargo:rerun-if-changed={}", p.display());

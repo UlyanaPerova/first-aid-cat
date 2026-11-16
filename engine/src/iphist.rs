@@ -2,8 +2,6 @@
 //! Запись — при каждой проверке «Мой внешний IP»; файл ip_history.json в папке настроек (только владелец, 0600),
 //! хранится 30 дней и не больше 300 записей. Никуда не отправляется. Удалить историю — удалить этот файл.
 
-use crate::i18n::t;
-
 /// Один отрезок: адрес и с какого по какой миг его видели (Unix-время).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Stay {
@@ -45,16 +43,15 @@ pub fn changes_since(h: &[Stay], since: i64) -> usize {
 }
 
 /// «5 мин», «3 ч 12 мин», «2 дн 4 ч» — без секунд: проверка идёт раз в несколько минут, точнее не знаем.
+/// Всё здесь — по-русски: подсказку переводит окно при показе (иначе после смены языка она осталась бы на прежнем).
 fn span(secs: i64) -> String {
-    // «ч» — одна буква: общий перевод однобуквенные строки не трогает, поэтому выбор языка здесь
-    let h = crate::i18n::pick("ч", "h");
     let m = secs.max(0) / 60;
     if m < 60 {
-        format!("{} {}", m, t("мин"))
+        format!("{m} мин")
     } else if m < 24 * 60 {
-        format!("{} {} {} {}", m / 60, h, m % 60, t("мин"))
+        format!("{} ч {} мин", m / 60, m % 60)
     } else {
-        format!("{} {} {} {}", m / 1440, t("дн"), m % 1440 / 60, h)
+        format!("{} дн {} ч", m / 1440, m % 1440 / 60)
     }
 }
 
@@ -68,31 +65,25 @@ fn stamp(secs: i64) -> String {
 pub fn summary(h: &[Stay], now: i64) -> Vec<String> {
     let Some(cur) = h.last() else { return Vec::new() };
     let mut out = Vec::new();
-    let held = format!("{} {} ({})", t("Этот адрес — с"), stamp(cur.from), span(now.max(cur.to) - cur.from));
+    let held = format!("Этот адрес — с {} ({})", stamp(cur.from), span(now.max(cur.to) - cur.from));
     if h.len() == 1 {
         out.push(held);
-        out.push(t("Смен адреса пока не видел."));
+        out.push("Смен адреса пока не видел.".into());
         return out;
     }
     out.push(held);
     out.push(format!(
-        "{} {} · {} {} · {} {}",
-        t("Смен за сутки:"),
+        "Смен за сутки: {} · за неделю: {} · за 30 дней: {}",
         changes_since(h, now - 86_400),
-        t("за неделю:"),
         changes_since(h, now - 7 * 86_400),
-        t("за 30 дней:"),
         changes_since(h, now - KEEP_SECS)
     ));
     // прежние адреса: с какого по какой миг, сколько держался; разрыв в наблюдениях — отдельной пометкой
     for w in h.windows(2).rev().take(4) {
         let (p, next) = (&w[0], &w[1]);
         let c = if p.country.is_empty() { String::new() } else { format!(" {}", p.country) };
-        let gap = if next.from - p.to > GAP_SECS {
-            format!(", {} {}", t("потом без наблюдений"), span(next.from - p.to))
-        } else {
-            String::new()
-        };
+        let gap =
+            if next.from - p.to > GAP_SECS { format!(", потом без наблюдений {}", span(next.from - p.to)) } else { String::new() };
         out.push(format!("{} – {}: {}{} ({}{})", stamp(p.from), stamp(p.to), p.ip, c, span(p.to - p.from), gap));
     }
     out

@@ -2150,6 +2150,25 @@ pub fn print_table() {
         println!("{:<5} {}{}  {}", c.status, t, pad, term_safe(&crate::i18n::tr(&c.value)));
     }
     println!("\n{} {}", crate::i18n::pick("итог:", "total:"), worst(&all));
+    // DIAG_FULL=1 — следом всё, что окно показало бы про эти строки: подсказки, кнопки и тексты лечений
+    // (проверка перевода: в английском выводе не должно остаться русских слов)
+    if std::env::var_os("DIAG_FULL").is_some() {
+        let tr = |s: &str| term_safe(&crate::i18n::tr(s));
+        for c in &all {
+            println!("# {} | {} | {}", tr(&c.title), tr(&c.value), tr(&c.detail).replace('\n', " / "));
+            for f in &c.fixes {
+                let manual = crate::fixes::manual(&f.id, f.arg.as_deref()).unwrap_or_default();
+                println!(
+                    "#   [{}] {} | {} | {} | {}",
+                    f.id,
+                    tr(&f.label),
+                    tr(crate::fixes::what_happens(&f.id)),
+                    tr(crate::fixes::confirm_text(&f.id).unwrap_or("")),
+                    tr(&manual)
+                );
+            }
+        }
+    }
 }
 
 // ───────────────────────────── Сессии Claude Code ─────────────────────────────

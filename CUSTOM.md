@@ -111,6 +111,20 @@ Then build and try the fix with `DRY_RUN=1` first:
 DRY_RUN=1 engine/target/release/aptechka --fix my_wake_nas
 ```
 
+## Translation
+
+The interface has two languages. Write your texts in the language you use; they are shown as written. If you write them in Russian and also want them in the English interface, put the translations next to your code, in `custom/en.txt`, in the same format as `engine/i18n/en/*.txt`:
+
+```text
+ru: Мой NAS
+en: My NAS
+
+ru: не отвечает уже {} мин
+en: no answer for {} min
+```
+
+From the repository root, `python3 tools/i18n.py missing custom` prints your strings that have no translation yet, ready to paste into that file, and `python3 tools/i18n.py check` counts them.
+
 ## Updating
 
 Your `custom/` folder survives `git pull`. After updating, build again. If the program changed something your code uses, the compiler tells you exactly where.

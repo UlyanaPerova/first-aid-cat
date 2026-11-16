@@ -1,27 +1,21 @@
 # iphist.rs — история внешнего IP (подсказка у строки «Мой внешний IP»)
-ru: мин
-en: min
+ru: {} мин
+en: {} min
 
-ru: ч
-en: h
+ru: {} ч {} мин
+en: {} h {} min
 
-ru: дн
-en: d
+ru: {} дн {} ч
+en: {} d {} h
 
-ru: Этот адрес — с
-en: This address since
+ru: Этот адрес — с {} ({})
+en: This address since {} ({})
 
 ru: Смен адреса пока не видел.
 en: No address changes seen yet.
 
-ru: Смен за сутки:
-en: Changes in 24 h:
+ru: Смен за сутки: {} · за неделю: {} · за 30 дней: {}
+en: Changes in 24 h: {} · in a week: {} · in 30 days: {}
 
-ru: за неделю:
-en: in a week:
-
-ru: за 30 дней:
-en: in 30 days:
-
-ru: потом без наблюдений
-en: then unobserved for
+ru: , потом без наблюдений {}
+en: , then unobserved for {}

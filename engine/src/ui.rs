@@ -2342,6 +2342,9 @@ impl Ui {
             self.st.popup = Popup::Heal;
         } else if what == "problems" {
             self.st.popup = Popup::Problems;
+        } else if let Some(n) = what.strip_prefix("lang") {
+            // lang<0|1|2> — как пункт меню «Вид → Язык» (смена языка при уже показанных проверках)
+            cmds.extend(self.menu_act(MenuAct::Lang(n.parse().unwrap_or(0))));
         } else if what == "about" {
             cmds.extend(self.menu_act(MenuAct::About));
         } else if let Some(n) = what.strip_prefix("hover") {
