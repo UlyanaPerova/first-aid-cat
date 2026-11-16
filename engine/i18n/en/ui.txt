@@ -1022,3 +1022,68 @@ en: Session dots by the icon
 
 ru: Чёрный кот на значке (для светлой панели)
 en: Black cat on the icon (for a light panel)
+
+# образец данных (UI_FAKE): те же переводы, что дают настоящие строки
+
+ru: 41°C · загрузка 2% · 1/12 ГБ
+en: 41°C · load 2% · 1/12 GB
+
+ru: занят на 1% (32 потока)
+en: 1% busy (32 threads)
+
+ru: свободно 2249 ГБ из 2951 ГБ (76%)
+en: 2249 GB free of 2951 GB (76%)
+
+ru: 97 мс · джиттер 2 мс
+en: 97 ms · jitter 2 ms
+
+ru: Claude Code: лимит на 5 ч
+en: Claude Code: limit per 5 h
+
+ru: 42% · сброс завтра в 02:30
+en: 42% · resets tomorrow at 02:30
+
+ru: Claude Code: лимит на неделю
+en: Claude Code: limit per week
+
+ru: 18% · сброс вс 22.11 в 14:00
+en: 18% · resets Sun 22.11 at 14:00
+
+ru: Codex: связь с API OpenAI
+en: Codex: connection to API OpenAI
+
+ru: 858 мс
+en: 858 ms
+
+ru: Codex: связь с ChatGPT
+en: Codex: connection to ChatGPT
+
+ru: 671 мс
+en: 671 ms
+
+ru: Codex: серверы
+en: Codex: servers
+
+ru: Codex: лимит на 5 ч
+en: Codex: limit per 5 h
+
+ru: 73% · сброс завтра в 00:13
+en: 73% · resets tomorrow at 00:13
+
+ru: Codex: лимит на неделю
+en: Codex: limit per week
+
+ru: 35% · сброс ср 18.11 в 23:02
+en: 35% · resets Wed 18.11 at 23:02
+
+ru: переключение: Alt+Shift
+en: switching: Alt+Shift
+
+ru: точное (+0 с)
+en: exact (+0 s)
+
+ru: в порядке (2)
+en: OK (2)
+
+ru: 7 ч 56 мин
+en: 7 h 56 min
