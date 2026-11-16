@@ -1072,10 +1072,23 @@ impl Ui {
         if matches!(self.st.pressed, Some(Hit::Fix(_)) | Some(Hit::FixItem(..)) | Some(Hit::Ignore(_)) | Some(Hit::Row(_))) {
             self.st.pressed = None;
         }
-        // список действий строки открыт по её номеру — строки меняются, список закрываем
-        if matches!(self.st.popup, Popup::RowFixes(_)) {
-            self.close_popup();
+        // список действий строки открыт по её номеру: после перестройки найдём ту же строку по названию
+        // (проверки обновляются каждые несколько секунд — закрывать список на каждое обновление нельзя)
+        let menu_title = match self.st.popup {
+            Popup::RowFixes(i) => self.st.rows.get(i as usize).map(|r| r.title.clone()),
+            _ => None,
+        };
+        self.rebuild_rows_inner();
+        if let Popup::RowFixes(_) = self.st.popup {
+            let again = menu_title.and_then(|t| self.st.rows.iter().position(|r| r.title == t && r.fixes.first().is_some_and(|f| f.id == "menu")));
+            match again {
+                Some(i) => self.st.popup = Popup::RowFixes(i as u16),
+                None => self.close_popup(),
+            }
         }
+    }
+
+    fn rebuild_rows_inner(&mut self) {
         self.st.ignored = crate::prefs::ignored();
         if self.st.tab == SETTINGS_TAB {
             self.st.rows = settings_rows();
@@ -1474,7 +1487,9 @@ impl Ui {
                     // считалось «мимо списка»: список закрывался, а переход не срабатывал)
                     | Some(Hit::Problem(_))
                     | Some(Hit::BalloonMore)
-            );
+                    // список действий строки: его пункты и сама кнопка строки
+                    | Some(Hit::FixItem(..))
+            ) || matches!((h, self.st.popup), (Some(Hit::Fix(a)), Popup::RowFixes(b)) if a == b);
             if !inside {
                 self.close_popup();
                 if h != Some(Hit::Art) {
@@ -3944,6 +3959,47 @@ mod tests {
         u.set_checks(vec![chk("net", "B", "bad", "", &[("b", "B", None)])], false);
         let c = u.mouse_up(x, y);
         assert!(!c.iter().any(|c| matches!(c, Cmd::RunFix { id, .. } if id == "b")));
+    }
+
+    /// Строка с несколькими действиями: кнопка-заголовок открывает список, обновление проверок его не закрывает,
+    /// нажатие на пункт доходит до пункта (а не считается щелчком мимо списка).
+    #[test]
+    fn row_actions_list_opens_survives_refresh_and_takes_clicks() {
+        let rows = || {
+            vec![chk(
+                "net",
+                "Вентиляторы",
+                "info",
+                "",
+                &[("menu", "Скорость", None), ("my_fans", "Тихо", Some("100")), ("my_fans", "Максимум", Some("255"))],
+            )]
+        };
+        let mut u = Ui::new(1, 600, 500);
+        u.set_checks(rows(), false);
+        u.ensure_hits();
+        let r = u.hit_rect(Hit::Fix(0));
+        assert!(!r.is_empty(), "у спокойной строки со списком действий должна быть кнопка");
+        let (x, y) = (r.x + r.w / 2, r.y + r.h / 2);
+        u.mouse_down(x, y);
+        u.mouse_up(x, y);
+        assert_eq!(u.st.popup, Popup::RowFixes(0));
+        // пришёл новый прогон проверок — список остаётся
+        u.set_checks(rows(), false);
+        assert_eq!(u.st.popup, Popup::RowFixes(0));
+        u.hits_ok = false;
+        u.ensure_hits();
+        let items: Vec<Hit> = u.hits.iter().map(|(_, h)| *h).filter(|h| matches!(h, Hit::FixItem(..))).collect();
+        assert_eq!(items, [Hit::FixItem(0, 1), Hit::FixItem(0, 2)]);
+        let r = u.hit_rect(Hit::FixItem(0, 2));
+        let (x, y) = (r.x + r.w / 2, r.y + r.h / 2);
+        u.mouse_down(x, y);
+        assert_eq!(u.st.pressed, Some(Hit::FixItem(0, 2)), "нажатие на пункт не должно считаться щелчком мимо списка");
+        u.mouse_up(x, y);
+        assert_eq!(u.st.popup, Popup::None);
+        // строка исчезла — список закрывается
+        u.st.popup = Popup::RowFixes(0);
+        u.set_checks(Vec::new(), false);
+        assert_eq!(u.st.popup, Popup::None);
     }
 
     /// Открыли список «Полечить» и закрыли его щелчком мимо (или Esc): кнопка «Полечить» должна попасть в перерисовку,
