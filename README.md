@@ -76,7 +76,7 @@ A speed test (download, upload, ping) runs only when you ask for it.
 
 | No agent is open | An agent is working | The work is done |
 |---|---|---|
-| <img src="docs/screenshots/limits_panel_sleeps.gif" alt="AI limits panel: ring charts of the 5-hour and weekly limits, tokens per day, and the cat asleep at his desk" width="270"> | <img src="docs/screenshots/limits_panel.gif" alt="AI limits panel: the cat writes with a pen at his desk; when his ear is clicked he blushes" width="270"> | <img src="docs/screenshots/limits_panel_done.gif" alt="AI limits panel: the cat has put the pen down and looks at you" width="270"> |
+| <img src="docs/screenshots/limits_panel_sleeps.png" alt="AI limits panel: ring charts of the 5-hour and weekly limits, tokens per day, and the cat asleep at his desk" width="270"> | <img src="docs/screenshots/limits_panel.gif" alt="AI limits panel: the cat writes with a pen at his desk; when his ear is clicked he blushes" width="270"> | <img src="docs/screenshots/limits_panel_done.png" alt="AI limits panel: the cat has put the pen down and looks at you" width="270"> |
 
 Limits are tracked for **Claude Code** and **Codex**: these two are the agents that report their subscription limits on your computer. For the other agents (Gemini CLI, Qwen Code, Kimi Code, Cursor, OpenCode, Antigravity) the app checks the connection to their servers, their status pages and their sessions with the resume command (the **AI** tab), but it shows no limits and no token counts.
 

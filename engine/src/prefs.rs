@@ -11,7 +11,12 @@ pub fn config_dir() -> PathBuf {
     // тесты подменяют папку через XDG_CONFIG_HOME на любой системе: на macOS и Windows иначе они писали бы
     // в настоящую папку настроек
     #[cfg(test)]
-    if let Some(x) = std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from).filter(|p| p.is_absolute()) {
+    if let Some(x) = std::env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        // переменная может стоять и сама по себе, указывая на настоящую папку (так на сборочных машинах GitHub:
+        // XDG_CONFIG_HOME=~/.config) — это не подмена теста, туда не пишем
+        .filter(|p| p.is_absolute() && crate::store::home_dir().is_none_or(|h| *p != h.join(".config")))
+    {
         return x.join("aptechka");
     }
     // тест не подменил папку — всё равно не настоящая: своя временная на этот запуск тестов (на любой системе)

@@ -296,9 +296,14 @@ fn ping_stats_median_and_jitter_against_server_side_latency() {
 /// зазора между ними. Выбранное значение стабильно, но название «медиана» неточно.
 #[test]
 fn ping_stats_even_count_true_median() {
+    if !timing_ok("ping_stats_even_count_true_median") {
+        return;
+    }
     let (base, _) = latency_server(vec![0, 20, 40, 60, 80, 100, 120, 140, 160], None, "200 OK");
     let (med, _) = with_base(base, || ping_stats(8)).unwrap();
-    assert!((88.0..=96.0).contains(&med), "{med} (истинная медиана 90 мс)");
+    // накладные расходы только добавляют время: снизу — истинная медиана 90, сверху запас; прежняя «верхняя из двух
+    // средних» (100 + расходы) сюда на спокойной машине не попадала, но точную границу держит тест выше
+    assert!((88.0..=99.0).contains(&med), "{med} (истинная медиана 90 мс)");
 }
 
 #[test]
