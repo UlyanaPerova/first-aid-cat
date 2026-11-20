@@ -7,6 +7,7 @@
   <img alt="License: Apache-2.0" src="https://img.shields.io/badge/code-Apache--2.0-6a1b9a">
   <img alt="Languages: English, Русский" src="https://img.shields.io/badge/languages-English%20%7C%20%D0%A0%D1%83%D1%81%D1%81%D0%BA%D0%B8%D0%B9-00838f">
   <a href="../../releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/UlyanaPerova/first-aid-cat?color=c2185b&label=release"></a>
+  <a href="../../actions/workflows/ci.yml"><img alt="CI" src="https://github.com/UlyanaPerova/first-aid-cat/actions/workflows/ci.yml/badge.svg"></a>
 </p>
 
 <p align="center">
